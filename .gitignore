@@ -1,0 +1,14 @@
+node_modules/
+.next/
+dist/
+build/
+*.log
+.env
+.env.local
+.env.production
+.turbo/
+coverage/
+.DS_Store
+Thumbs.db
+prisma/migrations/
+*.db

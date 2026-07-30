@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(curl -s http://localhost:3001/health)",
+      "Bash(curl -s http://localhost:3000/health)",
+      "WebSearch",
+      "WebFetch(domain:docs.rapyd.net)",
+      "Bash(npx prisma *)",
+      "Bash(node -e ' *)",
+      "Bash(node \"C:\\\\Users\\\\USUARI~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-USUARIO-MC-Desktop-Trendpay-TrendPay---Claude\\\\6cc05e3f-ad11-4ba6-9fa3-e409593081ae\\\\scratchpad\\\\test-rapyd-webhook.js\")",
+      "Bash(curl -s -m 5 http://localhost:3001/health)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(curl -sv -m 5 http://localhost:3001/health)",
+      "Bash(curl -s -m 5 -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(npm install *)",
+      "PowerShell(Get-Process node -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\")",
+      "PowerShell(Stop-Process -Id 40628 -Force -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Id 10732 -Force -ErrorAction SilentlyContinue)"
+    ]
+  }
+}

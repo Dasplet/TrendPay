@@ -1,0 +1,172 @@
+import { Router, Request, Response } from 'express';
+import { prisma } from '../index';
+import { authenticate, requireAdmin } from '../middleware/auth';
+
+const router = Router();
+
+// ══ GET /api/admin/metrics ══
+router.get('/metrics', authenticate, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const [totalUsuarios, txAgg, retirosPend, comisionCfg] = await Promise.all([
+      prisma.user.count(),
+      prisma.transaction.aggregate({ _sum: { montoBruto: true, comisionValor: true } }),
+      prisma.withdrawal.count({ where: { status: 'pendiente' } }).catch(() => 0),
+      prisma.config.findUnique({ where: { clave: 'comision_pct' } }),
+    ]);
+    res.json({
+      ok: true,
+      metricas: {
+        total_usuarios:     totalUsuarios,
+        total_volumen:      parseFloat(txAgg._sum.montoBruto?.toString() || '0'),
+        total_comisiones:   parseFloat(txAgg._sum.comisionValor?.toString() || '0'),
+        retiros_pendientes: retirosPend,
+        comision_pct:       parseFloat(comisionCfg?.valor || '3'),
+      },
+    });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// ══ GET /api/admin/users ══
+router.get('/users', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 200;
+    const q     = (req.query.q as string) || '';
+    const users = await prisma.user.findMany({
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: { wallet: true },
+      where: q ? { OR: [
+        { nombre: { contains: q, mode: 'insensitive' } },
+        { cedula: { contains: q } },
+        { correo: { contains: q, mode: 'insensitive' } },
+      ]} : undefined,
+    });
+    res.json({
+      ok: true,
+      usuarios: users.map(u => ({
+        id: u.id, cedula: u.cedula, nombre: u.nombre, correo: u.correo,
+        celular: u.celular, ciudad: u.ciudad, rol: u.rol, subRol: u.subRol,
+        kycNivel: u.kycNivel, kycVerificado: u.kycVerificado,
+        bloqueado: u.bloqueado, codigoReferido: u.codigoReferido,
+        saldo: parseFloat(u.wallet?.saldo.toString() || '0'),
+        ultimoLogin: u.ultimoLogin, createdAt: u.createdAt,
+      })),
+    });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// ══ PUT /api/admin/users/:id ══
+router.put('/users/:id', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { nombre, correo, celular, ciudad, bloqueado, kycNivel, nuevo_pin } = req.body;
+    const data: any = {};
+    if (nombre    !== undefined) data.nombre    = nombre;
+    if (correo    !== undefined) data.correo    = correo;
+    if (celular   !== undefined) data.celular   = celular;
+    if (ciudad    !== undefined) data.ciudad    = ciudad;
+    if (bloqueado !== undefined) data.bloqueado = bloqueado;
+    if (kycNivel  !== undefined) data.kycNivel  = parseInt(kycNivel);
+    if (nuevo_pin) {
+      const bcrypt = await import('bcryptjs');
+      data.pinHash = await bcrypt.hash(nuevo_pin, parseInt(process.env.BCRYPT_ROUNDS || '12'));
+    }
+    const user = await prisma.user.update({ where: { id: req.params.id }, data });
+
+    // Audit
+    await prisma.auditLog.create({
+      data: { userId: req.user!.id, accion: 'EDITAR_USUARIO', tabla: 'users', registroId: req.params.id, ip: req.ip, datos: data },
+    }).catch(() => {});
+
+    res.json({ ok: true, mensaje: 'Usuario actualizado', usuario: user });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// ══ DELETE /api/admin/users/:id ══
+router.delete('/users/:id', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const u = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!u) return res.status(404).json({ ok: false });
+    // Soft delete
+    await prisma.user.update({
+      where: { id: req.params.id },
+      data: { cedula: `DEL-${u.cedula}`, correo: `${u.cedula}@eliminado.local`, nombre: 'Usuario eliminado', bloqueado: true },
+    });
+    await prisma.auditLog.create({
+      data: { userId: req.user!.id, accion: 'ELIMINAR_USUARIO', tabla: 'users', registroId: req.params.id, ip: req.ip },
+    }).catch(() => {});
+    res.json({ ok: true, mensaje: 'Usuario eliminado' });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// ══ GET /api/admin/transactions ══
+router.get('/transactions', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 300;
+    const txs = await prisma.transaction.findMany({
+      take: limit, orderBy: { createdAt: 'desc' },
+      include: { user: { select: { nombre: true, cedula: true } } },
+    });
+    res.json({
+      ok: true,
+      transacciones: txs.map(t => ({
+        id: t.id, codigo: t.codigo, categoria: t.categoria, descripcion: t.descripcion,
+        monto_neto: parseFloat(t.montoNeto.toString()),
+        monto_bruto: parseFloat(t.montoBruto.toString()),
+        comision_valor: parseFloat(t.comisionValor.toString()),
+        status: t.status, created_at: t.createdAt,
+        usuario_nombre: t.user.nombre, usuario_cedula: t.user.cedula,
+      })),
+    });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// ══ GET /api/admin/dashboard-chart ══
+router.get('/dashboard-chart', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const months = parseInt(req.query.months as string) || 6;
+    const from   = new Date(); from.setMonth(from.getMonth() - months);
+    const txs = await prisma.transaction.findMany({
+      where: { createdAt: { gte: from } },
+      select: { montoBruto: true, comisionValor: true, createdAt: true },
+    });
+    const buckets: Record<string, any> = {};
+    txs.forEach(t => {
+      const key = `${t.createdAt.getFullYear()}-${String(t.createdAt.getMonth()+1).padStart(2,'0')}`;
+      if (!buckets[key]) buckets[key] = { mes: key, volumen: 0, comisiones: 0 };
+      buckets[key].volumen    += parseFloat(t.montoBruto.toString());
+      buckets[key].comisiones += parseFloat(t.comisionValor.toString());
+    });
+    res.json({ ok: true, datos: Object.values(buckets).sort((a,b) => a.mes.localeCompare(b.mes)) });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// ══ GET /api/admin/notifications ══
+router.get('/notifications', authenticate, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const [auditLogs, retirosPend, newUsers] = await Promise.all([
+      prisma.auditLog.findMany({ take:15, orderBy:{ createdAt:'desc' }, include:{ user:{ select:{ nombre:true } } } }),
+      prisma.withdrawal.findMany({ where:{ status:'pendiente' }, take:10, orderBy:{ createdAt:'desc' }, include:{ user:{ select:{ nombre:true } } } }).catch(()=>[]),
+      prisma.user.findMany({ where:{ createdAt:{ gte: new Date(Date.now()-24*60*60*1000) } }, take:5, orderBy:{ createdAt:'desc' }, select:{ nombre:true, createdAt:true } }),
+    ]);
+    const notifs: any[] = [];
+    newUsers.forEach(u => notifs.push({ id:`user-${u.createdAt.getTime()}`, tipo:'ok', titulo:'Nuevo usuario registrado', mensaje:u.nombre, leida:false, createdAt:u.createdAt }));
+    (retirosPend as any[]).forEach((w:any) => notifs.push({ id:`wd-${w.id}`, tipo:'warning', titulo:'Retiro pendiente de aprobación', mensaje:`${w.user?.nombre} · $${Number(w.monto).toLocaleString('es-CO')}`, leida:false, createdAt:w.createdAt }));
+    const actionLabels: Record<string,string> = { LOGIN:'Inicio de sesión', RETIRO_APROBADO:'Retiro aprobado', CREAR_USUARIO:'Usuario creado', EDITAR_USUARIO:'Usuario editado', CAMBIO_PIN:'PIN cambiado', BLOQUEO_CUENTA:'Cuenta bloqueada', ELIMINAR_USUARIO:'Usuario eliminado' };
+    auditLogs.slice(0,5).forEach(l => notifs.push({ id:`audit-${l.id}`, tipo:'info', titulo:actionLabels[l.accion]||l.accion, mensaje:l.user?.nombre||'', leida:true, createdAt:l.createdAt }));
+    notifs.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json({ ok:true, notificaciones:notifs.slice(0,20), sin_leer:notifs.filter(n=>!n.leida).length });
+  } catch (e: any) { res.status(500).json({ ok:false, mensaje:e.message }); }
+});
+
+// ══ PUT /api/admin/notifications/read ══
+router.put('/notifications/read', authenticate, requireAdmin, (_req, res) => res.json({ ok: true }));
+
+// ══ GET /api/admin/audit ══
+router.get('/audit', authenticate, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const logs = await prisma.auditLog.findMany({ take:100, orderBy:{ createdAt:'desc' }, include:{ user:{ select:{ nombre:true, cedula:true } } } });
+    res.json({ ok: true, logs });
+  } catch (e: any) { res.status(500).json({ ok:false, mensaje:e.message }); }
+});
+
+export default router;

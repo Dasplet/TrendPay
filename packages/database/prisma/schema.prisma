@@ -1,0 +1,304 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ══════════════════════════════════════
+// USUARIOS
+// ══════════════════════════════════════
+model User {
+  id              String    @id @default(uuid())
+  cedula          String    @unique
+  nombre          String
+  correo          String    @unique
+  celular         String?
+  ciudad          String?
+  pinHash         String    @map("pin_hash")
+  rol             String    @default("usuario") // usuario | admin
+  subRol          String?   @map("sub_rol")     // super_admin | operador
+  kycNivel        Int       @default(1) @map("kyc_nivel")
+  kycVerificado   Boolean   @default(false) @map("kyc_verificado")
+  bloqueado       Boolean   @default(false)
+  bloqueadoHasta  DateTime? @map("bloqueado_hasta")
+  intentosPin     Int       @default(0) @map("intentos_pin")
+  codigoReferido  String?   @unique @map("codigo_referido")
+  referidoPorId   String?   @map("referido_por_id")
+  ultimoLogin     DateTime? @map("ultimo_login")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relaciones
+  referidoPor     User?           @relation("Referidos", fields: [referidoPorId], references: [id])
+  referidos       User[]          @relation("Referidos")
+  wallet          Wallet?
+  sessions        Session[]
+  notifications   Notification[]
+  bankAccounts    BankAccount[]
+  auditLogs       AuditLog[]
+  userAuditLogs   UserAuditLog[]
+  referralsGiven  Referral[]      @relation("ReferidorRel")
+  referralReceived Referral?      @relation("ReferidoRel")
+  withdrawals     Withdrawal[]
+  rapydPayments   RapydPayment[]
+  transactions    Transaction[]
+
+  @@map("users")
+}
+
+// ══════════════════════════════════════
+// WALLETS (BILLETERAS)
+// ══════════════════════════════════════
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  saldo     Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id])
+  transactions Transaction[]
+  qrCodes      QrCode[]
+
+  @@map("wallets")
+}
+
+// ══════════════════════════════════════
+// TRANSACCIONES
+// ══════════════════════════════════════
+model Transaction {
+  id            String   @id @default(uuid())
+  walletId      String   @map("wallet_id")
+  userId        String   @map("user_id")
+  codigo        String   @unique
+  categoria     String   // consigna | cobro_qr | envio | retiro | comision
+  descripcion   String
+  montoBruto    Decimal  @map("monto_bruto") @db.Decimal(18, 2)
+  comisionPct   Decimal  @default(0) @map("comision_pct") @db.Decimal(5, 2)
+  comisionValor Decimal  @default(0) @map("comision_valor") @db.Decimal(18, 2)
+  montoNeto     Decimal  @map("monto_neto") @db.Decimal(18, 2)
+  saldoAntes    Decimal  @map("saldo_antes") @db.Decimal(18, 2)
+  saldoDespues  Decimal  @map("saldo_despues") @db.Decimal(18, 2)
+  status        String   @default("exitosa") // exitosa | rechazada | procesado | pendiente
+  metadata      Json?    // datos adicionales (banco, referencia externa, etc.)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([walletId, createdAt(sort: Desc)])
+  @@map("transactions")
+}
+
+// ══════════════════════════════════════
+// RETIROS
+// ══════════════════════════════════════
+model Withdrawal {
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
+  bancoId         String?   @map("banco_id")
+  bancoNombre     String    @map("banco_nombre")
+  tipoCuenta      String    @map("tipo_cuenta")
+  nombreTitular   String    @map("nombre_titular")
+  numeroCuenta    String    @map("numero_cuenta") // AES-256 encrypted
+  cedulaTitular   String    @map("cedula_titular") // AES-256 encrypted
+  monto           Decimal   @db.Decimal(18, 2)
+  montoNeto       Decimal   @map("monto_neto") @db.Decimal(18, 2)
+  status          String    @default("pendiente") // pendiente | procesado | rechazado
+  motivo          String?
+  notasAdmin      String?   @map("notas_admin")
+  aprobadoPor     String?   @map("aprobado_por")
+  aprobadoAt      DateTime? @map("aprobado_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("withdrawals")
+}
+
+// ══════════════════════════════════════
+// BANCOS
+// ══════════════════════════════════════
+model Bank {
+  id         String   @id
+  nombre     String
+  habilitado Boolean  @default(true)
+  nuevo      Boolean  @default(false)
+  orden      Int      @default(99)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("banks")
+}
+
+// ══════════════════════════════════════
+// CUENTAS BANCARIAS DE USUARIOS
+// ══════════════════════════════════════
+model BankAccount {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  bancoId       String?  @map("banco_id")
+  bancoNombre   String   @map("banco_nombre")
+  tipoCuenta    String   @map("tipo_cuenta")
+  numeroCuenta  String   @map("numero_cuenta") // encrypted
+  cedulaTitular String   @map("cedula_titular") // encrypted
+  nombreTitular String   @map("nombre_titular")
+  alias         String?
+  activa        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("bank_accounts")
+}
+
+// ══════════════════════════════════════
+// QR CODES
+// ══════════════════════════════════════
+model QrCode {
+  id          String    @id @default(uuid())
+  walletId    String    @map("wallet_id")
+  token       String    @unique
+  monto       Decimal?  @db.Decimal(18, 2)
+  concepto    String?
+  usado       Boolean   @default(false)
+  permanente  Boolean   @default(false)
+  expiresAt   DateTime  @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+
+  @@index([walletId, permanente])
+  @@map("qr_codes")
+}
+
+// ══════════════════════════════════════
+// SESIONES
+// ══════════════════════════════════════
+model Session {
+  id           String    @id @default(uuid())
+  userId       String    @map("user_id")
+  refreshToken String    @unique @map("refresh_token")
+  userAgent    String?   @map("user_agent")
+  ip           String?
+  expiresAt    DateTime  @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ══════════════════════════════════════
+// NOTIFICACIONES
+// ══════════════════════════════════════
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tipo      String   @default("info")
+  titulo    String
+  mensaje   String
+  leida     Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, leida])
+  @@map("notifications")
+}
+
+// ══════════════════════════════════════
+// REFERIDOS
+// ══════════════════════════════════════
+model Referral {
+  id              String   @id @default(uuid())
+  referidorId     String   @map("referidor_id")
+  referidoId      String   @unique @map("referido_id")
+  comisionValor   Decimal  @default(1000) @map("comision_valor") @db.Decimal(18, 2)
+  status          String   @default("pendiente") // pendiente | pagado
+  pagadoAt        DateTime? @map("pagado_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  referidor User @relation("ReferidorRel", fields: [referidorId], references: [id])
+  referido  User @relation("ReferidoRel", fields: [referidoId], references: [id])
+
+  @@map("referrals")
+}
+
+// ══════════════════════════════════════
+// PAGOS RAPYD (consignaciones)
+// ══════════════════════════════════════
+model RapydPayment {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  reference      String   @unique
+  checkoutId     String?  @unique @map("checkout_id")
+  monto          Decimal  @db.Decimal(18, 2)
+  rapydPaymentId String?  @map("rapyd_payment_id")
+  estado         String   @default("pendiente")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("rapyd_payments")
+}
+
+// ══════════════════════════════════════
+// CONFIGURACIONES DEL SISTEMA
+// ══════════════════════════════════════
+model Config {
+  id        String   @id @default(uuid())
+  clave     String   @unique
+  valor     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("configs")
+}
+
+// ══════════════════════════════════════
+// AUDITORÍA ADMIN
+// ══════════════════════════════════════
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  accion    String
+  tabla     String?
+  registroId String? @map("registro_id")
+  datos     Json?
+  ip        String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("audit_log")
+}
+
+// ══════════════════════════════════════
+// AUDITORÍA DE USUARIOS (cambios de perfil)
+// ══════════════════════════════════════
+model UserAuditLog {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  accion       String
+  campo        String?
+  valorAntes   String?  @map("valor_antes")
+  valorDespues String?  @map("valor_despues")
+  ip           String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("user_audit_log")
+}
