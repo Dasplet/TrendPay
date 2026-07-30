@@ -1,5 +1,6 @@
 {
   "$schema": "https://v2-10-7.turborepo.dev/schema.json",
+  "envMode": "loose",
   "globalDependencies": [
     ".env"
   ],
@@ -25,10 +26,6 @@
     "lint": {
       "outputs": []
     },
-    "test": {
-      "outputs": [
-        "coverage/**"
-      ]
-    }
+    "test": {}
   }
 }
