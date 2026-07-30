@@ -9,6 +9,32 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: trendpay_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: "postgresql://test:test@localhost:5432/trendpay_test"
+      JWT_SECRET: "test-secret-key-for-ci"
+      JWT_REFRESH_SECRET: "test-refresh-secret-for-ci"
+      ENCRYPTION_KEY: "test-32-char-encryption-key-here"
+      RAPYD_BASE_URL: "https://sandboxapi.rapyd.net"
+      RAPYD_ACCESS_KEY: "test_access_key"
+      RAPYD_SECRET_KEY: "test_secret_key"
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,17 +49,12 @@ jobs:
 
       - name: Generate Prisma client
         run: npm run -w @trendpay/database generate
-        env:
-          DATABASE_URL: "postgresql://test:test@localhost:5432/trendpay_test"
+
+      - name: Apply database migrations
+        run: npm run -w @trendpay/database migrate:prod
 
       - name: Run tests
         run: npm run test
-        env:
-          NODE_ENV: test
-          DATABASE_URL: "postgresql://test:test@localhost:5432/trendpay_test"
-          JWT_SECRET: "test-secret-key-for-ci"
-          JWT_REFRESH_SECRET: "test-refresh-secret-for-ci"
-          ENCRYPTION_KEY: "test-32-char-encryption-key-here"
 
       - name: Build
         run: npm run build

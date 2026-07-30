@@ -173,5 +173,9 @@ process.on('uncaughtException', (err: Error) => {
   process.exit(1);
 });
 
-start();
+// En tests, supertest maneja el ciclo de vida del server directamente
+// contra `app` — no necesitamos (ni queremos) un listen() real en un puerto fijo.
+if (process.env.NODE_ENV !== 'test') {
+  start();
+}
 export default app;

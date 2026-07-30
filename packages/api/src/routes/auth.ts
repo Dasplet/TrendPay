@@ -15,12 +15,12 @@ function generateTokens(user: AuthUser) {
   const accessToken = jwt.sign(
     { id: user.id, cedula: user.cedula, nombre: user.nombre, rol: user.rol, subRol: user.subRol },
     process.env.JWT_SECRET!,
-    { expiresIn: process.env.JWT_EXPIRES_IN || '15m' }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '15m' } as jwt.SignOptions
   );
   const refreshToken = jwt.sign(
     { id: user.id },
     process.env.JWT_REFRESH_SECRET!,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' }
+    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' } as jwt.SignOptions
   );
   return { accessToken, refreshToken };
 }
