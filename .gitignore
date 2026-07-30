@@ -10,5 +10,6 @@ build/
 coverage/
 .DS_Store
 Thumbs.db
-prisma/migrations/
 *.db
+.claude/
+*.tsbuildinfo
