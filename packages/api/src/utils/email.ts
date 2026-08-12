@@ -1,38 +1,22 @@
-import dns from 'dns';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
-// nodemailer resuelve el host por su cuenta con dns.resolve4/resolve6 (ignora
-// dns.setDefaultResultOrder). En contenedores donde esa consulta manual por A
-// falla (ej. Railway con smtp.hostinger.com), termina conectando solo por
-// IPv6 y falla con ENETUNREACH. Resolvemos la IPv4 nosotros mismos con
-// dns.lookup (el resolver estándar, que sí funciona bien aquí) y se la
-// pasamos directa a nodemailer, manteniendo el hostname real vía
-// tls.servername para que la validación del certificado siga siendo correcta.
-async function resolveIPv4(host: string): Promise<string> {
-  const { address } = await dns.promises.lookup(host, { family: 4 });
-  return address;
+let resend: Resend | null = null;
+
+function getClient(): Resend | null {
+  if (!process.env.RESEND_API_KEY) return null;
+  if (!resend) resend = new Resend(process.env.RESEND_API_KEY);
+  return resend;
 }
 
-// Devuelve true si el correo se envió, false si SMTP no está configurado (modo local/debug).
+// Devuelve true si el correo se envió, false si Resend no está configurado (modo local/debug).
 export async function sendOtpEmail(to: string, otp: string): Promise<boolean> {
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!host || !user || !pass) return false;
+  const client = getClient();
+  if (!client) return false;
 
-  const port = parseInt(process.env.SMTP_PORT || '465', 10);
-  const ip = await resolveIPv4(host);
+  const from = process.env.RESEND_FROM || 'TrendPay <noreply@trendpay.com.co>';
 
-  const transporter = nodemailer.createTransport({
-    host: ip,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-    tls: { servername: host },
-  });
-
-  await transporter.sendMail({
-    from: `TrendPay <${user}>`,
+  const { error } = await client.emails.send({
+    from,
     to,
     subject: 'Tu código de verificación — TrendPay',
     html: `
@@ -44,5 +28,7 @@ export async function sendOtpEmail(to: string, otp: string): Promise<boolean> {
       </div>
     `,
   });
+
+  if (error) throw new Error(error.message);
   return true;
 }
