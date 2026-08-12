@@ -7,6 +7,7 @@ import { prisma } from '../index';
 import { authenticate, AuthUser } from '../middleware/auth';
 import { authLimiter } from '../middleware/rateLimiter';
 import { logger } from '../utils/logger';
+import { sendOtpEmail } from '../utils/email';
 
 const router = Router();
 
@@ -449,7 +450,19 @@ router.post('/send-otp', async (req: Request, res: Response) => {
   const otp     = String(randomInt(100000, 1000000));
   const expires = new Date(Date.now() + 10 * 60 * 1000);
   otpStore.set(key, { otp, expires });
-  logger.info(`OTP para ${key}: ${otp}`);
+
+  let enviado = false;
+  if (correo) {
+    try {
+      enviado = await sendOtpEmail(correo, otp);
+    } catch (err: any) {
+      logger.error('Error enviando OTP por correo', { err: err.message, correo });
+      otpStore.delete(key);
+      return res.status(500).json({ ok: false, mensaje: 'No pudimos enviar el código. Intenta de nuevo.' });
+    }
+  }
+  if (!enviado) logger.info(`OTP para ${key}: ${otp} (SMTP no configurado o envío por celular no implementado)`);
+
   res.json({
     ok: true,
     mensaje: correo ? `Código enviado a ${correo.replace(/(.{2}).*(@.*)/, '$1***$2')}` : `Código enviado al celular ****${celular?.slice(-4)}`,
