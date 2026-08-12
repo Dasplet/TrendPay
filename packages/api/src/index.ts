@@ -1,4 +1,9 @@
 import 'dotenv/config';
+import dns from 'dns';
+// Algunos entornos de hosting (ej. Railway) no tienen salida IPv6; Node 18+ puede
+// resolver hosts externos con la dirección IPv6 primero y fallar con ENETUNREACH.
+// Forzamos IPv4 primero para todas las conexiones salientes (SMTP, APIs externas, etc).
+dns.setDefaultResultOrder('ipv4first');
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
