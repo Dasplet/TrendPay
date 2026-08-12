@@ -4,6 +4,7 @@ import { adminApi } from '@/lib/api';
 import { MetricCard, Panel, PanelHeader, Btn, fmt } from '@/components/admin/ui';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
+import { CircleDollarSign, Percent, BarChart3, PieChart, Settings2, Check } from 'lucide-react';
 
 export default function ComisionesPage() {
   const { data } = useQuery({ queryKey:['admin-metrics'], queryFn:()=>adminApi.metrics(), select:d=>d.data });
@@ -24,14 +25,14 @@ export default function ComisionesPage() {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14 }}>
-        <MetricCard icon="◎" value={fmt(m.total_comisiones||0)} label="Total comisiones cobradas" color="#6CC998" bg="rgba(108,201,152,.2)" />
-        <MetricCard icon="%" value={`${com}%`} label="Tasa de comisión actual" color="#852EC7" bg="rgba(133,46,199,.2)" />
-        <MetricCard icon="⊡" value={fmt(m.total_volumen||0)} label="Volumen base para comisión" color="#d4a017" bg="rgba(212,160,23,.2)" />
+        <MetricCard icon={<CircleDollarSign size={22} />} value={fmt(m.total_comisiones||0)} label="Total comisiones cobradas" color="#6CC998" bg="rgba(108,201,152,.2)" />
+        <MetricCard icon={<Percent size={22} />} value={`${com}%`} label="Tasa de comisión actual" color="#852EC7" bg="rgba(133,46,199,.2)" />
+        <MetricCard icon={<BarChart3 size={22} />} value={fmt(m.total_volumen||0)} label="Volumen base para comisión" color="#d4a017" bg="rgba(212,160,23,.2)" />
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr', gap:14 }}>
         <Panel>
-          <PanelHeader title="Comisión por categoría" icon="⊟" />
+          <PanelHeader title="Comisión por categoría" icon={<PieChart size={16} />} />
           <div style={{ padding:'8px 0' }}>
             {Object.entries(bycat).map(([cat, val]) => (
               <div key={cat} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 20px', borderBottom:'1px solid rgba(255,255,255,.04)' }}>
@@ -46,7 +47,7 @@ export default function ComisionesPage() {
         </Panel>
 
         <Panel>
-          <PanelHeader title="Configurar comisión" icon="⊙" />
+          <PanelHeader title="Configurar comisión" icon={<Settings2 size={16} />} />
           <div style={{ padding:20 }}>
             <div style={{ fontSize:13, color:'#AE93AA', marginBottom:16 }}>Porcentaje aplicado a todas las transacciones</div>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20 }}>
@@ -55,7 +56,7 @@ export default function ComisionesPage() {
               <span style={{ fontSize:24, color:'#AE93AA', fontWeight:700 }}>%</span>
             </div>
             <Btn variant="primary" style={{ width:'100%', justifyContent:'center' }} onClick={() => toast.success('Comisión actualizada al '+com+'%')}>
-              ✓ Guardar comisión
+              <Check size={14} /> Guardar comisión
             </Btn>
             <div style={{ fontSize:11, color:'rgba(255,255,255,.3)', textAlign:'center', marginTop:10 }}>
               Se aplica automáticamente a todas las operaciones

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, TR, TD, StatusBadge, fmt, fmtDate } from '@/components/admin/ui';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { TrendingUp, CircleDollarSign, Users, Clock, PieChart, ArrowLeftRight, Download, Check, Activity } from 'lucide-react';
 
 function MetricCard({ icon, value, label, color, badge }: any) {
   const gradients: Record<string, string> = {
@@ -21,7 +22,7 @@ function MetricCard({ icon, value, label, color, badge }: any) {
       <div style={{ width:44, height:44, borderRadius:12, background:bgs[color]||bgs.purple, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, marginBottom:18, position:'relative' }}>{icon}</div>
       <div style={{ fontSize:32, fontWeight:900, color:'#fff', letterSpacing:'-1px', marginBottom:4, position:'relative' }}>{value}</div>
       <div style={{ fontSize:13, color:'rgba(255,255,255,.6)', position:'relative' }}>{label}</div>
-      {badge && <div style={{ marginTop:10, display:'inline-flex', alignItems:'center', gap:5, background:'rgba(108,201,152,.2)', color:'#6CC998', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600 }}>✓ {badge}</div>}
+      {badge && <div style={{ marginTop:10, display:'inline-flex', alignItems:'center', gap:5, background:'rgba(108,201,152,.2)', color:'#6CC998', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600 }}><Check size={12} /> {badge}</div>}
     </div>
   );
 }
@@ -102,21 +103,21 @@ export default function AdminDashboard() {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14 }}>
-        <MetricCard color="purple" icon="↗" value={fmt(m.total_volumen||0)} label="Volumen total procesado" />
-        <MetricCard color="blue"   icon="◎" value={fmt(m.total_comisiones||0)} label={`Comisiones generadas (${m.comision_pct||3}%)`} />
-        <MetricCard color="green"  icon="◉" value={String(users.length)} label="Usuarios registrados" />
-        <MetricCard color="red"    icon="⊙" value={String(m.retiros_pendientes||0)} label="Retiros pendientes" badge={!m.retiros_pendientes?'Al día':undefined} />
+        <MetricCard color="purple" icon={<TrendingUp size={22} />} value={fmt(m.total_volumen||0)} label="Volumen total procesado" />
+        <MetricCard color="blue"   icon={<CircleDollarSign size={22} />} value={fmt(m.total_comisiones||0)} label={`Comisiones generadas (${m.comision_pct||3}%)`} />
+        <MetricCard color="green"  icon={<Users size={22} />} value={String(users.length)} label="Usuarios registrados" />
+        <MetricCard color="red"    icon={<Clock size={22} />} value={String(m.retiros_pendientes||0)} label="Retiros pendientes" badge={!m.retiros_pendientes?'Al día':undefined} />
       </div>
 
       <Panel>
-        <PanelHeader title="Volumen mensual" icon="↗"
+        <PanelHeader title="Volumen mensual" icon={<TrendingUp size={16} />}
           actions={<>
             <select value={period} onChange={e=>setPeriod(e.target.value)} style={{ background:'rgba(30,12,65,.6)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'5px 10px', fontSize:11, color:'#fff', cursor:'pointer' }}>
               <option value="6">Últimos 6 meses</option>
               <option value="12">Últimos 12 meses</option>
               <option value="current">Mes actual</option>
             </select>
-            <button style={{ background:'rgba(133,46,199,.1)', border:'1px solid rgba(133,46,199,.25)', borderRadius:8, padding:'5px 12px', fontSize:11, color:'#c088f0', cursor:'pointer' }}>⬇ .xlsx</button>
+            <button style={{ background:'rgba(133,46,199,.1)', border:'1px solid rgba(133,46,199,.25)', borderRadius:8, padding:'5px 12px', fontSize:11, color:'#c088f0', cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5 }}><Download size={12} /> .xlsx</button>
           </>}
         />
         <div style={{ padding:'16px 18px 10px', height:280 }}>
@@ -135,7 +136,7 @@ export default function AdminDashboard() {
       </Panel>
 
       <Panel>
-        <PanelHeader title="Distribución de operaciones por tipo" icon="⊟"
+        <PanelHeader title="Distribución de operaciones por tipo" icon={<PieChart size={16} />}
           actions={<div style={{ display:'flex', gap:14, fontSize:11, color:'#AE93AA' }}>
             {[['#852EC7','Consignas'],['#6CC998','Cobros QR'],['#AE93AA','Envíos'],['#C0392B','Retiros']].map(([c,l])=>(
               <span key={l} style={{ display:'flex', alignItems:'center', gap:5 }}><span style={{ width:10,height:10,borderRadius:3,background:c as string,display:'inline-block' }}/>{l}</span>
@@ -160,7 +161,7 @@ export default function AdminDashboard() {
 
       <div style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr', gap:14 }}>
         <Panel>
-          <PanelHeader title="Saldos en plataforma" icon="◎" />
+          <PanelHeader title="Saldos en plataforma" icon={<CircleDollarSign size={16} />} />
           <div style={{ padding:'16px 20px' }}>
             <div style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.5px', marginBottom:2 }}>{fmt(totalSaldo)}</div>
             <div style={{ fontSize:11, color:'#AE93AA', marginBottom:16 }}>Total en billeteras activas</div>
@@ -181,7 +182,7 @@ export default function AdminDashboard() {
           </div>
         </Panel>
         <Panel>
-          <PanelHeader title="Estado del sistema" icon="↗" />
+          <PanelHeader title="Estado del sistema" icon={<Activity size={16} />} />
           <div style={{ padding:'8px 0' }}>
             {[['API Backend'],['Base de datos'],['ACH Colombia'],['Rapyd'],['PSE Débito']].map(([n])=>(
               <div key={n} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'13px 20px', borderBottom:'1px solid rgba(255,255,255,.04)' }}>
@@ -196,7 +197,7 @@ export default function AdminDashboard() {
       </div>
 
       <Panel>
-        <PanelHeader title="Transacciones recientes" icon="⇄"
+        <PanelHeader title="Transacciones recientes" icon={<ArrowLeftRight size={16} />}
           actions={<a href="/admin/transacciones" style={{ fontSize:12, color:'#fff', textDecoration:'none', fontWeight:600, background:'rgba(133,46,199,.2)', border:'1px solid rgba(133,46,199,.3)', borderRadius:8, padding:'6px 14px' }}>Ver todas →</a>}
         />
         <Table headers={['Referencia','Descripción','Usuario','Monto','Estado','Fecha']}>

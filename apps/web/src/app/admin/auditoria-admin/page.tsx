@@ -3,21 +3,26 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Panel, PanelHeader, Btn } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
+import {
+  LogIn, Check, X, CircleDollarSign, UserCheck, Lock, Settings2,
+  Landmark, UserPlus, Pencil, UserX, List, Download, Circle,
+  type LucideIcon,
+} from 'lucide-react';
 
 // Map actions to icons and colors
-const ACTION_STYLE: Record<string,{icon:string,color:string,label:string}> = {
-  LOGIN:                  { icon:'□', color:'#6CC998', label:'Inicio de sesión'       },
-  RETIRO_APROBADO:        { icon:'✓', color:'#6CC998', label:'Retiro aprobado'         },
-  RETIRO_RECHAZADO:       { icon:'✗', color:'#C0392B', label:'Retiro rechazado'        },
-  COMISION_MODIFICADA:    { icon:'◎', color:'#d4a017', label:'Comisión modificada'     },
-  USUARIO_VERIFICADO_KYC: { icon:'◉', color:'#6CC998', label:'Usuario verificado KYC' },
-  BLOQUEO_CUENTA:         { icon:'🔒', color:'#C0392B', label:'Bloqueo de cuenta'      },
-  CONFIG_ACTUALIZADA:     { icon:'⊙', color:'#d4a017', label:'Configuración actualizada'},
-  BANCO_TOGGLE:           { icon:'⊡', color:'#d4a017', label:'Banco deshabilitado'     },
-  BANCO_CREAR:            { icon:'⊡', color:'#6CC998', label:'Banco creado'            },
-  CREAR_USUARIO:          { icon:'◉', color:'#852EC7', label:'Usuario creado'          },
-  EDITAR_USUARIO:         { icon:'✏', color:'#AE93AA', label:'Usuario editado'         },
-  ELIMINAR_USUARIO:       { icon:'✗', color:'#C0392B', label:'Usuario eliminado'       },
+const ACTION_STYLE: Record<string,{icon:LucideIcon,color:string,label:string}> = {
+  LOGIN:                  { icon:LogIn,            color:'#6CC998', label:'Inicio de sesión'       },
+  RETIRO_APROBADO:        { icon:Check,            color:'#6CC998', label:'Retiro aprobado'         },
+  RETIRO_RECHAZADO:       { icon:X,                color:'#C0392B', label:'Retiro rechazado'        },
+  COMISION_MODIFICADA:    { icon:CircleDollarSign, color:'#d4a017', label:'Comisión modificada'     },
+  USUARIO_VERIFICADO_KYC: { icon:UserCheck,        color:'#6CC998', label:'Usuario verificado KYC' },
+  BLOQUEO_CUENTA:         { icon:Lock,             color:'#C0392B', label:'Bloqueo de cuenta'      },
+  CONFIG_ACTUALIZADA:     { icon:Settings2,        color:'#d4a017', label:'Configuración actualizada'},
+  BANCO_TOGGLE:           { icon:Landmark,         color:'#d4a017', label:'Banco deshabilitado'     },
+  BANCO_CREAR:            { icon:Landmark,         color:'#6CC998', label:'Banco creado'            },
+  CREAR_USUARIO:          { icon:UserPlus,         color:'#852EC7', label:'Usuario creado'          },
+  EDITAR_USUARIO:         { icon:Pencil,           color:'#AE93AA', label:'Usuario editado'         },
+  ELIMINAR_USUARIO:       { icon:UserX,            color:'#C0392B', label:'Usuario eliminado'       },
 };
 
 // Fallback mock logs for demo (when DB has no data yet)
@@ -51,12 +56,12 @@ export default function AuditoriaAdminPage() {
 
   return (
     <Panel>
-      <PanelHeader title="Log de auditoría" icon="≡"
-        actions={<Btn variant="ghost" onClick={()=>toast.success('Exportando...')}>⬇ Exportar</Btn>}
+      <PanelHeader title="Log de auditoría" icon={<List size={16} />}
+        actions={<Btn variant="ghost" onClick={()=>toast.success('Exportando...')}><Download size={13} /> Exportar</Btn>}
       />
       <div style={{ padding:'12px 0' }}>
         {logs.map((l:any)=>{
-          const style = ACTION_STYLE[l.accion||''] || { icon:'○', color:'#AE93AA', label: l.accion||'Acción' };
+          const style = ACTION_STYLE[l.accion||''] || { icon:Circle, color:'#AE93AA', label: l.accion||'Acción' };
           const desc  = isReal ? (l.datos ? JSON.stringify(l.datos).slice(0,80) : l.tabla||'') : l.desc;
           const time  = isReal ? timeAgo(l.createdAt||l.created_at) : l.tiempo;
           return (
@@ -66,8 +71,8 @@ export default function AuditoriaAdminPage() {
               {/* Colored dot */}
               <div style={{ width:8, height:8, borderRadius:'50%', background:style.color, flexShrink:0 }} />
               {/* Icon */}
-              <div style={{ width:36, height:36, borderRadius:10, background:`${style.color}18`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, color:style.color, flexShrink:0 }}>
-                {style.icon}
+              <div style={{ width:36, height:36, borderRadius:10, background:`${style.color}18`, display:'flex', alignItems:'center', justifyContent:'center', color:style.color, flexShrink:0 }}>
+                <style.icon size={16} />
               </div>
               {/* Content */}
               <div style={{ flex:1 }}>

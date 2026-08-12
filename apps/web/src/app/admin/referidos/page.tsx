@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { MetricCard, Panel, PanelHeader, Table, TR, TD, StatusBadge, Btn, fmt, fmtDate } from '@/components/admin/ui';
+import { Share2, Check, Clock, CircleDollarSign, Download, Trophy, Medal } from 'lucide-react';
 
 export default function ReferidosPage() {
   const { data } = useQuery({
@@ -23,20 +24,20 @@ export default function ReferidosPage() {
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
       {/* Metrics */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14 }}>
-        <MetricCard icon="◈" value={String(stats.total||0)}    label="Total referidos"         color="#852EC7" bg="rgba(133,46,199,.2)" />
-        <MetricCard icon="✓" value={String(stats.pagados||0)}  label="Comisiones pagadas"      color="#6CC998" bg="rgba(108,201,152,.2)" />
-        <MetricCard icon="⊙" value={String(stats.pendientes||0)} label="Pendientes (sin 1ra TX)" color="#d4a017" bg="rgba(212,160,23,.2)" />
-        <MetricCard icon="◎" value={fmt(stats.total_pagado||0)} label="Total pagado en comisiones" color="#C0392B" bg="rgba(192,57,43,.2)" />
+        <MetricCard icon={<Share2 size={22} />} value={String(stats.total||0)}    label="Total referidos"         color="#852EC7" bg="rgba(133,46,199,.2)" />
+        <MetricCard icon={<Check size={22} />} value={String(stats.pagados||0)}  label="Comisiones pagadas"      color="#6CC998" bg="rgba(108,201,152,.2)" />
+        <MetricCard icon={<Clock size={22} />} value={String(stats.pendientes||0)} label="Pendientes (sin 1ra TX)" color="#d4a017" bg="rgba(212,160,23,.2)" />
+        <MetricCard icon={<CircleDollarSign size={22} />} value={fmt(stats.total_pagado||0)} label="Total pagado en comisiones" color="#C0392B" bg="rgba(192,57,43,.2)" />
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'1.6fr 1fr', gap:14 }}>
         {/* Table */}
         <Panel>
-          <PanelHeader title={`${referidos.length} relaciones de referido`} icon="◈"
+          <PanelHeader title={`${referidos.length} relaciones de referido`} icon={<Share2 size={16} />}
             actions={
               <>
                 <Btn variant="primary">+ Crear referido</Btn>
-                <Btn variant="ghost">⬇ CSV</Btn>
+                <Btn variant="ghost"><Download size={13} /> CSV</Btn>
               </>
             }
           />
@@ -63,17 +64,17 @@ export default function ReferidosPage() {
 
         {/* Ranking */}
         <Panel>
-          <PanelHeader title="Ranking de referidores" icon="⊡" />
+          <PanelHeader title="Ranking de referidores" icon={<Trophy size={16} />} />
           <div style={{ padding:'10px 0' }}>
             {ranking.length === 0 && (
               <div style={{ textAlign:'center', padding:32, color:'rgba(255,255,255,.3)', fontSize:13 }}>Sin datos aún</div>
             )}
             {ranking.slice(0,10).map((r:any, i:number) => {
-              const medals = ['🥇','🥈','🥉'];
+              const medalColors = ['#FFD700','#C0C0C0','#CD7F32'];
               return (
                 <div key={r.id||i} style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 18px', borderBottom:'1px solid rgba(255,255,255,.04)' }}>
                   <div style={{ width:26, height:26, borderRadius:8, background:i<3?'rgba(133,46,199,.2)':'rgba(255,255,255,.06)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>
-                    {i<3 ? medals[i] : i+1}
+                    {i<3 ? <Medal size={14} color={medalColors[i]} /> : i+1}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:13, fontWeight:700, color:'#fff', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.nombre}</div>

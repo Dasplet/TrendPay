@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, TR, TD, StatusBadge, KycBadge, Avatar, Btn, Modal, Input, fmt, fmtDate } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
+import { Users, Download, Eye, Pencil, Lock, Trash2, AlertTriangle } from 'lucide-react';
 
 export default function UsuariosPage() {
   const qc = useQueryClient();
@@ -41,12 +42,12 @@ export default function UsuariosPage() {
     <div>
       <Panel>
         <PanelHeader
-          title={`${users.length} usuarios registrados`} icon="◉"
+          title={`${users.length} usuarios registrados`} icon={<Users size={16} />}
           actions={
             <>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar usuario..."
                 style={{ background:'rgba(30,12,65,.6)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'6px 12px', fontSize:12, color:'#fff', outline:'none', width:200 }} />
-              <Btn variant="ghost">⬇ Exportar CSV</Btn>
+              <Btn variant="ghost"><Download size={13} /> Exportar CSV</Btn>
               <Btn variant="primary" onClick={() => setShowNew(true)}>+ Nuevo usuario</Btn>
             </>
           }
@@ -77,10 +78,10 @@ export default function UsuariosPage() {
               <TD><StatusBadge status={u.bloqueado?'bloqueado':'activo'} /></TD>
               <TD>
                 <div style={{ display:'flex', gap:6 }}>
-                  <Btn variant="ghost" onClick={() => setSelected(u)} style={{ padding:'5px 8px' }}>👁</Btn>
-                  <Btn variant="ghost" onClick={() => setShowEdit({...u})} style={{ padding:'5px 8px' }}>✏</Btn>
-                  <Btn variant="ghost" onClick={() => updateMut.mutate({ id:u.id, data:{ bloqueado: !u.bloqueado } })} style={{ padding:'5px 8px' }}>🔒</Btn>
-                  <Btn variant="danger" onClick={() => setShowDel(u)} style={{ padding:'5px 8px' }}>🗑</Btn>
+                  <Btn variant="ghost" onClick={() => setSelected(u)} style={{ padding:'5px 8px' }}><Eye size={14} /></Btn>
+                  <Btn variant="ghost" onClick={() => setShowEdit({...u})} style={{ padding:'5px 8px' }}><Pencil size={14} /></Btn>
+                  <Btn variant="ghost" onClick={() => updateMut.mutate({ id:u.id, data:{ bloqueado: !u.bloqueado } })} style={{ padding:'5px 8px' }}><Lock size={14} /></Btn>
+                  <Btn variant="danger" onClick={() => setShowDel(u)} style={{ padding:'5px 8px' }}><Trash2 size={14} /></Btn>
                 </div>
               </TD>
             </TR>
@@ -131,7 +132,7 @@ export default function UsuariosPage() {
       <Modal open={!!showDel} onClose={() => setShowDel(null)} title="¿Eliminar usuario?">
         {showDel && (
           <div style={{ textAlign:'center' }}>
-            <div style={{ fontSize:40, marginBottom:12 }}>⚠️</div>
+            <div style={{ display:'flex', justifyContent:'center', color:'#d4a017', marginBottom:12 }}><AlertTriangle size={40} /></div>
             <div style={{ fontSize:14, color:'rgba(255,255,255,.8)', marginBottom:20 }}>
               Estás por eliminar a <strong style={{ color:'#fff' }}>{showDel.nombre}</strong>. Esta acción no se puede deshacer.
             </div>

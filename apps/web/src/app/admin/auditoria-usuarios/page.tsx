@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Panel, PanelHeader, Table, TR, TD, Btn, fmtDate } from '@/components/admin/ui';
+import { Users, RotateCcw, Download, AlertTriangle } from 'lucide-react';
 
 const ACTION_COLORS: Record<string,{c:string,bg:string}> = {
   CAMBIO_PERFIL:             { c:'#852EC7', bg:'rgba(133,46,199,.15)' },
@@ -25,19 +26,19 @@ export default function AuditoriaUsuariosPage() {
 
   return (
     <Panel>
-      <PanelHeader title={`${logs.length} cambios registrados`} icon="◉"
+      <PanelHeader title={`${logs.length} cambios registrados`} icon={<Users size={16} />}
         actions={
           <>
             <span style={{ fontSize:11, color:'rgba(255,255,255,.35)' }}>Actualización automática cada 15s</span>
-            <Btn variant="ghost" onClick={() => refetch()}>↺ Actualizar</Btn>
-            <Btn variant="ghost">⬇ CSV</Btn>
+            <Btn variant="ghost" onClick={() => refetch()}><RotateCcw size={13} /> Actualizar</Btn>
+            <Btn variant="ghost"><Download size={13} /> CSV</Btn>
           </>
         }
       />
 
       {needsMigration && (
-        <div style={{ margin:'12px 16px', background:'rgba(212,160,23,.08)', border:'1px solid rgba(212,160,23,.25)', borderRadius:10, padding:'14px 18px', color:'#d4a017', fontSize:13 }}>
-          ⚠ La tabla de auditoría no existe aún. Ejecuta: <code style={{ background:'rgba(0,0,0,.3)', padding:'2px 8px', borderRadius:6, fontFamily:'monospace' }}>npm run migrate-v2</code>
+        <div style={{ margin:'12px 16px', background:'rgba(212,160,23,.08)', border:'1px solid rgba(212,160,23,.25)', borderRadius:10, padding:'14px 18px', color:'#d4a017', fontSize:13, display:'flex', alignItems:'center', gap:8 }}>
+          <AlertTriangle size={16} style={{ flexShrink:0 }} /> La tabla de auditoría no existe aún. Ejecuta: <code style={{ background:'rgba(0,0,0,.3)', padding:'2px 8px', borderRadius:6, fontFamily:'monospace' }}>npm run migrate-v2</code>
         </div>
       )}
 

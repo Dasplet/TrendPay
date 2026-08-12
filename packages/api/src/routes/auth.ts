@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomInt } from 'crypto';
 import { prisma } from '../index';
 import { authenticate, AuthUser } from '../middleware/auth';
 import { authLimiter } from '../middleware/rateLimiter';
@@ -23,6 +23,30 @@ function generateTokens(user: AuthUser) {
     { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' } as jwt.SignOptions
   );
   return { accessToken, refreshToken };
+}
+
+// ── Session helpers ──
+const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 días
+
+async function createSession(req: Request, userId: string, refreshToken: string) {
+  await prisma.session.create({
+    data: {
+      userId,
+      refreshToken,
+      userAgent: req.headers['user-agent'] || null,
+      ip: req.ip || null,
+      expiresAt: new Date(Date.now() + SESSION_MAX_AGE_MS),
+    },
+  });
+}
+
+function setRefreshCookie(res: Response, refreshToken: string) {
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: SESSION_MAX_AGE_MS,
+  });
 }
 
 // ══ POST /api/auth/login ══
@@ -80,24 +104,8 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     const authUser: AuthUser = { id: user.id, cedula: user.cedula, nombre: user.nombre, rol: user.rol, subRol: user.subRol };
     const { accessToken, refreshToken } = generateTokens(authUser);
 
-    // Store refresh token in DB
-    await prisma.session.create({
-      data: {
-        userId: user.id,
-        refreshToken,
-        userAgent: req.headers['user-agent'] || null,
-        ip: req.ip || null,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
-    });
-
-    // HttpOnly cookie for refresh token (web)
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
+    await createSession(req, user.id, refreshToken);
+    setRefreshCookie(res, refreshToken);
 
     logger.info('Login exitoso', { userId: user.id, cedula });
 
@@ -201,22 +209,8 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
     const authUser: AuthUser = { id: user.id, cedula: user.cedula, nombre: user.nombre, rol: user.rol, subRol: user.subRol };
     const { accessToken, refreshToken } = generateTokens(authUser);
 
-    await prisma.session.create({
-      data: {
-        userId: user.id,
-        refreshToken,
-        userAgent: req.headers['user-agent'] || null,
-        ip: req.ip || null,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
-    });
-
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
+    await createSession(req, user.id, refreshToken);
+    setRefreshCookie(res, refreshToken);
 
     logger.info('Nuevo usuario registrado', { userId: user.id, cedula });
 
@@ -267,22 +261,8 @@ router.post('/refresh', async (req: Request, res: Response) => {
 
     // Rotate refresh token
     await prisma.session.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
-    await prisma.session.create({
-      data: {
-        userId: user.id,
-        refreshToken: newRefreshToken,
-        userAgent: req.headers['user-agent'] || null,
-        ip: req.ip || null,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-      },
-    });
-
-    res.cookie('refreshToken', newRefreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 30 * 24 * 60 * 60 * 1000,
-    });
+    await createSession(req, user.id, newRefreshToken);
+    setRefreshCookie(res, newRefreshToken);
 
     res.json({ ok: true, accessToken, refreshToken: newRefreshToken });
   } catch {
@@ -466,7 +446,7 @@ router.post('/send-otp', async (req: Request, res: Response) => {
   const { correo, celular } = req.body;
   const key = correo || celular;
   if (!key) return res.status(400).json({ ok: false, mensaje: 'Correo o celular requerido' });
-  const otp     = String(Math.floor(100000 + Math.random() * 900000));
+  const otp     = String(randomInt(100000, 1000000));
   const expires = new Date(Date.now() + 10 * 60 * 1000);
   otpStore.set(key, { otp, expires });
   logger.info(`OTP para ${key}: ${otp}`);

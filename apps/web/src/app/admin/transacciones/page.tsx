@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, TR, TD, StatusBadge, Btn, fmt, fmtDate } from '@/components/admin/ui';
+import { ArrowLeftRight, Download, FileSpreadsheet } from 'lucide-react';
 
 const FILTERS = ['Todas','Consigna','Cobro QR','Retiro','Envío'];
 
@@ -22,13 +23,13 @@ export default function TransaccionesPage() {
 
   return (
     <Panel>
-      <PanelHeader title={`${txs.length} transacciones`} icon="⇄"
+      <PanelHeader title={`${txs.length} transacciones`} icon={<ArrowLeftRight size={16} />}
         actions={
           <>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..."
               style={{ background:'rgba(30,12,65,.6)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'6px 12px', fontSize:12, color:'#fff', outline:'none', width:180 }} />
-            <Btn variant="ghost">⬇ CSV</Btn>
-            <Btn variant="ghost">📋 Excel</Btn>
+            <Btn variant="ghost"><Download size={13} /> CSV</Btn>
+            <Btn variant="ghost"><FileSpreadsheet size={13} /> Excel</Btn>
           </>
         }
       />

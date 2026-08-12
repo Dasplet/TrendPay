@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import QRCode from 'qrcode';
 import {
   ArrowRight,
@@ -31,6 +32,7 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useAuthStore, type User } from '@/store/authStore';
+import { banksApi } from '@/lib/api';
 
 export function fmtCOP(value?: number | string | null) {
   const n = Number(value || 0);
@@ -191,6 +193,77 @@ export function AmountPicker({ value, setValue, options = [10000, 20000, 50000, 
         ))}
       </div>
     </div>
+  );
+}
+
+export function useBanksList() {
+  return useQuery({
+    queryKey: ['banks-list'],
+    queryFn: () => banksApi.list(),
+    select: (res) => res.data.bancos || [],
+  });
+}
+
+export function BankAccountFields({
+  bancos,
+  label = 'Selecciona el banco:',
+  bancoId,
+  setBancoId,
+  tipoCuenta,
+  setTipoCuenta,
+  numeroCuenta,
+  setNumeroCuenta,
+  nombreTitular,
+  setNombreTitular,
+  cedulaTitular,
+  setCedulaTitular,
+}: Readonly<{
+  bancos: any[];
+  label?: string;
+  bancoId: string;
+  setBancoId: (id: string) => void;
+  tipoCuenta: string;
+  setTipoCuenta: (v: string) => void;
+  numeroCuenta: string;
+  setNumeroCuenta: (v: string) => void;
+  nombreTitular: string;
+  setNombreTitular: (v: string) => void;
+  cedulaTitular: string;
+  setCedulaTitular: (v: string) => void;
+}>) {
+  return (
+    <>
+      <p className="tp-modal-label">{label}</p>
+      <div className="tp-bank-list">
+        {bancos.map((b: any) => (
+          <button key={b.id} onClick={() => setBancoId(b.id)} className={bancoId === b.id ? 'selected' : ''}>
+            <span className="tp-bank-logo">{b.nombre.slice(0, 2).toUpperCase()}</span>
+            <div><strong>{b.nombre} {b.nuevo && <em>Nuevo</em>}</strong></div>
+            <ChevronRight size={19} />
+          </button>
+        ))}
+      </div>
+
+      <label className="tp-form-field">
+        <span>Tipo de cuenta</span>
+        <select value={tipoCuenta} onChange={(e) => setTipoCuenta(e.target.value)}>
+          <option value="ahorros">Ahorros</option>
+          <option value="corriente">Corriente</option>
+        </select>
+      </label>
+      <label className="tp-form-field">
+        <span>Número de cuenta</span>
+        <input value={numeroCuenta} onChange={(e) => setNumeroCuenta(e.target.value.replace(/\D/g, ''))} placeholder="Ej. 04512345678" inputMode="numeric" />
+      </label>
+      <label className="tp-form-field">
+        <span>Nombre del titular</span>
+        <input value={nombreTitular} onChange={(e) => setNombreTitular(e.target.value)} placeholder="Nombre completo" />
+      </label>
+      <label className="tp-form-field">
+        <span>Cédula del titular</span>
+        <input value={cedulaTitular} onChange={(e) => setCedulaTitular(e.target.value.replace(/\D/g, ''))} placeholder="Ej. 1023456789" inputMode="numeric" />
+      </label>
+    </>
   );
 }
 

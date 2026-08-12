@@ -28,7 +28,8 @@ export function maskAccount(num: string): string {
 }
 
 export function genCodigo(prefix: string): string {
-  return `${prefix}-${Math.floor(Math.random() * 900000 + 100000)}`;
+  const numero = crypto.randomInt(100000, 1000000);
+  return `${prefix}-${numero}`;
 }
 
 export function genQrToken(): string {

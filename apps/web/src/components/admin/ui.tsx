@@ -1,12 +1,15 @@
 'use client';
 
+import { X } from 'lucide-react';
+import type { ReactNode } from 'react';
+
 // ── Metric card ──
 export function MetricCard({ icon, value, label, color = '#852EC7', bg = 'rgba(133,46,199,.15)' }:
-  { icon: string; value: string; label: string; color?: string; bg?: string }) {
+  { icon: ReactNode; value: string; label: string; color?: string; bg?: string }) {
   return (
     <div style={{ background:'#252547', border:'1px solid rgba(133,46,199,.18)', borderRadius:16, padding:'24px 24px', position:'relative', overflow:'hidden' }}>
       <div style={{ position:'absolute', top:-20, right:-20, width:100, height:100, borderRadius:'50%', background: bg, opacity:.4 }} />
-      <div style={{ width:44, height:44, borderRadius:12, background:bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, marginBottom:16, color }}>
+      <div style={{ width:44, height:44, borderRadius:12, background:bg, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:16, color }}>
         {icon}
       </div>
       <div style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.5px', marginBottom:4 }}>{value}</div>
@@ -25,11 +28,11 @@ export function Panel({ children, style }: { children: React.ReactNode; style?: 
 }
 
 // ── Panel header ──
-export function PanelHeader({ title, icon, actions }: { title: string; icon?: string; actions?: React.ReactNode }) {
+export function PanelHeader({ title, icon, actions }: { title: string; icon?: ReactNode; actions?: React.ReactNode }) {
   return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 20px', borderBottom:'1px solid rgba(133,46,199,.12)' }}>
       <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:14, fontWeight:700, color:'#fff' }}>
-        {icon && <span style={{ color:'#852EC7' }}>{icon}</span>}
+        {icon && <span style={{ color:'#852EC7', display:'inline-flex' }}>{icon}</span>}
         {title}
       </div>
       {actions && <div style={{ display:'flex', gap:8 }}>{actions}</div>}
@@ -137,7 +140,7 @@ export function Modal({ open, onClose, title, children }: { open:boolean; onClos
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }} onClick={onClose}>
       <div style={{ background:'#252547', border:'1px solid rgba(133,46,199,.3)', borderRadius:20, width:'100%', maxWidth:480, maxHeight:'90vh', overflowY:'auto', padding:28, position:'relative' }} onClick={e => e.stopPropagation()}>
-        <button onClick={onClose} style={{ position:'absolute', top:16, right:16, width:28, height:28, borderRadius:8, background:'rgba(255,255,255,.08)', border:'none', color:'#fff', cursor:'pointer', fontSize:16 }}>×</button>
+        <button onClick={onClose} style={{ position:'absolute', top:16, right:16, width:28, height:28, borderRadius:8, background:'rgba(255,255,255,.08)', border:'none', color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><X size={16} /></button>
         <div style={{ fontSize:18, fontWeight:800, color:'#fff', marginBottom:20 }}>{title}</div>
         {children}
       </div>

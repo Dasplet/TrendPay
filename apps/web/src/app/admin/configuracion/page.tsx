@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Avatar, Btn } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
+import { Settings2, ShieldCheck, Check } from 'lucide-react';
 
 function ParamRow({ label, sub, value, onChange }: any) {
   const [editing, setEditing] = useState(false);
@@ -23,7 +24,7 @@ function ParamRow({ label, sub, value, onChange }: any) {
             {val}
           </div>
         )}
-        <button onClick={()=>{setEditing(false);onChange(val);toast.success('Guardado');}} style={{ width:32, height:32, borderRadius:8, background:'rgba(133,46,199,.2)', border:'1px solid rgba(133,46,199,.3)', color:'#c088f0', cursor:'pointer', fontSize:16 }}>✓</button>
+        <button onClick={()=>{setEditing(false);onChange(val);toast.success('Guardado');}} style={{ width:32, height:32, borderRadius:8, background:'rgba(133,46,199,.2)', border:'1px solid rgba(133,46,199,.3)', color:'#c088f0', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><Check size={16} /></button>
       </div>
     </div>
   );
@@ -39,7 +40,7 @@ export default function ConfiguracionPage() {
   return (
     <div style={{ display:'grid', gridTemplateColumns:'1.2fr 1fr', gap:16 }}>
       <Panel>
-        <PanelHeader title="Parámetros del sistema" icon="⊙" />
+        <PanelHeader title="Parámetros del sistema" icon={<Settings2 size={16} />} />
         <ParamRow label="Comisión por transacción" sub="Se aplica a todas las operaciones" value={cfg.comision} onChange={(v:string)=>setCfg(p=>({...p,comision:v}))} />
         <ParamRow label="Límite diario de retiro"  sub="Por usuario · Superfinanciera"    value={cfg.limite_diario} onChange={(v:string)=>setCfg(p=>({...p,limite_diario:v}))} />
         <ParamRow label="Límite mensual de retiro" sub="Por usuario · Superfinanciera"    value={cfg.limite_mensual} onChange={(v:string)=>setCfg(p=>({...p,limite_mensual:v}))} />
@@ -47,7 +48,7 @@ export default function ConfiguracionPage() {
       </Panel>
 
       <Panel>
-        <PanelHeader title="Roles y accesos" icon="◈" />
+        <PanelHeader title="Roles y accesos" icon={<ShieldCheck size={16} />} />
         <div style={{ padding:'8px 0', maxHeight:500, overflowY:'auto' }}>
           {users.map((u:any)=>(
             <div key={u.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 20px', borderBottom:'1px solid rgba(255,255,255,.04)' }}>

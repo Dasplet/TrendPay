@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, TR, TD, StatusBadge, Btn, Modal, Input, fmt, fmtDate } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
+import { Clock, CheckCircle2, Check, X, Download } from 'lucide-react';
 
 export default function RetirosPage() {
   const qc = useQueryClient();
@@ -25,7 +26,7 @@ export default function RetirosPage() {
 
   const approveMut = useMutation({
     mutationFn: (id: string) => adminApi.approveWD(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey:['admin-retiros-pend'] }); qc.invalidateQueries({ queryKey:['admin-retiros-all'] }); toast.success('✓ Retiro aprobado'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey:['admin-retiros-pend'] }); qc.invalidateQueries({ queryKey:['admin-retiros-all'] }); toast.success('Retiro aprobado'); },
     onError: (e:any) => toast.error(e.response?.data?.mensaje || 'Error'),
   });
 
@@ -43,7 +44,7 @@ export default function RetirosPage() {
 
       {/* Pending queue */}
       <Panel style={{ border:'1px solid rgba(212,160,23,.25)' }}>
-        <PanelHeader title={`Cola de aprobación · ${pendientes.length} pendiente${pendientes.length!==1?'s':''}`} icon="⊙"
+        <PanelHeader title={`Cola de aprobación · ${pendientes.length} pendiente${pendientes.length!==1?'s':''}`} icon={<Clock size={16} />}
           actions={<span style={{ fontSize:11, color:'rgba(212,160,23,.7)' }}>Para procesar: transfiere manualmente y marca como aprobado</span>}
         />
         <Table headers={['Referencia','Usuario','Banco destino','Datos de transferencia','Monto','Solicitado','Acciones']}>
@@ -51,7 +52,7 @@ export default function RetirosPage() {
             <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(255,255,255,.3)' }} colSpan={7 as any}>Cargando...</TD></TR>
           ) : pendientes.length === 0 ? (
             <TR><TD style={{ textAlign:'center', padding:36, color:'rgba(255,255,255,.3)' }} colSpan={7 as any}>
-              <div style={{ fontSize:28, marginBottom:8 }}>✓</div>
+              <div style={{ display:'flex', justifyContent:'center', color:'#6CC998', marginBottom:8 }}><CheckCircle2 size={28} /></div>
               Sin retiros pendientes · Todo al día
             </TD></TR>
           ) : pendientes.map((w:any) => (
@@ -85,8 +86,8 @@ export default function RetirosPage() {
               <TD style={{ fontSize:11, color:'rgba(255,255,255,.35)', whiteSpace:'nowrap' }}>{fmtDate(w.created_at)}</TD>
               <TD>
                 <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-                  <Btn variant="primary" onClick={() => approveMut.mutate(w.id)} disabled={approveMut.isPending}>✓ Transferido</Btn>
-                  <Btn variant="danger"  onClick={() => { setShowReject(w); setMotivo(''); }}>✗ Rechazar</Btn>
+                  <Btn variant="primary" onClick={() => approveMut.mutate(w.id)} disabled={approveMut.isPending}><Check size={14} /> Transferido</Btn>
+                  <Btn variant="danger"  onClick={() => { setShowReject(w); setMotivo(''); }}><X size={14} /> Rechazar</Btn>
                 </div>
               </TD>
             </TR>
@@ -96,8 +97,8 @@ export default function RetirosPage() {
 
       {/* History */}
       <Panel>
-        <PanelHeader title="Historial de retiros · procesados" icon="⊙"
-          actions={<Btn variant="ghost">⬇ CSV</Btn>}
+        <PanelHeader title="Historial de retiros · procesados" icon={<CheckCircle2 size={16} />}
+          actions={<Btn variant="ghost"><Download size={13} /> CSV</Btn>}
         />
         <Table headers={['Banco','Titular','Cuenta','Usuario','Monto','Estado','Fecha']}>
           {procesados.length === 0 ? (

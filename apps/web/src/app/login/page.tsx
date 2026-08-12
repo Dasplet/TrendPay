@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const router   = useRouter();
@@ -101,7 +102,7 @@ export default function LoginPage() {
           {/* Error */}
           {error && (
             <div className="text-[#C0392B] text-xs text-center mb-3 flex items-center justify-center gap-1">
-              <span>⚠</span> {error}
+              <AlertCircle size={14} /> {error}
             </div>
           )}
 
