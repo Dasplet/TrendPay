@@ -204,6 +204,22 @@ export function useBanksList() {
   });
 }
 
+const BANK_LOGO_EXTENSIONS = ['png', 'jpg'];
+
+function BankLogo({ id, nombre }: { id: string; nombre: string }) {
+  const [attempt, setAttempt] = useState(0);
+  if (attempt >= BANK_LOGO_EXTENSIONS.length) {
+    return <span className="tp-bank-tile-fallback">{nombre.slice(0, 2).toUpperCase()}</span>;
+  }
+  return (
+    <img
+      src={`/bancos/${id}.${BANK_LOGO_EXTENSIONS[attempt]}`}
+      alt={nombre}
+      onError={() => setAttempt((a) => a + 1)}
+    />
+  );
+}
+
 export function BankAccountFields({
   bancos,
   label = 'Selecciona el banco:',
@@ -234,15 +250,23 @@ export function BankAccountFields({
   return (
     <>
       <p className="tp-modal-label">{label}</p>
-      <div className="tp-bank-list">
+      <div className="tp-bank-grid">
         {bancos.map((b: any) => (
-          <button key={b.id} onClick={() => setBancoId(b.id)} className={bancoId === b.id ? 'selected' : ''}>
-            <span className="tp-bank-logo">{b.nombre.slice(0, 2).toUpperCase()}</span>
-            <div><strong>{b.nombre} {b.nuevo && <em>Nuevo</em>}</strong></div>
-            <ChevronRight size={19} />
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => setBancoId(b.id)}
+            className={`tp-bank-tile ${bancoId === b.id ? 'selected' : ''}`}
+            title={b.nombre}
+          >
+            <BankLogo id={b.id} nombre={b.nombre} />
+            {b.nuevo && <span className="tp-bank-tile-badge">Nuevo</span>}
           </button>
         ))}
       </div>
+      {bancoId && (
+        <p className="tp-bank-selected-name">{bancos.find((b: any) => b.id === bancoId)?.nombre}</p>
+      )}
 
       <label className="tp-form-field">
         <span>Tipo de cuenta</span>

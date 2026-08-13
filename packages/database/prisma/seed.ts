@@ -9,18 +9,17 @@ async function main() {
 
   // Seed banks
   const banks = [
-    { id: 'nubak',       nombre: 'Nubak',             nuevo: true,  orden: 1  },
+    { id: 'nubank',      nombre: 'Nubank',            nuevo: true,  orden: 1  },
     { id: 'bancolombia', nombre: 'Bancolombia',        nuevo: false, orden: 2  },
     { id: 'nequi',       nombre: 'Nequi',              nuevo: false, orden: 3  },
-    { id: 'daviplata',   nombre: 'Daviplata',          nuevo: false, orden: 4  },
-    { id: 'bbva',        nombre: 'BBVA',               nuevo: false, orden: 5  },
-    { id: 'bogota',      nombre: 'Banco de Bogotá',    nuevo: false, orden: 6  },
-    { id: 'davivienda',  nombre: 'Davivienda',         nuevo: false, orden: 7  },
-    { id: 'falabella',   nombre: 'Banco Falabella',    nuevo: false, orden: 8  },
-    { id: 'occidente',   nombre: 'Banco de Occidente', nuevo: false, orden: 9  },
-    { id: 'popular',     nombre: 'Banco Popular',      nuevo: false, orden: 10 },
-    { id: 'av-villas',   nombre: 'AV Villas',          nuevo: false, orden: 11 },
-    { id: 'itau',        nombre: 'Banco Itaú',         nuevo: false, orden: 12 },
+    { id: 'bbva',        nombre: 'BBVA',               nuevo: false, orden: 4  },
+    { id: 'bogota',      nombre: 'Banco de Bogotá',    nuevo: false, orden: 5  },
+    { id: 'davivienda',  nombre: 'DAVI Bank',          nuevo: false, orden: 6  },
+    { id: 'falabella',   nombre: 'Banco Falabella',    nuevo: false, orden: 7  },
+    { id: 'occidente',   nombre: 'Banco de Occidente', nuevo: false, orden: 8  },
+    { id: 'popular',     nombre: 'Banco Popular',      nuevo: false, orden: 9  },
+    { id: 'av-villas',   nombre: 'AV Villas',          nuevo: false, orden: 10 },
+    { id: 'itau',        nombre: 'Banco Itaú',         nuevo: false, orden: 11 },
   ];
 
   for (const bank of banks) {
