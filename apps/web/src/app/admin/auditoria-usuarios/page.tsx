@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Panel, PanelHeader, Table, TR, TD, Btn, fmtDate } from '@/components/admin/ui';
 import { Users, RotateCcw, Download, AlertTriangle } from 'lucide-react';
+import { downloadCsv } from '@/lib/exportCsv';
 
 const ACTION_COLORS: Record<string,{c:string,bg:string}> = {
   CAMBIO_PERFIL:             { c:'#852EC7', bg:'rgba(133,46,199,.15)' },
@@ -24,6 +25,22 @@ export default function AuditoriaUsuariosPage() {
   const logs: any[] = data?.logs || [];
   const needsMigration = data?._info;
 
+  function exportarCsv() {
+    downloadCsv('auditoria-usuarios', ['Acción', 'Campo', 'Valor anterior', 'Valor nuevo', 'Usuario', 'Cédula', 'Fecha'],
+      logs.map((l: any) => {
+        const isPIN = l.campo === 'pin';
+        return [
+          ACTION_LABELS[l.accion] || l.accion || '',
+          CAMPO_LABELS[l.campo] || l.campo || '',
+          isPIN ? '••••' : (l.valorAntes || l.valor_antes || ''),
+          isPIN ? '••••' : (l.valorDespues || l.valor_despues || ''),
+          l.usuario_nombre || '',
+          l.usuario_cedula || '',
+          fmtDate(l.createdAt || l.created_at),
+        ];
+      }));
+  }
+
   return (
     <Panel>
       <PanelHeader title={`${logs.length} cambios registrados`} icon={<Users size={16} />}
@@ -31,7 +48,7 @@ export default function AuditoriaUsuariosPage() {
           <>
             <span style={{ fontSize:11, color:'rgba(255,255,255,.35)' }}>Actualización automática cada 15s</span>
             <Btn variant="ghost" onClick={() => refetch()}><RotateCcw size={13} /> Actualizar</Btn>
-            <Btn variant="ghost"><Download size={13} /> CSV</Btn>
+            <Btn variant="ghost" onClick={exportarCsv}><Download size={13} /> CSV</Btn>
           </>
         }
       />

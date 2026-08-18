@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { MetricCard, Panel, PanelHeader, Table, TR, TD, StatusBadge, Btn, fmt, fmtDate } from '@/components/admin/ui';
 import { Share2, Check, Clock, CircleDollarSign, Download, Trophy, Medal } from 'lucide-react';
+import { downloadCsv } from '@/lib/exportCsv';
 
 export default function ReferidosPage() {
   const { data } = useQuery({
@@ -19,6 +20,11 @@ export default function ReferidosPage() {
   const referidos = data?.referidos || [];
   const stats     = data?.stats || {};
   const ranking   = rankData?.ranking || [];
+
+  function exportarCsv() {
+    downloadCsv('referidos', ['Referidor', 'Cédula referidor', 'Referido', 'Cédula referido', 'Comisión', 'Estado', 'Fecha'],
+      referidos.map((r: any) => [r.referidor_nombre || '', r.referidor_cedula || '', r.referido_nombre || '', r.referido_cedula || '', r.comision_valor || 1000, r.status || '', fmtDate(r.created_at)]));
+  }
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
@@ -37,7 +43,7 @@ export default function ReferidosPage() {
             actions={
               <>
                 <Btn variant="primary">+ Crear referido</Btn>
-                <Btn variant="ghost"><Download size={13} /> CSV</Btn>
+                <Btn variant="ghost" onClick={exportarCsv}><Download size={13} /> CSV</Btn>
               </>
             }
           />

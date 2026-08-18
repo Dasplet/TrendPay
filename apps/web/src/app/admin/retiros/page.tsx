@@ -5,6 +5,7 @@ import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, TR, TD, StatusBadge, Btn, Modal, Input, fmt, fmtDate } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
 import { Clock, CheckCircle2, Check, X, Download } from 'lucide-react';
+import { downloadCsv } from '@/lib/exportCsv';
 
 export default function RetirosPage() {
   const qc = useQueryClient();
@@ -38,6 +39,11 @@ export default function RetirosPage() {
 
   const pendientes: any[] = pendData?.retiros || [];
   const procesados: any[] = (allData?.retiros || []).filter((w: any) => w.status !== 'pendiente');
+
+  function exportarCsv() {
+    downloadCsv('retiros', ['Banco', 'Titular', 'Cuenta', 'Usuario', 'Monto', 'Estado', 'Fecha'],
+      procesados.map((w: any) => [w.banco_nombre || '', w.nombre_titular || '', w.numero_cuenta_masked || '', w.usuario_nombre || '', w.monto || 0, w.status || '', fmtDate(w.created_at)]));
+  }
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
@@ -98,7 +104,7 @@ export default function RetirosPage() {
       {/* History */}
       <Panel>
         <PanelHeader title="Historial de retiros · procesados" icon={<CheckCircle2 size={16} />}
-          actions={<Btn variant="ghost"><Download size={13} /> CSV</Btn>}
+          actions={<Btn variant="ghost" onClick={exportarCsv}><Download size={13} /> CSV</Btn>}
         />
         <Table headers={['Banco','Titular','Cuenta','Usuario','Monto','Estado','Fecha']}>
           {procesados.length === 0 ? (

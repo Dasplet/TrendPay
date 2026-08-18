@@ -5,6 +5,7 @@ import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, TR, TD, StatusBadge, KycBadge, Avatar, Btn, Modal, Input, fmt, fmtDate } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
 import { Users, Download, Eye, Pencil, Lock, Trash2, AlertTriangle } from 'lucide-react';
+import { downloadCsv } from '@/lib/exportCsv';
 
 export default function UsuariosPage() {
   const qc = useQueryClient();
@@ -32,6 +33,11 @@ export default function UsuariosPage() {
     onError: (e:any) => toast.error(e.response?.data?.mensaje || 'Error'),
   });
 
+  function exportarCsv() {
+    downloadCsv('usuarios', ['Nombre', 'Correo', 'Cédula', 'Rol', 'Saldo', 'KYC', 'Transacciones', 'Estado'],
+      users.map((u: any) => [u.nombre, u.correo, u.cedula, u.rol === 'admin' ? 'Admin' : 'Usuario', u.saldo || 0, u.kycNivel || u.kyc_nivel || 1, u._txCount || 0, u.bloqueado ? 'Bloqueado' : 'Activo']));
+  }
+
   const deleteMut = useMutation({
     mutationFn: (id: string) => adminApi.deleteUser(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey:['admin-users'] }); toast.success('Usuario eliminado'); setShowDel(null); },
@@ -47,7 +53,7 @@ export default function UsuariosPage() {
             <>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar usuario..."
                 style={{ background:'rgba(30,12,65,.6)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'6px 12px', fontSize:12, color:'#fff', outline:'none', width:200 }} />
-              <Btn variant="ghost"><Download size={13} /> Exportar CSV</Btn>
+              <Btn variant="ghost" onClick={exportarCsv}><Download size={13} /> Exportar CSV</Btn>
               <Btn variant="primary" onClick={() => setShowNew(true)}>+ Nuevo usuario</Btn>
             </>
           }

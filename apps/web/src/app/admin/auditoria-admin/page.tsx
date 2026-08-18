@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Panel, PanelHeader, Btn } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
+import { downloadCsv } from '@/lib/exportCsv';
 import {
   LogIn, Check, X, CircleDollarSign, UserCheck, Lock, Settings2,
   Landmark, UserPlus, Pencil, UserX, List, Download, Circle,
@@ -54,10 +55,20 @@ export default function AuditoriaAdminPage() {
   const logs = apiLogs.length > 0 ? apiLogs : MOCK;
   const isReal = apiLogs.length > 0;
 
+  function exportarCsv() {
+    if (!isReal) return toast.error('Aún no hay registros reales para exportar');
+    downloadCsv('auditoria-admin', ['Acción', 'Detalle', 'Fecha'],
+      logs.map((l: any) => [
+        (ACTION_STYLE[l.accion || ''] || { label: l.accion || 'Acción' }).label,
+        l.datos ? JSON.stringify(l.datos).slice(0, 200) : l.tabla || '',
+        timeAgo(l.createdAt || l.created_at),
+      ]));
+  }
+
   return (
     <Panel>
       <PanelHeader title="Log de auditoría" icon={<List size={16} />}
-        actions={<Btn variant="ghost" onClick={()=>toast.success('Exportando...')}><Download size={13} /> Exportar</Btn>}
+        actions={<Btn variant="ghost" onClick={exportarCsv}><Download size={13} /> Exportar</Btn>}
       />
       <div style={{ padding:'12px 0' }}>
         {logs.map((l:any)=>{

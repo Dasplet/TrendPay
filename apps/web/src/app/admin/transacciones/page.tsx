@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, TR, TD, StatusBadge, Btn, fmt, fmtDate } from '@/components/admin/ui';
 import { ArrowLeftRight, Download, FileSpreadsheet } from 'lucide-react';
+import { downloadCsv } from '@/lib/exportCsv';
 
 const FILTERS = ['Todas','Consigna','Cobro QR','Retiro','Envío'];
 
@@ -21,6 +22,11 @@ export default function TransaccionesPage() {
   if (filter !== 'Todas') txs = txs.filter((t:any) => t.categoria?.toLowerCase().includes(filter.toLowerCase().replace(' ','_')));
   if (search) txs = txs.filter((t:any) => t.descripcion?.toLowerCase().includes(search.toLowerCase()) || t.usuario_nombre?.toLowerCase().includes(search.toLowerCase()) || t.codigo?.toLowerCase().includes(search.toLowerCase()));
 
+  function exportarCsv() {
+    downloadCsv('transacciones', ['Referencia', 'Descripción', 'Usuario', 'Monto', 'Comisión', 'Estado', 'Fecha'],
+      txs.map((t: any) => [t.codigo || '', t.descripcion || '', t.usuario_nombre || '', t.monto_neto || 0, t.comision_valor || 0, t.status || '', fmtDate(t.created_at)]));
+  }
+
   return (
     <Panel>
       <PanelHeader title={`${txs.length} transacciones`} icon={<ArrowLeftRight size={16} />}
@@ -28,8 +34,8 @@ export default function TransaccionesPage() {
           <>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..."
               style={{ background:'rgba(30,12,65,.6)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'6px 12px', fontSize:12, color:'#fff', outline:'none', width:180 }} />
-            <Btn variant="ghost"><Download size={13} /> CSV</Btn>
-            <Btn variant="ghost"><FileSpreadsheet size={13} /> Excel</Btn>
+            <Btn variant="ghost" onClick={exportarCsv}><Download size={13} /> CSV</Btn>
+            <Btn variant="ghost" onClick={exportarCsv}><FileSpreadsheet size={13} /> Excel</Btn>
           </>
         }
       />
