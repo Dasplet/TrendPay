@@ -17,5 +17,7 @@ export function downloadCsv(filename: string, headers: string[], rows: unknown[]
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Revocar de inmediato corta la descarga en algunos navegadores antes
+  // de que alcance a iniciarse.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
