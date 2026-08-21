@@ -343,7 +343,11 @@ input::placeholder { color: rgba(174,147,170,.5); }
   .tp-modal-stage { inset: 0; padding: 16px; }
   .tp-user-page { padding: 0 18px 50px; }
   .tp-topbar, .tp-page-header { margin-left: -18px; margin-right: -18px; padding: 0 22px; min-height: 94px; }
-  .tp-action-grid, .tp-stat-row, .tp-filter-row { grid-template-columns: 1fr; }
+  .tp-stat-row, .tp-filter-row { grid-template-columns: 1fr; }
+  .tp-action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .tp-action-card { min-height: 92px; gap: 8px; border-radius: 16px; }
+  .tp-action-card > span { width: 44px; height: 44px; border-radius: 14px; }
+  .tp-action-card strong { font-size: 11px; text-align: center; }
   .tp-balance-card > strong { font-size: 44px; }
   .tp-sidebar-nav { display: none; }
 }

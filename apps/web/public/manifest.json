@@ -1,0 +1,19 @@
+{
+  "name": "TrendPay — Billetera Virtual",
+  "short_name": "TrendPay",
+  "description": "Tu billetera virtual segura y rápida",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a0840",
+  "theme_color": "#252547",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
