@@ -19,14 +19,8 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
   return (
     <div style={{ position:'fixed', inset:0, zIndex:9999, background:'linear-gradient(160deg,#1a0840 0%,#321168 60%,#252547 100%)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
       <div style={{ marginBottom:48, textAlign:'center' }}>
-        <svg width="160" height="42" viewBox="0 0 400 104" xmlns="http://www.w3.org/2000/svg">
-          <rect x="0" y="22" width="48" height="22" rx="5" fill="#852EC7"/>
-          <rect x="58" y="0" width="22" height="22" rx="5" fill="#6CC998"/>
-          <rect x="58" y="32" width="22" height="12" rx="4" fill="#AE93AA"/>
-          <rect x="90" y="22" width="66" height="22" rx="5" fill="#852EC7"/>
-          <text x="170" y="44" fontFamily="-apple-system,sans-serif" fontSize="42" fontWeight="800" fill="#ffffff" letterSpacing="-1.5">TrendLab.</text>
-        </svg>
-        <div style={{ fontSize:13, color:'rgba(255,255,255,.4)', marginTop:8, letterSpacing:'2px', textTransform:'uppercase' }}>Billetera Virtual</div>
+        <img src="/tp_icon.png" alt="TrendPay" width={88} height={88} style={{ borderRadius:24 }} />
+        <div style={{ fontSize:13, color:'rgba(255,255,255,.4)', marginTop:14, letterSpacing:'2px', textTransform:'uppercase' }}>Billetera Virtual</div>
       </div>
       <div style={{ width:240, marginBottom:16 }}>
         <div style={{ height:3, background:'rgba(255,255,255,.1)', borderRadius:2, overflow:'hidden' }}>

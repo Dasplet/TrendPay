@@ -88,7 +88,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* Logo */}
         <div style={{ padding:'18px 18px 14px', borderBottom:'1px solid rgba(133,46,199,.12)' }}>
-          <div style={{ fontSize:18, fontWeight:900, color:'#fff', letterSpacing:'-.5px' }}>TrendLab.</div>
+          <img src="/tp_icon.png" alt="TrendPay" width={32} height={32} style={{ borderRadius:9 }} />
           <div style={{ marginTop:6 }}>
             <span style={{ fontSize:10, fontWeight:700, background:'rgba(133,46,199,.2)', color:'#c088f0', padding:'3px 10px', borderRadius:20, border:'1px solid rgba(133,46,199,.3)' }}>
               ADMIN PANEL

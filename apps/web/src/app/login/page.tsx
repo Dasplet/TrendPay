@@ -41,7 +41,7 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="text-3xl font-black text-white tracking-tight mb-1">TrendLab.</div>
+          <img src="/tp_icon.png" alt="TrendPay" width={64} height={64} style={{ borderRadius: 18, margin: '0 auto 10px' }} />
           <div className="text-sm text-brand-muted">Billetera virtual segura</div>
         </div>
 

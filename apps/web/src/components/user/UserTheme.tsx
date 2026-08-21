@@ -70,14 +70,10 @@ export function maskPhone(phone?: string | null) {
 }
 
 export function BrandLogo({ compact = false }: { compact?: boolean }) {
+  const size = compact ? 28 : 36;
   return (
-    <div className="tp-logo" aria-label="TrendLab">
-      <span className="tp-logo-bars" aria-hidden="true">
-        <i />
-        <i />
-        <i />
-      </span>
-      {!compact && <strong>TrendLab.</strong>}
+    <div className="tp-logo" aria-label="TrendPay">
+      <img src="/tp_icon.png" alt="TrendPay" width={size} height={size} style={{ borderRadius: size * 0.28 }} />
     </div>
   );
 }

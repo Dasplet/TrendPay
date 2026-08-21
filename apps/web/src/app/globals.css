@@ -72,11 +72,6 @@ input::placeholder { color: rgba(174,147,170,.5); }
   border-bottom: 1px solid rgba(255,255,255,.06);
 }
 .tp-logo { display: inline-flex; align-items: center; gap: 8px; color: #fff; }
-.tp-logo strong { font-weight: 900; letter-spacing: -.04em; }
-.tp-logo-bars { display: inline-flex; align-items: end; gap: 5px; height: 18px; }
-.tp-logo-bars i { display: block; border-radius: 3px; background: #852EC7; width: 20px; height: 6px; }
-.tp-logo-bars i:first-child { width: 7px; height: 7px; background: #6CC998; }
-.tp-logo-bars i:nth-child(2) { height: 13px; }
 .tp-sidebar-user {
   min-height: 92px;
   display: flex;
