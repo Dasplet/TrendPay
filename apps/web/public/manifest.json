@@ -1,4 +1,5 @@
 {
+  "id": "/",
   "name": "TrendPay — Billetera Virtual",
   "short_name": "TrendPay",
   "description": "Tu billetera virtual segura y rápida",
@@ -12,6 +13,12 @@
     {
       "src": "/tp_icon.png",
       "sizes": "500x500",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/tp_icon_512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     }
