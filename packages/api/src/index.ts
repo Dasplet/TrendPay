@@ -158,8 +158,14 @@ async function start() {
       logger.info(`🏥 Health check: http://localhost:${PORT}/health`);
     });
   } catch (err: any) {
-    logger.error('❌ No se pudo iniciar el servidor', { err: err.message });
-    process.exit(1);
+    logger.error('❌ No se pudo iniciar el servidor', { err: err.message, stack: err.stack });
+    // process.exit() puede cortar la escritura del log de arriba a medias —
+    // stdout/stderr son asíncronos cuando están conectados a un pipe (como
+    // en Railway), no a una TTY. Dejamos que el proceso termine solo una
+    // vez se vacíe el event loop, con un exit forzado de respaldo por si algo
+    // más queda abierto.
+    process.exitCode = 1;
+    setTimeout(() => process.exit(1), 1000).unref();
   }
 }
 
