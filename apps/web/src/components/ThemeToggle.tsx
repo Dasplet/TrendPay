@@ -28,7 +28,7 @@ export function useTheme() {
   return { theme, toggle };
 }
 
-export function ThemeToggle({ className = 'tp-theme-toggle' }: { className?: string }) {
+export function ThemeToggle({ className = 'tp-theme-toggle', iconSize = 19 }: { className?: string; iconSize?: number }) {
   const { theme, toggle } = useTheme();
   return (
     <button
@@ -38,7 +38,7 @@ export function ThemeToggle({ className = 'tp-theme-toggle' }: { className?: str
       onClick={toggle}
       className={className}
     >
-      {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
+      {theme === 'dark' ? <Sun size={iconSize} /> : <Moon size={iconSize} />}
     </button>
   );
 }

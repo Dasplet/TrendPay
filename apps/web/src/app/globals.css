@@ -240,6 +240,18 @@ input::placeholder { color: rgba(174,147,170,.5); }
   justify-content: center;
   cursor: pointer;
 }
+.adm-icon-button {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: rgba(133,46,199,.1);
+  border: 1px solid rgba(133,46,199,.2);
+  color: var(--adm-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
 .tp-balance-card {
   position: relative;
   overflow: hidden;
