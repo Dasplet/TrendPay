@@ -62,6 +62,24 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ── Login screen (dark: brand gradient, light: soft lavender-white) ── */
+.tp-login-bg {
+  background: linear-gradient(160deg, #1a0840 0%, #321168 60%, #252547 100%);
+}
+:root[data-theme="light"] .tp-login-bg {
+  background: linear-gradient(160deg, #ffffff 0%, #f1e9fb 55%, #f5f3fb 100%);
+}
+.tp-login-card {
+  background: rgba(255,255,255,.1);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,.2);
+}
+:root[data-theme="light"] .tp-login-card {
+  background: rgba(255,255,255,.82);
+  border: 1px solid rgba(133,46,199,.16);
+  box-shadow: 0 24px 60px rgba(88,30,140,.1);
+}
+
 body {
   background: var(--tp-bg);
   color: var(--tp-text);

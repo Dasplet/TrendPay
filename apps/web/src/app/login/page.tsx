@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { AlertCircle } from 'lucide-react';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function LoginPage() {
   const router   = useRouter();
@@ -59,23 +60,26 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-brand-gradient flex items-center justify-center p-5">
+    <main className="min-h-screen tp-login-bg flex items-center justify-center p-5" style={{ position: 'relative' }}>
+      <div style={{ position: 'absolute', top: 20, right: 20 }}>
+        <ThemeToggle className="tp-theme-toggle" />
+      </div>
       <div className="w-full max-w-sm">
 
         {/* Logo */}
         <div className="text-center mb-8">
           <img src="/tp_icon.png" alt="TrendPay" width={64} height={64} style={{ borderRadius: 18, margin: '0 auto 10px' }} />
-          <div className="text-sm text-brand-muted">Billetera virtual segura</div>
+          <div className="text-sm text-[var(--tp-muted)]">Billetera virtual segura</div>
         </div>
 
         {/* Card */}
-        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl p-8">
+        <div className="tp-login-card rounded-3xl p-8">
 
           {step === 'credenciales' ? (
             <>
               {/* Cédula */}
               <div className="mb-5">
-                <label className="block text-xs font-semibold text-brand-muted uppercase tracking-wider mb-2">
+                <label className="block text-xs font-semibold text-[var(--tp-muted)] uppercase tracking-wider mb-2">
                   Número de cédula
                 </label>
                 <input
@@ -84,13 +88,13 @@ export default function LoginPage() {
                   placeholder="Ej. 1023456789"
                   value={cedula}
                   onChange={e => setCedula(e.target.value.replace(/\D/g, ''))}
-                  className="w-full bg-[rgba(30,12,65,.7)] border border-[rgba(133,46,199,.3)] rounded-xl px-4 py-3 text-white text-base font-mono tracking-widest focus:border-brand-accent outline-none"
+                  className="w-full bg-[rgba(var(--tp-card-rgb),.7)] border border-[rgba(133,46,199,.3)] rounded-xl px-4 py-3 text-[var(--tp-text)] text-base font-mono tracking-widest focus:border-brand-accent outline-none"
                 />
               </div>
 
               {/* PIN dots */}
               <div className="mb-4">
-                <label className="block text-xs font-semibold text-brand-muted uppercase tracking-wider mb-3">
+                <label className="block text-xs font-semibold text-[var(--tp-muted)] uppercase tracking-wider mb-3">
                   PIN de 4 dígitos
                 </label>
                 <div className="flex justify-center gap-4 mb-4">
@@ -98,7 +102,7 @@ export default function LoginPage() {
                     <div key={i} className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-2xl transition-all ${
                       i < pin.length
                         ? 'bg-[rgba(133,46,199,.35)] border-brand-accent text-white'
-                        : 'bg-[rgba(30,12,65,.6)] border-[rgba(133,46,199,.35)] text-white/30'
+                        : 'bg-[rgba(var(--tp-card-rgb),.6)] border-[rgba(133,46,199,.35)] text-[rgba(var(--tp-fg-rgb),.3)]'
                     }`}>
                       {i < pin.length ? '●' : '·'}
                     </div>
@@ -115,7 +119,7 @@ export default function LoginPage() {
                       className={`h-14 rounded-xl font-semibold text-xl transition-all ${
                         k === 'x'
                           ? 'bg-[rgba(192,57,43,.12)] border border-[rgba(192,57,43,.2)] text-[#e87575] hover:bg-[rgba(192,57,43,.25)]'
-                          : 'bg-[rgba(133,46,199,.1)] border border-[rgba(133,46,199,.2)] text-white hover:bg-[rgba(133,46,199,.25)]'
+                          : 'bg-[rgba(133,46,199,.1)] border border-[rgba(133,46,199,.2)] text-[var(--tp-text)] hover:bg-[rgba(133,46,199,.25)]'
                       }`}
                     >
                       {k === 'x' ? '⌫' : k}
@@ -145,12 +149,12 @@ export default function LoginPage() {
             <>
               {/* Paso 2FA */}
               <div className="mb-5 text-center">
-                <div className="text-white font-semibold mb-1">Verificación en dos pasos</div>
-                <div className="text-sm text-brand-muted">{twofaMsg}</div>
+                <div className="text-[var(--tp-text)] font-semibold mb-1">Verificación en dos pasos</div>
+                <div className="text-sm text-[var(--tp-muted)]">{twofaMsg}</div>
               </div>
 
               <div className="mb-5">
-                <label className="block text-xs font-semibold text-brand-muted uppercase tracking-wider mb-2">
+                <label className="block text-xs font-semibold text-[var(--tp-muted)] uppercase tracking-wider mb-2">
                   Código de verificación
                 </label>
                 <input
@@ -161,7 +165,7 @@ export default function LoginPage() {
                   placeholder="000000"
                   value={otp}
                   onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
-                  className="w-full bg-[rgba(30,12,65,.7)] border border-[rgba(133,46,199,.3)] rounded-xl px-4 py-3 text-white text-2xl font-mono tracking-[0.4em] text-center focus:border-brand-accent outline-none"
+                  className="w-full bg-[rgba(var(--tp-card-rgb),.7)] border border-[rgba(133,46,199,.3)] rounded-xl px-4 py-3 text-[var(--tp-text)] text-2xl font-mono tracking-[0.4em] text-center focus:border-brand-accent outline-none"
                 />
               </div>
 
@@ -184,7 +188,7 @@ export default function LoginPage() {
               <div className="text-center mt-4">
                 <button
                   onClick={() => { setStep('credenciales'); setOtp(''); setError(''); }}
-                  className="text-sm text-brand-muted hover:text-white transition-colors"
+                  className="text-sm text-[var(--tp-muted)] hover:text-[var(--tp-text)] transition-colors"
                 >
                   Volver a intentar
                 </button>
