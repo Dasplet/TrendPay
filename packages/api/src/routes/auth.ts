@@ -50,6 +50,42 @@ function setRefreshCookie(res: Response, refreshToken: string) {
   });
 }
 
+// Emite tokens + sesión y responde con el usuario — el tramo final común
+// tanto del login directo como de completar un login con 2FA.
+async function completeLogin(req: Request, res: Response, user: any) {
+  const authUser: AuthUser = { id: user.id, cedula: user.cedula, nombre: user.nombre, rol: user.rol, subRol: user.subRol };
+  const { accessToken, refreshToken } = generateTokens(authUser);
+
+  await createSession(req, user.id, refreshToken);
+  setRefreshCookie(res, refreshToken);
+
+  logger.info('Login exitoso', { userId: user.id, cedula: user.cedula });
+
+  res.json({
+    ok: true,
+    accessToken,
+    refreshToken, // también en body para móvil
+    usuario: {
+      id: user.id,
+      cedula: user.cedula,
+      nombre: user.nombre,
+      correo: user.correo,
+      celular: user.celular,
+      ciudad: user.ciudad,
+      rol: user.rol,
+      subRol: user.subRol,
+      kycVerificado: user.kycVerificado,
+      codigoReferido: user.codigoReferido,
+      saldo: parseFloat(user.wallet?.saldo.toString() || '0'),
+      walletId: user.wallet?.id,
+    },
+  });
+}
+
+// ── 2FA de login (paso extra por correo para cuentas marcadas como sensibles) ──
+const login2faStore = new Map<string, { otp: string; expires: Date; userId: string }>();
+const LOGIN_2FA_TTL_MS = 10 * 60 * 1000;
+
 // ══ POST /api/auth/login ══
 const loginSchema = z.object({
   cedula: z.string().min(6).max(20),
@@ -102,35 +138,60 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       data: { intentosPin: 0, bloqueado: false, bloqueadoHasta: null, ultimoLogin: new Date() },
     });
 
-    const authUser: AuthUser = { id: user.id, cedula: user.cedula, nombre: user.nombre, rol: user.rol, subRol: user.subRol };
-    const { accessToken, refreshToken } = generateTokens(authUser);
+    if (user.requiere2fa) {
+      if (!user.correo) {
+        return res.status(500).json({ ok: false, mensaje: 'Esta cuenta requiere verificación en dos pasos pero no tiene un correo configurado' });
+      }
+      const otp = String(randomInt(100000, 1000000));
+      login2faStore.set(cedula, { otp, expires: new Date(Date.now() + LOGIN_2FA_TTL_MS), userId: user.id });
+      try {
+        const enviado = await sendOtpEmail(user.correo, otp);
+        if (!enviado) logger.info(`2FA login para ${cedula}: ${otp} (correo no configurado, modo debug)`);
+      } catch (err: any) {
+        login2faStore.delete(cedula);
+        logger.error('Error enviando código 2FA de login', { err: err.message, cedula });
+        return res.status(500).json({ ok: false, mensaje: 'No pudimos enviar el código de verificación. Intenta de nuevo.' });
+      }
+      return res.json({
+        ok: true,
+        requiere2fa: true,
+        mensaje: `Código enviado a ${user.correo.replace(/(.{2}).*(@.*)/, '$1***$2')}`,
+        ...(process.env.NODE_ENV !== 'production' ? { otp_debug: otp } : {}),
+      });
+    }
 
-    await createSession(req, user.id, refreshToken);
-    setRefreshCookie(res, refreshToken);
-
-    logger.info('Login exitoso', { userId: user.id, cedula });
-
-    res.json({
-      ok: true,
-      accessToken,
-      refreshToken, // también en body para móvil
-      usuario: {
-        id: user.id,
-        cedula: user.cedula,
-        nombre: user.nombre,
-        correo: user.correo,
-        celular: user.celular,
-        ciudad: user.ciudad,
-        rol: user.rol,
-        subRol: user.subRol,
-        kycVerificado: user.kycVerificado,
-        codigoReferido: user.codigoReferido,
-        saldo: parseFloat(user.wallet?.saldo.toString() || '0'),
-        walletId: user.wallet?.id,
-      },
-    });
+    await completeLogin(req, res, user);
   } catch (err: any) {
     logger.error('Error en login', { err: err.message });
+    res.status(500).json({ ok: false, mensaje: 'Error interno' });
+  }
+});
+
+// ══ POST /api/auth/login/verify-2fa ══
+const verify2faSchema = z.object({
+  cedula: z.string().min(6).max(20),
+  otp:    z.string().min(4).max(8),
+});
+
+router.post('/login/verify-2fa', authLimiter, async (req: Request, res: Response) => {
+  const parse = verify2faSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Datos inválidos' });
+  const { cedula, otp } = parse.data;
+
+  try {
+    const stored = login2faStore.get(cedula);
+    if (!stored) return res.status(400).json({ ok: false, mensaje: 'Código no encontrado. Inicia sesión de nuevo.' });
+    if (new Date() > stored.expires) { login2faStore.delete(cedula); return res.status(400).json({ ok: false, mensaje: 'Código expirado. Inicia sesión de nuevo.' }); }
+    if (stored.otp !== otp) return res.status(400).json({ ok: false, mensaje: 'Código incorrecto' });
+
+    login2faStore.delete(cedula);
+
+    const user = await prisma.user.findUnique({ where: { id: stored.userId }, include: { wallet: true } });
+    if (!user) return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado' });
+
+    await completeLogin(req, res, user);
+  } catch (err: any) {
+    logger.error('Error verificando 2FA de login', { err: err.message, cedula });
     res.status(500).json({ ok: false, mensaje: 'Error interno' });
   }
 });

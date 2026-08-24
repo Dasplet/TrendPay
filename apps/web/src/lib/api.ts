@@ -65,6 +65,7 @@ api.interceptors.response.use(
 // ── Typed API calls ──
 export const authApi = {
   login:      (data: { cedula: string; pin: string }) => api.post('/auth/login', data),
+  verifyLogin2fa: (data: { cedula: string; otp: string }) => api.post('/auth/login/verify-2fa', data),
   register:   (data: any) => api.post('/auth/register', data),
   logout:     () => api.post('/auth/logout'),
   me:         () => api.get('/auth/me'),

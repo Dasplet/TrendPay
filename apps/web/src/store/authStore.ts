@@ -22,7 +22,8 @@ interface AuthState {
   user: User | null;
   accessToken: string | null;
   isLoading: boolean;
-  login: (cedula: string, pin: string) => Promise<void>;
+  login: (cedula: string, pin: string) => Promise<{ requiere2fa: boolean; mensaje?: string }>;
+  verifyLogin2fa: (cedula: string, otp: string) => Promise<void>;
   register: (data: any) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -42,12 +43,31 @@ export const useAuthStore = create<AuthState>()(
         try {
           const { data } = await authApi.login({ cedula, pin });
           if (!data.ok) throw new Error(data.mensaje);
+          if (data.requiere2fa) {
+            set({ isLoading: false });
+            return { requiere2fa: true, mensaje: data.mensaje };
+          }
+          localStorage.setItem('accessToken',  data.accessToken);
+          localStorage.setItem('refreshToken', data.refreshToken);
+          set({ user: { ...data.usuario, avatarDataUrl: get().user?.id === data.usuario?.id ? get().user?.avatarDataUrl : data.usuario?.avatarDataUrl }, accessToken: data.accessToken, isLoading: false });
+          return { requiere2fa: false };
+        } catch (err: any) {
+          set({ isLoading: false });
+          throw new Error(err.response?.data?.mensaje || err.message || 'Error al iniciar sesión');
+        }
+      },
+
+      verifyLogin2fa: async (cedula, otp) => {
+        set({ isLoading: true });
+        try {
+          const { data } = await authApi.verifyLogin2fa({ cedula, otp });
+          if (!data.ok) throw new Error(data.mensaje);
           localStorage.setItem('accessToken',  data.accessToken);
           localStorage.setItem('refreshToken', data.refreshToken);
           set({ user: { ...data.usuario, avatarDataUrl: get().user?.id === data.usuario?.id ? get().user?.avatarDataUrl : data.usuario?.avatarDataUrl }, accessToken: data.accessToken, isLoading: false });
         } catch (err: any) {
           set({ isLoading: false });
-          throw new Error(err.response?.data?.mensaje || err.message || 'Error al iniciar sesión');
+          throw new Error(err.response?.data?.mensaje || err.message || 'Código incorrecto');
         }
       },
 

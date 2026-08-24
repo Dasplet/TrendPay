@@ -25,6 +25,7 @@ model User {
   bloqueado       Boolean   @default(false)
   bloqueadoHasta  DateTime? @map("bloqueado_hasta")
   intentosPin     Int       @default(0) @map("intentos_pin")
+  requiere2fa     Boolean   @default(false) @map("requiere_2fa")
   codigoReferido  String?   @unique @map("codigo_referido")
   referidoPorId   String?   @map("referido_por_id")
   ultimoLogin     DateTime? @map("ultimo_login")
