@@ -52,14 +52,14 @@ export default function ConfiguracionPage() {
         <div style={{ padding:'8px 0', maxHeight:500, overflowY:'auto' }}>
           {users.map((u:any)=>(
             <div key={u.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 20px', borderBottom:'1px solid rgba(255,255,255,.04)' }}>
-              <Avatar name={u.nombre||'?'} size={36} />
+              <div style={{ flexShrink:0 }}><Avatar name={u.nombre||'?'} size={36} /></div>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:13, fontWeight:600, color:'#fff', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{u.nombre}</div>
-                <div style={{ fontSize:11, color:'#AE93AA' }}>CC {u.cedula}</div>
+                <div style={{ fontSize:11, color:'#AE93AA', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>CC {u.cedula}</div>
               </div>
               <select defaultValue={u.rol==='admin'?'Super Admin':'Usuario'}
                 onChange={e=>toast.success(`Rol de ${u.nombre?.split(' ')[0]} actualizado a ${e.target.value}`)}
-                style={{ background:'rgba(30,12,65,.7)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'5px 10px', fontSize:12, color:'#fff', cursor:'pointer', outline:'none' }}>
+                style={{ flexShrink:0, width:150, background:'rgba(30,12,65,.7)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'6px 10px', fontSize:12, color:'#fff', cursor:'pointer', outline:'none' }}>
                 {ROLES.map(r=><option key={r}>{r}</option>)}
               </select>
             </div>
