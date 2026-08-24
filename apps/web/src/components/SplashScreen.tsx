@@ -17,7 +17,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
   }, []);
 
   return (
-    <div style={{ position:'fixed', inset:0, zIndex:9999, background:'linear-gradient(160deg,#1a0840 0%,#321168 60%,#252547 100%)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+    <div style={{ position:'fixed', inset:0, zIndex:9999, background:'linear-gradient(160deg,#0a0a0d 0%,#1a1620 55%,#131316 100%)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
       <div style={{ marginBottom:48, textAlign:'center' }}>
         <img src="/tp_icon.png" alt="TrendPay" width={88} height={88} style={{ borderRadius:24, display:'block', margin:'0 auto' }} />
         <div style={{ fontSize:13, color:'rgba(255,255,255,.4)', marginTop:14, letterSpacing:'2px', textTransform:'uppercase' }}>Billetera Virtual</div>

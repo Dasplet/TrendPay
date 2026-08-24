@@ -12,26 +12,26 @@
   --brand-card:    #1e1a45;
 
   /* ── User dashboard theme tokens (dark, default) ── */
-  --tp-bg:         #252547;
-  --tp-bg2:        #1a0840;
-  --tp-card-rgb:   30,12,65;
+  --tp-bg:         #17171c;
+  --tp-bg2:        #0e0e12;
+  --tp-card-rgb:   26,26,32;
   --tp-text:       #ffffff;
   --tp-fg-rgb:     255,255,255;
-  --tp-muted:      #bd9cc6;
-  --tp-muted-rgb:  189,156,198;
+  --tp-muted:      #a8a3af;
+  --tp-muted-rgb:  168,163,175;
   --tp-success:    #6CC998;
   --tp-danger:     #ff6f91;
 
   /* ── Admin panel theme tokens (dark, default) ── */
-  --adm-bg:        #1c1a2e;
-  --adm-bg2:       #1a0840;
-  --adm-bg2b:      #16123a;
-  --adm-panel:     #252547;
-  --adm-card-rgb:  30,12,65;
+  --adm-bg:        #131316;
+  --adm-bg2:       #0e0e12;
+  --adm-bg2b:      #121216;
+  --adm-panel:     #1a1a1f;
+  --adm-card-rgb:  26,26,32;
   --adm-text:      #ffffff;
   --adm-fg-rgb:    255,255,255;
-  --adm-muted:     #AE93AA;
-  --adm-muted-rgb: 174,147,170;
+  --adm-muted:     #a19cab;
+  --adm-muted-rgb: 161,156,171;
 
   color-scheme: dark;
 }
@@ -64,7 +64,7 @@
 
 /* ── Login screen (dark: brand gradient, light: soft lavender-white) ── */
 .tp-login-bg {
-  background: linear-gradient(160deg, #1a0840 0%, #321168 60%, #252547 100%);
+  background: linear-gradient(160deg, #0a0a0d 0%, #1a1620 55%, #131316 100%);
 }
 :root[data-theme="light"] .tp-login-bg {
   background: linear-gradient(160deg, #ffffff 0%, #f1e9fb 55%, #f5f3fb 100%);

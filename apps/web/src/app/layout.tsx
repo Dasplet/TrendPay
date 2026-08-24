@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'TrendPay — Billetera Virtual',
   description: 'Tu billetera virtual segura y rápida',
   manifest: '/manifest.json',
-  themeColor: '#252547',
+  themeColor: '#131316',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover',
   appleWebApp: {
     capable: true,
