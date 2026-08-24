@@ -49,20 +49,20 @@ export default function ReferidosPage() {
           />
           <Table headers={['Referidor','Referido','Comisión','Estado','Fecha']}>
             {referidos.length === 0 ? (
-              <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(255,255,255,.3)' }} colSpan={5 as any}>Sin referidos</TD></TR>
+              <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={5 as any}>Sin referidos</TD></TR>
             ) : referidos.map((r:any) => (
               <TR key={r.id}>
                 <TD>
-                  <div style={{ fontSize:13, fontWeight:600, color:'#fff' }}>{r.referidor_nombre}</div>
-                  <div style={{ fontSize:11, color:'#AE93AA' }}>{r.referidor_cedula}</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)' }}>{r.referidor_nombre}</div>
+                  <div style={{ fontSize:11, color:'var(--adm-muted)' }}>{r.referidor_cedula}</div>
                 </TD>
                 <TD>
-                  <div style={{ fontSize:13, fontWeight:600, color:'#fff' }}>{r.referido_nombre}</div>
-                  <div style={{ fontSize:11, color:'#AE93AA' }}>{r.referido_cedula}</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)' }}>{r.referido_nombre}</div>
+                  <div style={{ fontSize:11, color:'var(--adm-muted)' }}>{r.referido_cedula}</div>
                 </TD>
                 <TD style={{ color:'#6CC998', fontWeight:700 }}>{fmt(r.comision_valor||1000)}</TD>
                 <TD><StatusBadge status={r.status} /></TD>
-                <TD style={{ fontSize:11, color:'rgba(255,255,255,.4)' }}>{fmtDate(r.created_at)}</TD>
+                <TD style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{fmtDate(r.created_at)}</TD>
               </TR>
             ))}
           </Table>
@@ -73,22 +73,22 @@ export default function ReferidosPage() {
           <PanelHeader title="Ranking de referidores" icon={<Trophy size={16} />} />
           <div style={{ padding:'10px 0' }}>
             {ranking.length === 0 && (
-              <div style={{ textAlign:'center', padding:32, color:'rgba(255,255,255,.3)', fontSize:13 }}>Sin datos aún</div>
+              <div style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)', fontSize:13 }}>Sin datos aún</div>
             )}
             {ranking.slice(0,10).map((r:any, i:number) => {
               const medalColors = ['#FFD700','#C0C0C0','#CD7F32'];
               return (
-                <div key={r.id||i} style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 18px', borderBottom:'1px solid rgba(255,255,255,.04)' }}>
-                  <div style={{ width:26, height:26, borderRadius:8, background:i<3?'rgba(133,46,199,.2)':'rgba(255,255,255,.06)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>
+                <div key={r.id||i} style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 18px', borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)' }}>
+                  <div style={{ width:26, height:26, borderRadius:8, background:i<3?'rgba(133,46,199,.2)':'rgba(var(--adm-fg-rgb),.06)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>
                     {i<3 ? <Medal size={14} color={medalColors[i]} /> : i+1}
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:'#fff', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.nombre}</div>
-                    <div style={{ fontSize:10, color:'rgba(255,255,255,.35)' }}>CC {r.cedula} · {r.total_referidos} referido{r.total_referidos!==1?'s':''}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:'var(--adm-text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.nombre}</div>
+                    <div style={{ fontSize:10, color:'rgba(var(--adm-fg-rgb),.35)' }}>CC {r.cedula} · {r.total_referidos} referido{r.total_referidos!==1?'s':''}</div>
                   </div>
                   <div style={{ textAlign:'right' }}>
-                    <div style={{ fontSize:14, fontWeight:800, color: r.total_ganado>0?'#6CC998':'rgba(255,255,255,.3)' }}>{fmt(r.total_ganado||0)}</div>
-                    <div style={{ fontSize:9, color:'rgba(255,255,255,.25)' }}>comisiones</div>
+                    <div style={{ fontSize:14, fontWeight:800, color: r.total_ganado>0?'#6CC998':'rgba(var(--adm-fg-rgb),.3)' }}>{fmt(r.total_ganado||0)}</div>
+                    <div style={{ fontSize:9, color:'rgba(var(--adm-fg-rgb),.25)' }}>comisiones</div>
                   </div>
                 </div>
               );

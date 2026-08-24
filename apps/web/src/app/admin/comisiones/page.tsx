@@ -35,13 +35,13 @@ export default function ComisionesPage() {
           <PanelHeader title="Comisión por categoría" icon={<PieChart size={16} />} />
           <div style={{ padding:'8px 0' }}>
             {Object.entries(bycat).map(([cat, val]) => (
-              <div key={cat} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 20px', borderBottom:'1px solid rgba(255,255,255,.04)' }}>
-                <span style={{ fontSize:14, color:'rgba(255,255,255,.8)' }}>{catLabels[cat]||cat}</span>
+              <div key={cat} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 20px', borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)' }}>
+                <span style={{ fontSize:14, color:'rgba(var(--adm-fg-rgb),.8)' }}>{catLabels[cat]||cat}</span>
                 <span style={{ fontSize:16, fontWeight:700, color:'#6CC998' }}>{fmt(val)}</span>
               </div>
             ))}
             {Object.keys(bycat).length === 0 && (
-              <div style={{ textAlign:'center', padding:32, color:'rgba(255,255,255,.3)', fontSize:13 }}>Sin datos de comisiones</div>
+              <div style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)', fontSize:13 }}>Sin datos de comisiones</div>
             )}
           </div>
         </Panel>
@@ -49,16 +49,16 @@ export default function ComisionesPage() {
         <Panel>
           <PanelHeader title="Configurar comisión" icon={<Settings2 size={16} />} />
           <div style={{ padding:20 }}>
-            <div style={{ fontSize:13, color:'#AE93AA', marginBottom:16 }}>Porcentaje aplicado a todas las transacciones</div>
+            <div style={{ fontSize:13, color:'var(--adm-muted)', marginBottom:16 }}>Porcentaje aplicado a todas las transacciones</div>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20 }}>
               <input type="number" value={com} onChange={e => setCom(parseFloat(e.target.value)||0)} min={0} max={20} step={0.5}
-                style={{ width:80, background:'rgba(30,12,65,.7)', border:'1.5px solid rgba(133,46,199,.3)', borderRadius:10, padding:'10px 14px', fontSize:24, fontWeight:700, color:'#fff', outline:'none', textAlign:'center' }} />
-              <span style={{ fontSize:24, color:'#AE93AA', fontWeight:700 }}>%</span>
+                style={{ width:80, background:'rgba(var(--adm-card-rgb),.7)', border:'1.5px solid rgba(133,46,199,.3)', borderRadius:10, padding:'10px 14px', fontSize:24, fontWeight:700, color:'var(--adm-text)', outline:'none', textAlign:'center' }} />
+              <span style={{ fontSize:24, color:'var(--adm-muted)', fontWeight:700 }}>%</span>
             </div>
             <Btn variant="primary" style={{ width:'100%', justifyContent:'center' }} onClick={() => toast.success('Comisión actualizada al '+com+'%')}>
               <Check size={14} /> Guardar comisión
             </Btn>
-            <div style={{ fontSize:11, color:'rgba(255,255,255,.3)', textAlign:'center', marginTop:10 }}>
+            <div style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.3)', textAlign:'center', marginTop:10 }}>
               Se aplica automáticamente a todas las operaciones
             </div>
           </div>

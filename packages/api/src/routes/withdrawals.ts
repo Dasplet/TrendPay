@@ -199,7 +199,8 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req: Request, res:
         data: { status: 'exitosa' },
       });
       await tx.auditLog.create({
-        data: { userId: req.user!.id, accion: 'RETIRO_APROBADO', tabla: 'withdrawals', registroId: withdrawal.id, ip: req.ip || null },
+        data: { userId: req.user!.id, accion: 'RETIRO_APROBADO', tabla: 'withdrawals', registroId: withdrawal.id, ip: req.ip || null,
+          datos: { monto: parseFloat(withdrawal.monto.toString()), banco: withdrawal.bancoNombre, antes: { status: 'pendiente' }, despues: { status: 'procesado' } } },
       });
     });
 
@@ -262,7 +263,8 @@ router.put('/:id/reject', authenticate, requireAdmin, async (req: Request, res: 
       });
 
       await tx.auditLog.create({
-        data: { userId: req.user!.id, accion: 'RETIRO_RECHAZADO', tabla: 'withdrawals', registroId: withdrawal.id, ip: req.ip || null, datos: { motivo } },
+        data: { userId: req.user!.id, accion: 'RETIRO_RECHAZADO', tabla: 'withdrawals', registroId: withdrawal.id, ip: req.ip || null,
+          datos: { motivo, monto, banco: withdrawal.bancoNombre, antes: { status: 'pendiente' }, despues: { status: 'rechazado' } } },
       });
     });
 

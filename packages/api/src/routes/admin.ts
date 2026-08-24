@@ -1,4 +1,7 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
+import bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 import { prisma } from '../index';
 import { authenticate, requireAdmin } from '../middleware/auth';
 
@@ -55,26 +58,83 @@ router.get('/users', authenticate, requireAdmin, async (req: Request, res: Respo
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 
+// ══ POST /api/admin/users ══
+const createUserSchema = z.object({
+  cedula:  z.string().min(6).max(20),
+  nombre:  z.string().min(3).max(200),
+  correo:  z.string().email(),
+  pin:     z.string().length(4).regex(/^\d{4}$/),
+  celular: z.string().optional(),
+  ciudad:  z.string().optional(),
+  rol:     z.enum(['usuario', 'admin']).optional(),
+});
+
+router.post('/users', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  const parse = createUserSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ ok: false, mensaje: parse.error.errors[0].message });
+  const { cedula, nombre, correo, pin, celular, ciudad, rol } = parse.data;
+
+  try {
+    const exists = await prisma.user.findFirst({ where: { OR: [{ cedula }, { correo }] } });
+    if (exists) {
+      const campo = exists.cedula === cedula ? 'cédula' : 'correo';
+      return res.status(400).json({ ok: false, mensaje: `Esta ${campo} ya está registrada` });
+    }
+
+    const pinHash      = await bcrypt.hash(pin, parseInt(process.env.BCRYPT_ROUNDS || '12'));
+    const codigoPropio = 'REF-' + cedula.slice(-6).padStart(6, '0');
+
+    const user = await prisma.user.create({
+      data: {
+        id: randomUUID(),
+        cedula, nombre, correo,
+        celular: celular || null,
+        ciudad: ciudad || null,
+        pinHash,
+        rol: rol || 'usuario',
+        codigoReferido: codigoPropio,
+        wallet: { create: { saldo: 0 } },
+      },
+      include: { wallet: true },
+    });
+
+    await prisma.auditLog.create({
+      data: { userId: req.user!.id, accion: 'CREAR_USUARIO', tabla: 'users', registroId: user.id, ip: req.ip,
+        datos: { despues: { nombre: user.nombre, correo: user.correo, cedula: user.cedula, rol: user.rol } } },
+    }).catch(() => {});
+
+    res.status(201).json({
+      ok: true, mensaje: 'Usuario creado',
+      usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, saldo: 0 },
+    });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
 // ══ PUT /api/admin/users/:id ══
 router.put('/users/:id', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
+    const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado' });
+
     const { nombre, correo, celular, ciudad, bloqueado, kycNivel, nuevo_pin } = req.body;
     const data: any = {};
-    if (nombre    !== undefined) data.nombre    = nombre;
-    if (correo    !== undefined) data.correo    = correo;
-    if (celular   !== undefined) data.celular   = celular;
-    if (ciudad    !== undefined) data.ciudad    = ciudad;
-    if (bloqueado !== undefined) data.bloqueado = bloqueado;
-    if (kycNivel  !== undefined) data.kycNivel  = parseInt(kycNivel);
+    const antes: any = {};
+    const despues: any = {};
+    if (nombre    !== undefined && nombre    !== existing.nombre)    { data.nombre    = nombre;    antes.nombre = existing.nombre;       despues.nombre = nombre; }
+    if (correo    !== undefined && correo    !== existing.correo)    { data.correo    = correo;    antes.correo = existing.correo;       despues.correo = correo; }
+    if (celular   !== undefined && celular   !== existing.celular)   { data.celular   = celular;   antes.celular = existing.celular;     despues.celular = celular; }
+    if (ciudad    !== undefined && ciudad    !== existing.ciudad)    { data.ciudad    = ciudad;    antes.ciudad = existing.ciudad;       despues.ciudad = ciudad; }
+    if (bloqueado !== undefined && bloqueado !== existing.bloqueado) { data.bloqueado = bloqueado; antes.bloqueado = existing.bloqueado; despues.bloqueado = bloqueado; }
+    if (kycNivel  !== undefined && parseInt(kycNivel) !== existing.kycNivel) { data.kycNivel = parseInt(kycNivel); antes.kycNivel = existing.kycNivel; despues.kycNivel = parseInt(kycNivel); }
     if (nuevo_pin) {
-      const bcrypt = await import('bcryptjs');
       data.pinHash = await bcrypt.hash(nuevo_pin, parseInt(process.env.BCRYPT_ROUNDS || '12'));
+      antes.pin = '••••'; despues.pin = '••••';
     }
     const user = await prisma.user.update({ where: { id: req.params.id }, data });
 
     // Audit
     await prisma.auditLog.create({
-      data: { userId: req.user!.id, accion: 'EDITAR_USUARIO', tabla: 'users', registroId: req.params.id, ip: req.ip, datos: data },
+      data: { userId: req.user!.id, accion: 'EDITAR_USUARIO', tabla: 'users', registroId: req.params.id, ip: req.ip, datos: { antes, despues } },
     }).catch(() => {});
 
     res.json({ ok: true, mensaje: 'Usuario actualizado', usuario: user });
@@ -92,7 +152,8 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req: Request, res
       data: { cedula: `DEL-${u.cedula}`, correo: `${u.cedula}@eliminado.local`, nombre: 'Usuario eliminado', bloqueado: true },
     });
     await prisma.auditLog.create({
-      data: { userId: req.user!.id, accion: 'ELIMINAR_USUARIO', tabla: 'users', registroId: req.params.id, ip: req.ip },
+      data: { userId: req.user!.id, accion: 'ELIMINAR_USUARIO', tabla: 'users', registroId: req.params.id, ip: req.ip,
+        datos: { antes: { nombre: u.nombre, correo: u.correo, cedula: u.cedula } } },
     }).catch(() => {});
     res.json({ ok: true, mensaje: 'Usuario eliminado' });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
@@ -212,7 +273,8 @@ router.put('/banks/:id', authenticate, requireAdmin, async (req: Request, res: R
 
     if (habilitado !== undefined && !!habilitado !== existing.habilitado) {
       await prisma.auditLog.create({
-        data: { userId: req.user!.id, accion: 'BANCO_TOGGLE', tabla: 'banks', registroId: bank.id, ip: req.ip, datos: { nombre: bank.nombre, habilitado: bank.habilitado } },
+        data: { userId: req.user!.id, accion: 'BANCO_TOGGLE', tabla: 'banks', registroId: bank.id, ip: req.ip,
+          datos: { nombre: bank.nombre, antes: { habilitado: existing.habilitado }, despues: { habilitado: bank.habilitado } } },
       }).catch(() => {});
     }
 

@@ -33,7 +33,7 @@ export default function TransaccionesPage() {
         actions={
           <>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..."
-              style={{ background:'rgba(30,12,65,.6)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'6px 12px', fontSize:12, color:'#fff', outline:'none', width:180 }} />
+              style={{ background:'rgba(var(--adm-card-rgb),.6)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'6px 12px', fontSize:12, color:'var(--adm-text)', outline:'none', width:180 }} />
             <Btn variant="ghost" onClick={exportarCsv}><Download size={13} /> CSV</Btn>
             <Btn variant="ghost" onClick={exportarCsv}><FileSpreadsheet size={13} /> Excel</Btn>
           </>
@@ -44,7 +44,7 @@ export default function TransaccionesPage() {
       <div style={{ display:'flex', gap:8, padding:'12px 16px', borderBottom:'1px solid rgba(133,46,199,.12)' }}>
         {FILTERS.map(f => (
           <button key={f} onClick={() => setFilter(f)}
-            style={{ padding:'6px 14px', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer', border: filter===f?'1px solid #852EC7':'1px solid rgba(255,255,255,.1)', background: filter===f?'rgba(133,46,199,.2)':'transparent', color: filter===f?'#fff':'rgba(255,255,255,.5)', transition:'all .15s' }}>
+            style={{ padding:'6px 14px', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer', border: filter===f?'1px solid #852EC7':'1px solid rgba(var(--adm-fg-rgb),.1)', background: filter===f?'rgba(133,46,199,.2)':'transparent', color: filter===f?'var(--adm-text)':'rgba(var(--adm-fg-rgb),.5)', transition:'all .15s' }}>
             {f}
           </button>
         ))}
@@ -52,20 +52,20 @@ export default function TransaccionesPage() {
 
       <Table headers={['Referencia','Descripción','Usuario','Monto','Comisión 3%','Estado','Fecha']}>
         {isLoading ? (
-          <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(255,255,255,.3)' }} colSpan={7 as any}>Cargando...</TD></TR>
+          <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Cargando...</TD></TR>
         ) : txs.length === 0 ? (
-          <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(255,255,255,.3)' }} colSpan={7 as any}>Sin transacciones</TD></TR>
+          <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Sin transacciones</TD></TR>
         ) : txs.map((t:any) => (
           <TR key={t.id}>
-            <TD style={{ fontFamily:'monospace', fontSize:11, color:'rgba(255,255,255,.4)' }}>{(t.codigo||'—').slice(0,16)}</TD>
+            <TD style={{ fontFamily:'monospace', fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{(t.codigo||'—').slice(0,16)}</TD>
             <TD style={{ fontSize:12, maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.descripcion}</TD>
-            <TD style={{ fontSize:12, color:'rgba(255,255,255,.7)' }}>{t.usuario_nombre||'—'}</TD>
+            <TD style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.7)' }}>{t.usuario_nombre||'—'}</TD>
             <TD style={{ fontWeight:700, color: parseFloat(t.monto_neto)>0?'#6CC998':'#C0392B' }}>
               {parseFloat(t.monto_neto)>0?'+':''}{fmt(t.monto_neto||0)}
             </TD>
             <TD style={{ color:'#d4a017', fontWeight:600 }}>{fmt(t.comision_valor||0)}</TD>
             <TD><StatusBadge status={t.status} /></TD>
-            <TD style={{ fontSize:11, color:'rgba(255,255,255,.4)', whiteSpace:'nowrap' }}>{fmtDate(t.created_at)}</TD>
+            <TD style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)', whiteSpace:'nowrap' }}>{fmtDate(t.created_at)}</TD>
           </TR>
         ))}
       </Table>

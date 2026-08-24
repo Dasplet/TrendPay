@@ -9,6 +9,7 @@ import {
   Settings, ClipboardList, UserCheck, LogOut, Bell, Search
 } from 'lucide-react';
 import { NotificationBell } from '@/components/admin/NotificationBell';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const NAV = [
   { section: 'GENERAL', items: [
@@ -81,10 +82,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div style={{ display:'flex', minHeight:'100vh', background:'#1c1a2e' }}>
+    <div style={{ display:'flex', minHeight:'100vh', background:'var(--adm-bg)' }}>
 
       {/* Sidebar */}
-      <aside style={{ width:220, flexShrink:0, position:'fixed', top:0, bottom:0, left:0, display:'flex', flexDirection:'column', zIndex:40, background:'linear-gradient(180deg,#1a0840 0%,#16123a 100%)', borderRight:'1px solid rgba(133,46,199,.18)' }}>
+      <aside style={{ width:220, flexShrink:0, position:'fixed', top:0, bottom:0, left:0, display:'flex', flexDirection:'column', zIndex:40, background:'linear-gradient(180deg,var(--adm-bg2) 0%,var(--adm-bg2b) 100%)', borderRight:'1px solid rgba(133,46,199,.18)' }}>
 
         {/* Logo */}
         <div style={{ padding:'18px 18px 14px', borderBottom:'1px solid rgba(133,46,199,.12)' }}>
@@ -105,7 +106,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <nav style={{ flex:1, padding:'10px', overflowY:'auto' }}>
           {NAV.map(group => (
             <div key={group.section} style={{ marginBottom:8 }}>
-              <div style={{ fontSize:9, fontWeight:700, color:'rgba(174,147,170,.5)', letterSpacing:'1.5px', padding:'8px 10px 4px', textTransform:'uppercase' }}>
+              <div style={{ fontSize:9, fontWeight:700, color:'rgba(var(--adm-muted-rgb),.5)', letterSpacing:'1.5px', padding:'8px 10px 4px', textTransform:'uppercase' }}>
                 {group.section}
               </div>
               {group.items.map(item => {
@@ -115,7 +116,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <Link key={item.href} href={item.href}
                     style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', borderRadius:10, marginBottom:2, textDecoration:'none', fontSize:13, fontWeight:active?600:400, transition:'all .15s',
                       background: active ? 'rgba(133,46,199,.22)' : 'transparent',
-                      color:      active ? '#fff' : '#AE93AA',
+                      color:      active ? 'var(--adm-text)' : 'var(--adm-muted)',
                       borderLeft: active ? '3px solid #852EC7' : '3px solid transparent',
                     }}>
                     <Icon size={15} strokeWidth={active?2.5:1.8}/>
@@ -134,8 +135,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               {initials}
             </div>
             <div style={{ minWidth:0 }}>
-              <div style={{ fontSize:12, fontWeight:600, color:'#fff', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user.nombre?.split(' ').slice(0,2).join(' ')}</div>
-              <div style={{ fontSize:10, color:'#AE93AA' }}>super_admin · activo</div>
+              <div style={{ fontSize:12, fontWeight:600, color:'var(--adm-text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user.nombre?.split(' ').slice(0,2).join(' ')}</div>
+              <div style={{ fontSize:10, color:'var(--adm-muted)' }}>super_admin · activo</div>
             </div>
           </div>
           <button onClick={handleLogout}
@@ -149,17 +150,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div style={{ marginLeft:220, flex:1, display:'flex', flexDirection:'column', minHeight:'100vh' }}>
 
         {/* Topbar */}
-        <header style={{ height:58, display:'flex', alignItems:'center', padding:'0 28px', gap:16, flexShrink:0, background:'#16123a', borderBottom:'1px solid rgba(133,46,199,.15)' }}>
+        <header style={{ height:58, display:'flex', alignItems:'center', padding:'0 28px', gap:16, flexShrink:0, background:'var(--adm-bg2b)', borderBottom:'1px solid rgba(133,46,199,.15)' }}>
           <div style={{ flex:1 }}>
-            <div style={{ fontSize:18, fontWeight:800, color:'#fff', letterSpacing:'-.3px' }}>{pageInfo.title}</div>
-            <div style={{ fontSize:11, color:'#AE93AA' }}>{pageInfo.sub}</div>
+            <div style={{ fontSize:18, fontWeight:800, color:'var(--adm-text)', letterSpacing:'-.3px' }}>{pageInfo.title}</div>
+            <div style={{ fontSize:11, color:'var(--adm-muted)' }}>{pageInfo.sub}</div>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <div style={{ position:'relative' }}>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..."
-                style={{ background:'rgba(30,12,65,.6)', border:'1px solid rgba(133,46,199,.2)', borderRadius:10, padding:'7px 14px 7px 32px', fontSize:12, color:'#fff', outline:'none', width:200 }}/>
-              <Search size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'#AE93AA' }}/>
+                style={{ background:'rgba(var(--adm-card-rgb),.6)', border:'1px solid rgba(133,46,199,.2)', borderRadius:10, padding:'7px 14px 7px 32px', fontSize:12, color:'var(--adm-text)', outline:'none', width:200 }}/>
+              <Search size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--adm-muted)' }}/>
             </div>
+            <ThemeToggle />
             <NotificationBell />
             <div style={{ width:34, height:34, borderRadius:10, background:'linear-gradient(135deg,#852EC7,#321168)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800, color:'#fff' }}>
               {initials}

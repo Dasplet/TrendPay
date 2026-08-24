@@ -110,13 +110,13 @@ export default function ReportesPage() {
         <PanelHeader title="Exportación de datos" icon={<FileDown size={16} />} />
         <div style={{ padding:'8px 0' }}>
           {EXPORTS.map(e => (
-            <div key={e.label} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 20px', borderBottom:'1px solid rgba(255,255,255,.04)' }}>
+            <div key={e.label} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 20px', borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)' }}>
               <div style={{ width:36, height:36, borderRadius:10, background:'rgba(133,46,199,.15)', display:'flex', alignItems:'center', justifyContent:'center', color:'#852EC7', flexShrink:0 }}>
                 <e.icon size={18} />
               </div>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:600, color:'#fff', marginBottom:2 }}>{e.label}</div>
-                <div style={{ fontSize:11, color:'#AE93AA' }}>{e.desc}</div>
+                <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)', marginBottom:2 }}>{e.label}</div>
+                <div style={{ fontSize:11, color:'var(--adm-muted)' }}>{e.desc}</div>
               </div>
               <div style={{ display:'flex', gap:6 }}>
                 <Btn variant="ghost" disabled={loading === e.period + e.label} onClick={() => exportReport(e.period, e.label)} style={{ fontSize:11, padding:'5px 10px' }}><FileText size={12} /> CSV</Btn>
@@ -132,13 +132,13 @@ export default function ReportesPage() {
         <PanelHeader title="Reportes regulatorios" icon={<ShieldCheck size={16} />} />
         <div style={{ padding:'8px 0' }}>
           {REGULATORY.map(r => (
-            <div key={r.label} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 20px', borderBottom:'1px solid rgba(255,255,255,.04)' }}>
+            <div key={r.label} style={{ display:'flex', alignItems:'center', gap:12, padding:'14px 20px', borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)' }}>
               <div style={{ width:36, height:36, borderRadius:10, background:`${r.color}20`, display:'flex', alignItems:'center', justifyContent:'center', color:r.color, flexShrink:0 }}>
                 <r.icon size={18} />
               </div>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:600, color:'#fff', marginBottom:2 }}>{r.label}</div>
-                <div style={{ fontSize:11, color:'#AE93AA' }}>{r.desc}</div>
+                <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)', marginBottom:2 }}>{r.label}</div>
+                <div style={{ fontSize:11, color:'var(--adm-muted)' }}>{r.desc}</div>
               </div>
               <div style={{ display:'flex', gap:6 }}>
                 <Btn variant="ghost" disabled={loading === r.period + r.label} onClick={() => exportReport(r.period, r.label)} style={{ fontSize:11, padding:'5px 10px' }}><FileText size={12} /> CSV</Btn>

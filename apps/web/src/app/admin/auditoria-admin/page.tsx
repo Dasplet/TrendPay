@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Panel, PanelHeader, Btn } from '@/components/admin/ui';
@@ -6,9 +7,17 @@ import toast from 'react-hot-toast';
 import { downloadCsv } from '@/lib/exportCsv';
 import {
   LogIn, Check, X, CircleDollarSign, UserCheck, Lock, Settings2,
-  Landmark, UserPlus, Pencil, UserX, List, Download, Circle,
+  Landmark, UserPlus, Pencil, UserX, List, Download, Circle, ChevronDown,
   type LucideIcon,
 } from 'lucide-react';
+
+const CAMPO_LABELS: Record<string,string> = { nombre:'Nombre', correo:'Correo', celular:'Celular', ciudad:'Ciudad', bloqueado:'Bloqueado', kycNivel:'Nivel KYC', pin:'PIN', habilitado:'Habilitado', status:'Estado' };
+
+function fmtValor(campo: string, v: any) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (campo === 'bloqueado' || campo === 'habilitado') return v === true || v === 'true' ? 'Sí' : 'No';
+  return String(v);
+}
 
 // Map actions to icons and colors
 const ACTION_STYLE: Record<string,{icon:LucideIcon,color:string,label:string}> = {
@@ -46,6 +55,8 @@ function timeAgo(d: string) {
 }
 
 export default function AuditoriaAdminPage() {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
   const { data } = useQuery({
     queryKey: ['audit-admin'],
     queryFn: () => api.get('/admin/audit?limit=100').catch(()=>({ data:{ logs:[] }})),
@@ -57,10 +68,11 @@ export default function AuditoriaAdminPage() {
 
   function exportarCsv() {
     if (!isReal) return toast.error('Aún no hay registros reales para exportar');
-    downloadCsv('auditoria-admin', ['Acción', 'Detalle', 'Fecha'],
+    downloadCsv('auditoria-admin', ['Acción', 'Detalle', 'Realizado por', 'Fecha'],
       logs.map((l: any) => [
         (ACTION_STYLE[l.accion || ''] || { label: l.accion || 'Acción' }).label,
         l.datos ? JSON.stringify(l.datos).slice(0, 200) : l.tabla || '',
+        l.user?.nombre || '',
         timeAgo(l.createdAt || l.created_at),
       ]));
   }
@@ -72,30 +84,76 @@ export default function AuditoriaAdminPage() {
       />
       <div style={{ padding:'12px 0' }}>
         {logs.map((l:any)=>{
-          const style = ACTION_STYLE[l.accion||''] || { icon:Circle, color:'#AE93AA', label: l.accion||'Acción' };
-          const desc  = isReal ? (l.datos ? JSON.stringify(l.datos).slice(0,80) : l.tabla||'') : l.desc;
+          const style = ACTION_STYLE[l.accion||''] || { icon:Circle, color:'var(--adm-muted)', label: l.accion||'Acción' };
+          const desc  = isReal ? (l.datos?.motivo || l.datos?.banco || l.tabla || '') : l.desc;
           const time  = isReal ? timeAgo(l.createdAt||l.created_at) : l.tiempo;
+          const isOpen = expanded === l.id;
+          const antes   = l.datos?.antes;
+          const despues = l.datos?.despues;
+          const hasDetail = isReal;
           return (
-            <div key={l.id} style={{ display:'flex', alignItems:'center', gap:16, padding:'16px 24px', borderBottom:'1px solid rgba(255,255,255,.04)', transition:'background .15s' }}
-              onMouseOver={e=>(e.currentTarget as HTMLDivElement).style.background='rgba(133,46,199,.04)'}
-              onMouseOut={e=>(e.currentTarget as HTMLDivElement).style.background=''}>
-              {/* Colored dot */}
-              <div style={{ width:8, height:8, borderRadius:'50%', background:style.color, flexShrink:0 }} />
-              {/* Icon */}
-              <div style={{ width:36, height:36, borderRadius:10, background:`${style.color}18`, display:'flex', alignItems:'center', justifyContent:'center', color:style.color, flexShrink:0 }}>
-                <style.icon size={16} />
+            <div key={l.id} style={{ borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:16, padding:'16px 24px', transition:'background .15s', cursor: hasDetail ? 'pointer' : 'default' }}
+                onClick={() => hasDetail && setExpanded(isOpen ? null : l.id)}
+                onMouseOver={e=>(e.currentTarget as HTMLDivElement).style.background='rgba(133,46,199,.04)'}
+                onMouseOut={e=>(e.currentTarget as HTMLDivElement).style.background=''}>
+                {/* Colored dot */}
+                <div style={{ width:8, height:8, borderRadius:'50%', background:style.color, flexShrink:0 }} />
+                {/* Icon */}
+                <div style={{ width:36, height:36, borderRadius:10, background:`${style.color}18`, display:'flex', alignItems:'center', justifyContent:'center', color:style.color, flexShrink:0 }}>
+                  <style.icon size={16} />
+                </div>
+                {/* Content */}
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:'var(--adm-text)', marginBottom:3 }}>{style.label}</div>
+                  <div style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.45)' }}>
+                    {isReal ? (l.user?.nombre || 'Sistema') : desc}{desc && isReal ? ` · ${desc}` : ''}
+                  </div>
+                </div>
+                {/* Time */}
+                <div style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.3)', whiteSpace:'nowrap', flexShrink:0 }}>{time}</div>
+                {hasDetail && (
+                  <ChevronDown size={16} style={{ color:'var(--adm-muted)', flexShrink:0, transition:'transform .15s', transform: isOpen ? 'rotate(180deg)' : 'none' }} />
+                )}
               </div>
-              {/* Content */}
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:700, color:'#fff', marginBottom:3 }}>{style.label}</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,.45)' }}>{desc}</div>
-              </div>
-              {/* Time */}
-              <div style={{ fontSize:12, color:'rgba(255,255,255,.3)', whiteSpace:'nowrap', flexShrink:0 }}>{time}</div>
+
+              {isOpen && hasDetail && (
+                <div style={{ padding:'0 24px 20px 74px' }}>
+                  <div style={{ background:'rgba(var(--adm-card-rgb),.5)', border:'1px solid rgba(133,46,199,.12)', borderRadius:12, padding:'14px 18px', display:'grid', gap:10 }}>
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:'6px 24px', fontSize:12 }}>
+                      <span><span style={{ color:'var(--adm-muted)' }}>Realizado por: </span><span style={{ color:'var(--adm-text)', fontWeight:600 }}>{l.user?.nombre || 'Sistema'}</span></span>
+                      {l.user?.cedula && <span><span style={{ color:'var(--adm-muted)' }}>Cédula: </span><span style={{ color:'var(--adm-text)', fontFamily:'monospace' }}>{l.user.cedula}</span></span>}
+                      {l.ip && <span><span style={{ color:'var(--adm-muted)' }}>IP: </span><span style={{ color:'var(--adm-text)', fontFamily:'monospace' }}>{l.ip}</span></span>}
+                      {l.registroId && <span><span style={{ color:'var(--adm-muted)' }}>Registro: </span><span style={{ color:'var(--adm-text)', fontFamily:'monospace' }}>{l.registroId}</span></span>}
+                    </div>
+
+                    {(antes || despues) ? (
+                      <div>
+                        <div style={{ fontSize:11, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700, marginBottom:6 }}>Cambios</div>
+                        <div style={{ display:'grid', gap:4 }}>
+                          {Object.keys({ ...(antes||{}), ...(despues||{}) }).map(campo => (
+                            <div key={campo} style={{ display:'grid', gridTemplateColumns:'120px 1fr auto 1fr', alignItems:'center', gap:8, fontSize:12 }}>
+                              <span style={{ color:'var(--adm-muted)' }}>{CAMPO_LABELS[campo] || campo}</span>
+                              <span style={{ color:'#ff8f9a', fontFamily:'monospace' }}>{fmtValor(campo, antes?.[campo])}</span>
+                              <span style={{ color:'var(--adm-muted)' }}>→</span>
+                              <span style={{ color:'#6CC998', fontFamily:'monospace' }}>{fmtValor(campo, despues?.[campo])}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : l.datos && Object.keys(l.datos).length > 0 ? (
+                      <div>
+                        <div style={{ fontSize:11, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700, marginBottom:6 }}>Detalle</div>
+                        <pre style={{ margin:0, fontSize:12, color:'rgba(var(--adm-fg-rgb),.75)', fontFamily:'monospace', whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{JSON.stringify(l.datos, null, 2)}</pre>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
-        {logs.length===0 && <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,.3)', fontSize:13 }}>Sin acciones registradas</div>}
+        {logs.length===0 && <div style={{ textAlign:'center', padding:40, color:'rgba(var(--adm-fg-rgb),.3)', fontSize:13 }}>Sin acciones registradas</div>}
       </div>
     </Panel>
   );

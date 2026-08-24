@@ -7,13 +7,13 @@ import type { ReactNode } from 'react';
 export function MetricCard({ icon, value, label, color = '#852EC7', bg = 'rgba(133,46,199,.15)' }:
   { icon: ReactNode; value: string; label: string; color?: string; bg?: string }) {
   return (
-    <div style={{ background:'#252547', border:'1px solid rgba(133,46,199,.18)', borderRadius:16, padding:'24px 24px', position:'relative', overflow:'hidden' }}>
+    <div style={{ background:'var(--adm-panel)', border:'1px solid rgba(133,46,199,.18)', borderRadius:16, padding:'24px 24px', position:'relative', overflow:'hidden' }}>
       <div style={{ position:'absolute', top:-20, right:-20, width:100, height:100, borderRadius:'50%', background: bg, opacity:.4 }} />
       <div style={{ width:44, height:44, borderRadius:12, background:bg, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:16, color }}>
         {icon}
       </div>
-      <div style={{ fontSize:28, fontWeight:900, color:'#fff', letterSpacing:'-.5px', marginBottom:4 }}>{value}</div>
-      <div style={{ fontSize:12, color:'#AE93AA' }}>{label}</div>
+      <div style={{ fontSize:28, fontWeight:900, color:'var(--adm-text)', letterSpacing:'-.5px', marginBottom:4 }}>{value}</div>
+      <div style={{ fontSize:12, color:'var(--adm-muted)' }}>{label}</div>
     </div>
   );
 }
@@ -21,7 +21,7 @@ export function MetricCard({ icon, value, label, color = '#852EC7', bg = 'rgba(1
 // ── Panel wrapper ──
 export function Panel({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{ background:'#252547', border:'1px solid rgba(133,46,199,.18)', borderRadius:16, overflow:'hidden', ...style }}>
+    <div style={{ background:'var(--adm-panel)', border:'1px solid rgba(133,46,199,.18)', borderRadius:16, overflow:'hidden', ...style }}>
       {children}
     </div>
   );
@@ -31,11 +31,11 @@ export function Panel({ children, style }: { children: React.ReactNode; style?: 
 export function PanelHeader({ title, icon, actions }: { title: string; icon?: ReactNode; actions?: React.ReactNode }) {
   return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 20px', borderBottom:'1px solid rgba(133,46,199,.12)' }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:14, fontWeight:700, color:'#fff' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:14, fontWeight:700, color:'var(--adm-text)' }}>
         {icon && <span style={{ color:'#852EC7', display:'inline-flex' }}>{icon}</span>}
         {title}
       </div>
-      {actions && <div style={{ display:'flex', gap:8 }}>{actions}</div>}
+      {actions && <div style={{ display:'flex', gap:8, alignItems:'center' }}>{actions}</div>}
     </div>
   );
 }
@@ -48,7 +48,7 @@ export function Table({ headers, children, empty }: { headers: string[]; childre
         <thead>
           <tr>
             {headers.map(h => (
-              <th key={h} style={{ padding:'10px 16px', textAlign:'left', fontSize:11, fontWeight:700, color:'rgba(174,147,170,.6)', textTransform:'uppercase', letterSpacing:'.5px', borderBottom:'1px solid rgba(255,255,255,.06)' }}>
+              <th key={h} style={{ padding:'10px 16px', textAlign:'left', fontSize:11, fontWeight:700, color:'rgba(var(--adm-muted-rgb),.8)', textTransform:'uppercase', letterSpacing:'.5px', borderBottom:'1px solid rgba(var(--adm-fg-rgb),.06)' }}>
                 {h}
               </th>
             ))}
@@ -63,7 +63,7 @@ export function Table({ headers, children, empty }: { headers: string[]; childre
 // ── Table row ──
 export function TR({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
   return (
-    <tr onClick={onClick} style={{ borderBottom:'1px solid rgba(255,255,255,.04)', transition:'background .15s', cursor: onClick ? 'pointer' : 'default' }}
+    <tr onClick={onClick} style={{ borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)', transition:'background .15s', cursor: onClick ? 'pointer' : 'default' }}
       onMouseOver={e => (e.currentTarget as HTMLTableRowElement).style.background='rgba(133,46,199,.05)'}
       onMouseOut={e  => (e.currentTarget as HTMLTableRowElement).style.background=''}>
       {children}
@@ -73,7 +73,7 @@ export function TR({ children, onClick }: { children: React.ReactNode; onClick?:
 
 // ── TD ──
 export function TD({ children, style, colSpan }: { children: React.ReactNode; style?: React.CSSProperties; colSpan?: number }) {
-  return <td colSpan={colSpan} style={{ padding:'12px 16px', color:'rgba(255,255,255,.8)', verticalAlign:'middle', ...style }}>{children}</td>;
+  return <td colSpan={colSpan} style={{ padding:'12px 16px', color:'rgba(var(--adm-fg-rgb),.85)', verticalAlign:'middle', ...style }}>{children}</td>;
 }
 
 // ── Status badge ──
@@ -118,16 +118,16 @@ export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
 }
 
 // ── Button ──
-export function Btn({ children, onClick, variant = 'default', disabled, style }:
-  { children: React.ReactNode; onClick?: () => void; variant?: 'default'|'primary'|'danger'|'ghost'; disabled?: boolean; style?: React.CSSProperties }) {
+export function Btn({ children, onClick, variant = 'default', disabled, style, title }:
+  { children: React.ReactNode; onClick?: () => void; variant?: 'default'|'primary'|'danger'|'ghost'; disabled?: boolean; style?: React.CSSProperties; title?: string }) {
   const variants = {
     default: { background:'rgba(133,46,199,.1)', border:'1px solid rgba(133,46,199,.25)', color:'#c088f0' },
     primary: { background:'#852EC7', border:'1px solid #852EC7', color:'#fff' },
     danger:  { background:'rgba(192,57,43,.1)', border:'1px solid rgba(192,57,43,.3)', color:'#C0392B' },
-    ghost:   { background:'transparent', border:'1px solid rgba(255,255,255,.1)', color:'rgba(255,255,255,.6)' },
+    ghost:   { background:'transparent', border:'1px solid rgba(var(--adm-fg-rgb),.15)', color:'rgba(var(--adm-fg-rgb),.65)' },
   };
   return (
-    <button onClick={onClick} disabled={disabled}
+    <button onClick={onClick} disabled={disabled} title={title}
       style={{ padding:'7px 14px', borderRadius:9, fontSize:12, fontWeight:600, cursor:disabled?'not-allowed':'pointer', display:'inline-flex', alignItems:'center', gap:6, transition:'all .15s', opacity:disabled?.4:1, ...variants[variant], ...style }}>
       {children}
     </button>
@@ -139,9 +139,9 @@ export function Modal({ open, onClose, title, children }: { open:boolean; onClos
   if (!open) return null;
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }} onClick={onClose}>
-      <div style={{ background:'#252547', border:'1px solid rgba(133,46,199,.3)', borderRadius:20, width:'100%', maxWidth:480, maxHeight:'90vh', overflowY:'auto', padding:28, position:'relative' }} onClick={e => e.stopPropagation()}>
-        <button onClick={onClose} style={{ position:'absolute', top:16, right:16, width:28, height:28, borderRadius:8, background:'rgba(255,255,255,.08)', border:'none', color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><X size={16} /></button>
-        <div style={{ fontSize:18, fontWeight:800, color:'#fff', marginBottom:20 }}>{title}</div>
+      <div style={{ background:'var(--adm-panel)', border:'1px solid rgba(133,46,199,.3)', borderRadius:20, width:'100%', maxWidth:480, maxHeight:'90vh', overflowY:'auto', padding:28, position:'relative' }} onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} style={{ position:'absolute', top:16, right:16, width:28, height:28, borderRadius:8, background:'rgba(133,46,199,.12)', border:'none', color:'var(--adm-text)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><X size={16} /></button>
+        <div style={{ fontSize:18, fontWeight:800, color:'var(--adm-text)', marginBottom:20 }}>{title}</div>
         {children}
       </div>
     </div>
@@ -152,8 +152,20 @@ export function Modal({ open, onClose, title, children }: { open:boolean; onClos
 export function Input({ label, ...props }: { label?: string } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div style={{ marginBottom:14 }}>
-      {label && <label style={{ display:'block', fontSize:11, fontWeight:600, color:'#AE93AA', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>{label}</label>}
-      <input {...props} style={{ width:'100%', background:'rgba(30,12,65,.7)', border:'1.5px solid rgba(133,46,199,.25)', borderRadius:10, padding:'10px 12px', fontSize:13, color:'#fff', outline:'none', fontFamily:'inherit', boxSizing:'border-box', ...props.style }} />
+      {label && <label style={{ display:'block', fontSize:11, fontWeight:600, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>{label}</label>}
+      <input {...props} style={{ width:'100%', background:'rgba(var(--adm-card-rgb),.7)', border:'1.5px solid rgba(133,46,199,.25)', borderRadius:10, padding:'10px 12px', fontSize:13, color:'var(--adm-text)', outline:'none', fontFamily:'inherit', boxSizing:'border-box', ...props.style }} />
+    </div>
+  );
+}
+
+// ── Select ──
+export function Select({ label, children, ...props }: { label?: string; children: React.ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <div style={{ marginBottom:14 }}>
+      {label && <label style={{ display:'block', fontSize:11, fontWeight:600, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>{label}</label>}
+      <select {...props} style={{ width:'100%', background:'rgba(var(--adm-card-rgb),.7)', border:'1.5px solid rgba(133,46,199,.25)', borderRadius:10, padding:'10px 12px', fontSize:13, color:'var(--adm-text)', outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer', ...props.style }}>
+        {children}
+      </select>
     </div>
   );
 }

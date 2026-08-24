@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
-import { Panel, PanelHeader, Table, TR, TD, StatusBadge, KycBadge, Avatar, Btn, Modal, Input, fmt, fmtDate } from '@/components/admin/ui';
+import { Panel, PanelHeader, Table, TR, TD, StatusBadge, KycBadge, Avatar, Btn, Modal, Input, Select, fmt, fmtDate } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
 import { Users, Download, Eye, Pencil, Lock, Trash2, AlertTriangle } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
@@ -12,6 +12,7 @@ export default function UsuariosPage() {
   const [search, setSearch]   = useState('');
   const [selected, setSelected] = useState<any>(null);
   const [showNew, setShowNew]   = useState(false);
+  const [newUser, setNewUser]   = useState({ nombre:'', cedula:'', correo:'', celular:'', ciudad:'', pin:'', rol:'usuario' });
   const [showEdit, setShowEdit] = useState<any>(null);
   const [showDel, setShowDel]   = useState<any>(null);
 
@@ -44,6 +45,25 @@ export default function UsuariosPage() {
     onError: (e:any) => toast.error(e.response?.data?.mensaje || 'Error'),
   });
 
+  const createMut = useMutation({
+    mutationFn: (data: any) => adminApi.createUser(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey:['admin-users'] });
+      toast.success('Usuario creado');
+      setShowNew(false);
+      setNewUser({ nombre:'', cedula:'', correo:'', celular:'', ciudad:'', pin:'', rol:'usuario' });
+    },
+    onError: (e:any) => toast.error(e.response?.data?.mensaje || 'Error creando el usuario'),
+  });
+
+  function submitNewUser() {
+    if (!newUser.nombre.trim() || newUser.cedula.length < 6 || !newUser.correo.trim() || !/^\d{4}$/.test(newUser.pin)) {
+      toast.error('Completa nombre, cédula, correo y un PIN de 4 dígitos');
+      return;
+    }
+    createMut.mutate(newUser);
+  }
+
   return (
     <div>
       <Panel>
@@ -52,7 +72,7 @@ export default function UsuariosPage() {
           actions={
             <>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar usuario..."
-                style={{ background:'rgba(30,12,65,.6)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'6px 12px', fontSize:12, color:'#fff', outline:'none', width:200 }} />
+                style={{ background:'rgba(var(--adm-card-rgb),.6)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'6px 12px', fontSize:12, color:'var(--adm-text)', outline:'none', width:200 }} />
               <Btn variant="ghost" onClick={exportarCsv}><Download size={13} /> Exportar CSV</Btn>
               <Btn variant="primary" onClick={() => setShowNew(true)}>+ Nuevo usuario</Btn>
             </>
@@ -60,27 +80,27 @@ export default function UsuariosPage() {
         />
         <Table headers={['Usuario','Cédula','Rol','Saldo','KYC','Transacciones','Estado','Acciones']}>
           {isLoading ? (
-            <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(255,255,255,.3)' }} colSpan={8 as any}>Cargando...</TD></TR>
+            <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={8 as any}>Cargando...</TD></TR>
           ) : users.map((u:any) => (
             <TR key={u.id}>
               <TD>
                 <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                   <Avatar name={u.nombre||'?'} size={34} />
                   <div>
-                    <div style={{ fontSize:13, fontWeight:600, color:'#fff' }}>{u.nombre}</div>
-                    <div style={{ fontSize:11, color:'#AE93AA' }}>{u.correo}</div>
+                    <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)' }}>{u.nombre}</div>
+                    <div style={{ fontSize:11, color:'var(--adm-muted)' }}>{u.correo}</div>
                   </div>
                 </div>
               </TD>
               <TD style={{ fontFamily:'monospace', fontSize:12 }}>{u.cedula}</TD>
               <TD>
-                <span style={{ background: u.rol==='admin'?'rgba(133,46,199,.2)':'rgba(174,147,170,.1)', color: u.rol==='admin'?'#c088f0':'#AE93AA', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600 }}>
+                <span style={{ background: u.rol==='admin'?'rgba(133,46,199,.2)':'rgba(var(--adm-muted-rgb),.1)', color: u.rol==='admin'?'#c088f0':'var(--adm-muted)', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600 }}>
                   {u.rol==='admin'?'Admin':'Usuario'}
                 </span>
               </TD>
               <TD style={{ fontWeight:700, color:'#6CC998' }}>{fmt(u.saldo||0)}</TD>
               <TD><KycBadge nivel={u.kycNivel||u.kyc_nivel||1} /></TD>
-              <TD style={{ color:'rgba(255,255,255,.6)' }}>{u._txCount||0}</TD>
+              <TD style={{ color:'rgba(var(--adm-fg-rgb),.6)' }}>{u._txCount||0}</TD>
               <TD><StatusBadge status={u.bloqueado?'bloqueado':'activo'} /></TD>
               <TD>
                 <div style={{ display:'flex', gap:6 }}>
@@ -99,22 +119,41 @@ export default function UsuariosPage() {
       <Modal open={!!selected} onClose={() => setSelected(null)} title="Detalle de usuario">
         {selected && (
           <div>
-            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20, padding:14, background:'rgba(30,12,65,.5)', borderRadius:12 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:20, padding:14, background:'rgba(var(--adm-card-rgb),.5)', borderRadius:12 }}>
               <Avatar name={selected.nombre||'?'} size={48} />
               <div>
-                <div style={{ fontSize:16, fontWeight:700, color:'#fff' }}>{selected.nombre}</div>
-                <div style={{ fontSize:12, color:'#AE93AA' }}>{selected.correo}</div>
-                <div style={{ fontSize:11, color:'#AE93AA', marginTop:2 }}>CC {selected.cedula}</div>
+                <div style={{ fontSize:16, fontWeight:700, color:'var(--adm-text)' }}>{selected.nombre}</div>
+                <div style={{ fontSize:12, color:'var(--adm-muted)' }}>{selected.correo}</div>
+                <div style={{ fontSize:11, color:'var(--adm-muted)', marginTop:2 }}>CC {selected.cedula}</div>
               </div>
             </div>
             {[['Celular', selected.celular||'—'],['Ciudad', selected.ciudad||'—'],['Saldo', fmt(selected.saldo||0)],['Código referido', selected.codigoReferido||selected.codigo_referido||'—'],['Último login', fmtDate(selected.ultimoLogin||selected.ultimo_login)]].map(([l,v]) => (
-              <div key={l} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid rgba(255,255,255,.06)', fontSize:13 }}>
-                <span style={{ color:'#AE93AA' }}>{l}</span>
-                <span style={{ color:'#fff', fontWeight:600 }}>{v}</span>
+              <div key={l} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid rgba(var(--adm-fg-rgb),.06)', fontSize:13 }}>
+                <span style={{ color:'var(--adm-muted)' }}>{l}</span>
+                <span style={{ color:'var(--adm-text)', fontWeight:600 }}>{v}</span>
               </div>
             ))}
           </div>
         )}
+      </Modal>
+
+      {/* New user modal */}
+      <Modal open={showNew} onClose={() => setShowNew(false)} title="Nuevo usuario">
+        <div>
+          <Input label="Nombre completo" value={newUser.nombre} onChange={e => setNewUser(p => ({...p, nombre:e.target.value}))} />
+          <Input label="Cédula" value={newUser.cedula} onChange={e => setNewUser(p => ({...p, cedula:e.target.value.replace(/\D/g,'')}))} />
+          <Input label="Correo" type="email" value={newUser.correo} onChange={e => setNewUser(p => ({...p, correo:e.target.value}))} />
+          <Input label="Celular (opcional)" value={newUser.celular} onChange={e => setNewUser(p => ({...p, celular:e.target.value.replace(/\D/g,'')}))} />
+          <Input label="Ciudad (opcional)" value={newUser.ciudad} onChange={e => setNewUser(p => ({...p, ciudad:e.target.value}))} />
+          <Input label="PIN de 4 dígitos" type="password" maxLength={4} value={newUser.pin} onChange={e => setNewUser(p => ({...p, pin:e.target.value.replace(/\D/g,'').slice(0,4)}))} />
+          <Select label="Rol" value={newUser.rol} onChange={e => setNewUser(p => ({...p, rol:e.target.value}))}>
+            <option value="usuario">Usuario</option>
+            <option value="admin">Admin</option>
+          </Select>
+          <Btn variant="primary" style={{ width:'100%', justifyContent:'center', marginTop:8 }} disabled={createMut.isPending} onClick={submitNewUser}>
+            {createMut.isPending ? 'Creando...' : 'Crear usuario'}
+          </Btn>
+        </div>
       </Modal>
 
       {/* Edit modal */}
@@ -139,8 +178,8 @@ export default function UsuariosPage() {
         {showDel && (
           <div style={{ textAlign:'center' }}>
             <div style={{ display:'flex', justifyContent:'center', color:'#d4a017', marginBottom:12 }}><AlertTriangle size={40} /></div>
-            <div style={{ fontSize:14, color:'rgba(255,255,255,.8)', marginBottom:20 }}>
-              Estás por eliminar a <strong style={{ color:'#fff' }}>{showDel.nombre}</strong>. Esta acción no se puede deshacer.
+            <div style={{ fontSize:14, color:'rgba(var(--adm-fg-rgb),.8)', marginBottom:20 }}>
+              Estás por eliminar a <strong style={{ color:'var(--adm-text)' }}>{showDel.nombre}</strong>. Esta acción no se puede deshacer.
             </div>
             <div style={{ display:'flex', gap:10 }}>
               <Btn variant="ghost" style={{ flex:1, justifyContent:'center' }} onClick={() => setShowDel(null)}>Cancelar</Btn>

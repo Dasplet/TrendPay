@@ -62,21 +62,21 @@ export default function BancosPage() {
         />
         <Table headers={['Banco', 'Orden', 'Nuevo', 'Estado', 'Acciones']}>
           {isLoading ? (
-            <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(255,255,255,.3)' }} colSpan={5 as any}>Cargando...</TD></TR>
+            <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={5 as any}>Cargando...</TD></TR>
           ) : bancos.length === 0 ? (
-            <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(255,255,255,.3)' }} colSpan={5 as any}>Sin bancos registrados</TD></TR>
+            <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={5 as any}>Sin bancos registrados</TD></TR>
           ) : bancos.map((b: any) => (
             <TR key={b.id}>
               <TD>
                 <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                   <BankLogo id={b.id} nombre={b.nombre} />
                   <div>
-                    <div style={{ fontSize:13, fontWeight:600, color:'#fff' }}>{b.nombre}</div>
-                    <div style={{ fontSize:10, color:'rgba(255,255,255,.35)', fontFamily:'monospace' }}>{b.id}</div>
+                    <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)' }}>{b.nombre}</div>
+                    <div style={{ fontSize:10, color:'rgba(var(--adm-fg-rgb),.35)', fontFamily:'monospace' }}>{b.id}</div>
                   </div>
                 </div>
               </TD>
-              <TD style={{ color:'rgba(255,255,255,.6)' }}>{b.orden}</TD>
+              <TD style={{ color:'rgba(var(--adm-fg-rgb),.6)' }}>{b.orden}</TD>
               <TD>
                 {b.nuevo && <span style={{ fontSize:10, fontWeight:700, color:'#fff', background:'#5d1ca9', borderRadius:5, padding:'2px 8px' }}>Nuevo</span>}
               </TD>
@@ -107,11 +107,11 @@ export default function BancosPage() {
       <Modal open={showNew} onClose={() => setShowNew(false)} title="Nuevo banco">
         <Input label="Nombre" value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} placeholder="Ej. Banco Agrario" />
         <Input label="Orden (menor = aparece primero)" type="number" value={form.orden} onChange={(e) => setForm((f) => ({ ...f, orden: e.target.value }))} />
-        <label style={{ display:'flex', alignItems:'center', gap:8, width:'100%', fontSize:13, color:'rgba(255,255,255,.8)', margin:'6px 0 16px', cursor:'pointer', whiteSpace:'nowrap' }}>
+        <label style={{ display:'flex', alignItems:'center', gap:8, width:'100%', fontSize:13, color:'rgba(var(--adm-fg-rgb),.8)', margin:'6px 0 16px', cursor:'pointer', whiteSpace:'nowrap' }}>
           <input type="checkbox" checked={form.nuevo} onChange={(e) => setForm((f) => ({ ...f, nuevo: e.target.checked }))} />
           Marcar como "Nuevo"
         </label>
-        <div style={{ fontSize:11, color:'rgba(255,255,255,.35)', marginBottom:16 }}>
+        <div style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.35)', marginBottom:16 }}>
           El logo se toma de <code style={{ fontFamily:'monospace' }}>/bancos/&lt;id&gt;.png</code> según el nombre — si no existe, se muestran las iniciales.
         </div>
         <Btn variant="primary" style={{ width:'100%', justifyContent:'center' }} disabled={!form.nombre.trim() || createMut.isPending}
@@ -126,7 +126,7 @@ export default function BancosPage() {
           <>
             <Input label="Nombre" value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} />
             <Input label="Orden" type="number" value={form.orden} onChange={(e) => setForm((f) => ({ ...f, orden: e.target.value }))} />
-            <label style={{ display:'flex', alignItems:'center', gap:8, width:'100%', fontSize:13, color:'rgba(255,255,255,.8)', margin:'6px 0 16px', cursor:'pointer', whiteSpace:'nowrap' }}>
+            <label style={{ display:'flex', alignItems:'center', gap:8, width:'100%', fontSize:13, color:'rgba(var(--adm-fg-rgb),.8)', margin:'6px 0 16px', cursor:'pointer', whiteSpace:'nowrap' }}>
               <input type="checkbox" checked={form.nuevo} onChange={(e) => setForm((f) => ({ ...f, nuevo: e.target.checked }))} />
               Marcar como "Nuevo"
             </label>

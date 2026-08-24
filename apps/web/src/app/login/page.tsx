@@ -2,8 +2,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
-import toast from 'react-hot-toast';
-import Link from 'next/link';
 import { AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
@@ -142,13 +140,6 @@ export default function LoginPage() {
               >
                 {isLoading ? 'Verificando...' : 'Ingresar'}
               </button>
-
-              {/* Register link */}
-              <div className="text-center mt-4">
-                <Link href="/register" className="text-sm text-brand-muted hover:text-white transition-colors">
-                  ¿No tienes cuenta? <span className="text-brand-accent font-semibold">Crear cuenta</span>
-                </Link>
-              </div>
             </>
           ) : (
             <>

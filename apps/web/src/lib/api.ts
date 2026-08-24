@@ -122,6 +122,7 @@ export const adminApi = {
   users:        (params?: any) => api.get('/admin/users', { params }),
   transactions: (params?: any) => api.get('/admin/transactions', { params }),
   chart:        (months: string) => api.get(`/admin/dashboard-chart?months=${months}`),
+  createUser:   (data: any) => api.post('/admin/users', data),
   updateUser:   (id: string, data: any) => api.put(`/admin/users/${id}`, data),
   deleteUser:   (id: string) => api.delete(`/admin/users/${id}`),
   pending:      () => api.get('/withdrawals/pending'),

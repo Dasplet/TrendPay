@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Panel, PanelHeader, Btn } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
-import { TrendingUp, Lock, Smartphone, AlertTriangle, Settings2, Eye, Check, Pencil, type LucideIcon } from 'lucide-react';
+import { TrendingUp, Lock, Smartphone, AlertTriangle, Settings2, Eye, Check, Pencil, Trash2, X, type LucideIcon } from 'lucide-react';
 
 const MOCK_ALERTS: { id:number; tipo:string; titulo:string; desc:string; tiempo:string; icon:LucideIcon; color:string; bg:string }[] = [
   { id:1, tipo:'Alto', titulo:'Alto volumen inusual', desc:"Retiro de $2.800.000 · CC 1023456789 · supera el 90% del límite diario", tiempo:'Hace 8 min', icon:TrendingUp, color:'#C0392B', bg:'rgba(192,57,43,.15)' },
@@ -19,30 +19,43 @@ export default function AlertasPage() {
     toast.success('Alerta marcada como revisada');
   }
 
+  function remove(id: number) {
+    setAlerts(a => a.filter(x => x.id !== id));
+    toast.success('Alerta eliminada');
+  }
+
+  function clearAll() {
+    setAlerts([]);
+    toast.success('Todas las alertas fueron eliminadas');
+  }
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
 
       {/* Active alerts */}
       <Panel style={{ border:'1px solid rgba(192,57,43,.25)' }}>
-        <PanelHeader title="Alertas de riesgo activas" icon={<AlertTriangle size={16} />} />
+        <PanelHeader title="Alertas de riesgo activas" icon={<AlertTriangle size={16} />}
+          actions={alerts.length > 0 ? <Btn variant="ghost" onClick={clearAll}><X size={13} /> Limpiar todas</Btn> : undefined}
+        />
         <div style={{ padding:'12px 16px', display:'flex', flexDirection:'column', gap:10 }}>
           {alerts.length === 0 && (
-            <div style={{ textAlign:'center', padding:32, color:'rgba(255,255,255,.3)', fontSize:13 }}>Sin alertas activas</div>
+            <div style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)', fontSize:13 }}>Sin alertas activas</div>
           )}
           {alerts.map(a => (
-            <div key={a.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 16px', background:'rgba(30,12,65,.5)', borderRadius:12, border:'1px solid rgba(133,46,199,.12)' }}>
+            <div key={a.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 16px', background:'rgba(var(--adm-card-rgb),.5)', borderRadius:12, border:'1px solid rgba(133,46,199,.12)' }}>
               <div style={{ width:44, height:44, borderRadius:12, background:a.bg, display:'flex', alignItems:'center', justifyContent:'center', color:a.color, flexShrink:0 }}><a.icon size={20} /></div>
               <div style={{ flex:1 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:3 }}>
-                  <span style={{ fontSize:14, fontWeight:700, color:'#fff' }}>{a.titulo}</span>
+                  <span style={{ fontSize:14, fontWeight:700, color:'var(--adm-text)' }}>{a.titulo}</span>
                   <span style={{ fontSize:11, fontWeight:700, background:a.bg, color:a.color, padding:'2px 8px', borderRadius:12 }}>{a.tipo}</span>
                 </div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,.6)', marginBottom:3 }}>{a.desc}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,.35)' }}>{a.tiempo}</div>
+                <div style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.6)', marginBottom:3 }}>{a.desc}</div>
+                <div style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.35)' }}>{a.tiempo}</div>
               </div>
               <div style={{ display:'flex', gap:8 }}>
-                <Btn variant="ghost" style={{ padding:'6px 10px' }}><Eye size={14} /></Btn>
-                <Btn variant="ghost" style={{ padding:'6px 10px' }} onClick={() => dismiss(a.id)}><Check size={14} /></Btn>
+                <Btn variant="ghost" style={{ padding:'6px 10px' }} title="Ver detalle"><Eye size={14} /></Btn>
+                <Btn variant="ghost" style={{ padding:'6px 10px' }} onClick={() => dismiss(a.id)} title="Marcar como revisada"><Check size={14} /></Btn>
+                <Btn variant="danger" style={{ padding:'6px 10px' }} onClick={() => remove(a.id)} title="Eliminar"><Trash2 size={14} /></Btn>
               </div>
             </div>
           ))}
@@ -58,10 +71,10 @@ export default function AlertasPage() {
             { label:'Max intentos PIN antes de bloqueo', sub:'Bloqueo temporal de 15 minutos', value:`${params.intentos} intentos`, key:'intentos' },
             { label:'Revisión de nuevos dispositivos', sub:'Requiere 2FA en dispositivos nuevos', value:params.dispositivos?'Activo':'Inactivo', key:'dispositivos' },
           ].map(p => (
-            <div key={p.key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 20px', borderBottom:'1px solid rgba(255,255,255,.04)' }}>
+            <div key={p.key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 20px', borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)' }}>
               <div>
-                <div style={{ fontSize:14, fontWeight:600, color:'#fff', marginBottom:3 }}>{p.label}</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,.4)' }}>{p.sub}</div>
+                <div style={{ fontSize:14, fontWeight:600, color:'var(--adm-text)', marginBottom:3 }}>{p.label}</div>
+                <div style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.4)' }}>{p.sub}</div>
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                 <span style={{ fontSize:13, fontWeight:700, color:'#6CC998' }}>{p.value}</span>
