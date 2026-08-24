@@ -107,7 +107,7 @@ export default function BancosPage() {
       <Modal open={showNew} onClose={() => setShowNew(false)} title="Nuevo banco">
         <Input label="Nombre" value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} placeholder="Ej. Banco Agrario" />
         <Input label="Orden (menor = aparece primero)" type="number" value={form.orden} onChange={(e) => setForm((f) => ({ ...f, orden: e.target.value }))} />
-        <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, color:'rgba(255,255,255,.8)', margin:'6px 0 16px', cursor:'pointer' }}>
+        <label style={{ display:'flex', alignItems:'center', gap:8, width:'100%', fontSize:13, color:'rgba(255,255,255,.8)', margin:'6px 0 16px', cursor:'pointer', whiteSpace:'nowrap' }}>
           <input type="checkbox" checked={form.nuevo} onChange={(e) => setForm((f) => ({ ...f, nuevo: e.target.checked }))} />
           Marcar como "Nuevo"
         </label>
@@ -126,7 +126,7 @@ export default function BancosPage() {
           <>
             <Input label="Nombre" value={form.nombre} onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))} />
             <Input label="Orden" type="number" value={form.orden} onChange={(e) => setForm((f) => ({ ...f, orden: e.target.value }))} />
-            <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, color:'rgba(255,255,255,.8)', margin:'6px 0 16px', cursor:'pointer' }}>
+            <label style={{ display:'flex', alignItems:'center', gap:8, width:'100%', fontSize:13, color:'rgba(255,255,255,.8)', margin:'6px 0 16px', cursor:'pointer', whiteSpace:'nowrap' }}>
               <input type="checkbox" checked={form.nuevo} onChange={(e) => setForm((f) => ({ ...f, nuevo: e.target.checked }))} />
               Marcar como "Nuevo"
             </label>
