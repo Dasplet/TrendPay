@@ -127,4 +127,7 @@ export const adminApi = {
   withdrawalsAll: () => api.get('/withdrawals'),
   approveWD:    (id: string) => api.put(`/withdrawals/${id}/approve`),
   rejectWD:     (id: string, motivo: string) => api.put(`/withdrawals/${id}/reject`, { motivo }),
+  banks:        () => api.get('/admin/banks'),
+  createBank:   (data: any) => api.post('/admin/banks', data),
+  updateBank:   (id: string, data: any) => api.put(`/admin/banks/${id}`, data),
 };

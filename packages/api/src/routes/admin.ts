@@ -161,6 +161,65 @@ router.get('/notifications', authenticate, requireAdmin, async (_req: Request, r
 // ══ PUT /api/admin/notifications/read ══
 router.put('/notifications/read', authenticate, requireAdmin, (_req, res) => res.json({ ok: true }));
 
+// ══ GET /api/admin/banks ══
+router.get('/banks', authenticate, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const banks = await prisma.bank.findMany({ orderBy: { orden: 'asc' } });
+    res.json({ ok: true, bancos: banks });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// ══ POST /api/admin/banks ══
+router.post('/banks', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { nombre, orden, nuevo } = req.body;
+    if (!nombre || !String(nombre).trim()) return res.status(400).json({ ok: false, mensaje: 'El nombre es obligatorio' });
+
+    const slug = String(nombre).trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '') // quita tildes
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    if (!slug) return res.status(400).json({ ok: false, mensaje: 'Nombre inválido' });
+
+    let id = slug, suffix = 1;
+    while (await prisma.bank.findUnique({ where: { id } })) { id = `${slug}-${++suffix}`; }
+
+    const bank = await prisma.bank.create({
+      data: { id, nombre: String(nombre).trim(), orden: orden ? parseInt(orden) : 99, nuevo: !!nuevo, habilitado: true },
+    });
+
+    await prisma.auditLog.create({
+      data: { userId: req.user!.id, accion: 'BANCO_CREAR', tabla: 'banks', registroId: bank.id, ip: req.ip, datos: { nombre: bank.nombre } },
+    }).catch(() => {});
+
+    res.status(201).json({ ok: true, mensaje: 'Banco creado', banco: bank });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// ══ PUT /api/admin/banks/:id ══
+router.put('/banks/:id', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const existing = await prisma.bank.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ ok: false, mensaje: 'Banco no encontrado' });
+
+    const { nombre, orden, nuevo, habilitado } = req.body;
+    const data: any = {};
+    if (nombre !== undefined) data.nombre = String(nombre).trim();
+    if (orden !== undefined) data.orden = parseInt(orden);
+    if (nuevo !== undefined) data.nuevo = !!nuevo;
+    if (habilitado !== undefined) data.habilitado = !!habilitado;
+
+    const bank = await prisma.bank.update({ where: { id: req.params.id }, data });
+
+    if (habilitado !== undefined && !!habilitado !== existing.habilitado) {
+      await prisma.auditLog.create({
+        data: { userId: req.user!.id, accion: 'BANCO_TOGGLE', tabla: 'banks', registroId: bank.id, ip: req.ip, datos: { nombre: bank.nombre, habilitado: bank.habilitado } },
+      }).catch(() => {});
+    }
+
+    res.json({ ok: true, mensaje: 'Banco actualizado', banco: bank });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
 // ══ GET /api/admin/audit ══
 router.get('/audit', authenticate, requireAdmin, async (_req: Request, res: Response) => {
   try {
