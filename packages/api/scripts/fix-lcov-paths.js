@@ -16,7 +16,7 @@ const fixed = fs
   .split('\n')
   .map((line) => {
     if (!line.startsWith('SF:')) return line;
-    const rel = line.slice(3).replace(/\\/g, '/');
+    const rel = line.slice(3).replaceAll('\\', '/');
     return `SF:packages/api/${rel}`;
   })
   .join('\n');
