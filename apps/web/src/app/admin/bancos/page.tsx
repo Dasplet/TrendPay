@@ -109,7 +109,7 @@ export default function BancosPage() {
         <Input label="Orden (menor = aparece primero)" type="number" value={form.orden} onChange={(e) => setForm((f) => ({ ...f, orden: e.target.value }))} />
         <label style={{ display:'flex', alignItems:'center', gap:8, width:'100%', fontSize:13, color:'rgba(var(--adm-fg-rgb),.8)', margin:'6px 0 16px', cursor:'pointer', whiteSpace:'nowrap' }}>
           <input type="checkbox" checked={form.nuevo} onChange={(e) => setForm((f) => ({ ...f, nuevo: e.target.checked }))} />
-          Marcar como "Nuevo"
+          <span>Marcar como "Nuevo"</span>
         </label>
         <div style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.35)', marginBottom:16 }}>
           El logo se toma de <code style={{ fontFamily:'monospace' }}>/bancos/&lt;id&gt;.png</code> según el nombre — si no existe, se muestran las iniciales.
@@ -128,7 +128,7 @@ export default function BancosPage() {
             <Input label="Orden" type="number" value={form.orden} onChange={(e) => setForm((f) => ({ ...f, orden: e.target.value }))} />
             <label style={{ display:'flex', alignItems:'center', gap:8, width:'100%', fontSize:13, color:'rgba(var(--adm-fg-rgb),.8)', margin:'6px 0 16px', cursor:'pointer', whiteSpace:'nowrap' }}>
               <input type="checkbox" checked={form.nuevo} onChange={(e) => setForm((f) => ({ ...f, nuevo: e.target.checked }))} />
-              Marcar como "Nuevo"
+              <span>Marcar como "Nuevo"</span>
             </label>
             <Btn variant="primary" style={{ width:'100%', justifyContent:'center' }} disabled={!form.nombre.trim() || updateMut.isPending}
               onClick={() => updateMut.mutate({ id: showEdit.id, data: { nombre: form.nombre, orden: form.orden, nuevo: form.nuevo } })}>
