@@ -6,7 +6,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "jest --runInBand",
-    "test:coverage": "jest --runInBand --coverage"
+    "test:coverage": "jest --runInBand --coverage && node scripts/fix-lcov-paths.js"
   },
   "dependencies": {
     "@prisma/client": "^5.7.0",
