@@ -23,6 +23,8 @@ async function getConfigNumber(clave: string, fallback: number): Promise<number>
 
 function mapWithdrawal(w: any, opts: { mask?: boolean } = {}) {
   const cuenta = decrypt(w.numeroCuenta);
+  const monto = Number.parseFloat(w.monto.toString());
+  const montoNeto = Number.parseFloat(w.montoNeto.toString());
   return {
     id: w.id,
     banco_nombre: w.bancoNombre,
@@ -31,8 +33,7 @@ function mapWithdrawal(w: any, opts: { mask?: boolean } = {}) {
     cedula_titular: decrypt(w.cedulaTitular),
     numero_cuenta: opts.mask ? undefined : cuenta,
     numero_cuenta_masked: opts.mask ? maskAccount(cuenta) : undefined,
-    monto: Number.parseFloat(w.monto.toString()),
-    monto_neto: Number.parseFloat(w.montoNeto.toString()),
+    monto, monto_neto: montoNeto,
     status: w.status,
     motivo: w.motivo,
     usuario_nombre: w.user?.nombre,
@@ -198,9 +199,10 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req: Request, res:
         where: { metadata: { path: ['withdrawalId'], equals: withdrawal.id } },
         data: { status: 'exitosa' },
       });
+      const montoAprobado = Number.parseFloat(withdrawal.monto.toString());
       await tx.auditLog.create({
         data: { userId: req.user!.id, accion: 'RETIRO_APROBADO', tabla: 'withdrawals', registroId: withdrawal.id, ip: req.ip || null,
-          datos: { monto: Number.parseFloat(withdrawal.monto.toString()), banco: withdrawal.bancoNombre, antes: { status: 'pendiente' }, despues: { status: 'procesado' } } },
+          datos: { monto: montoAprobado, banco: withdrawal.bancoNombre, antes: { status: 'pendiente' }, despues: { status: 'procesado' } } },
       });
     });
 

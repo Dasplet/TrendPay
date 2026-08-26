@@ -61,6 +61,7 @@ async function completeLogin(req: Request, res: Response, user: any) {
 
   logger.info('Login exitoso', { userId: user.id, cedula: user.cedula });
 
+  const saldo = Number.parseFloat(user.wallet?.saldo.toString() || '0');
   res.json({
     ok: true,
     accessToken,
@@ -76,7 +77,7 @@ async function completeLogin(req: Request, res: Response, user: any) {
       subRol: user.subRol,
       kycVerificado: user.kycVerificado,
       codigoReferido: user.codigoReferido,
-      saldo: Number.parseFloat(user.wallet?.saldo.toString() || '0'),
+      saldo,
       walletId: user.wallet?.id,
     },
   });
@@ -469,6 +470,7 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
       include: { wallet: true },
     });
     if (!user) return res.status(404).json({ ok: false });
+    const saldo = Number.parseFloat(user.wallet?.saldo.toString() || '0');
     res.json({
       ok: true,
       usuario: {
@@ -476,7 +478,7 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
         correo: user.correo, celular: user.celular, ciudad: user.ciudad,
         rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado,
         codigoReferido: user.codigoReferido,
-        saldo: Number.parseFloat(user.wallet?.saldo.toString() || '0'),
+        saldo,
         walletId: user.wallet?.id,
       },
     });

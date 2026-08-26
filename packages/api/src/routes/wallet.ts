@@ -19,16 +19,16 @@ class ApiError extends Error {
 }
 
 function mapTransaction(t: any) {
+  const montoNeto  = Number.parseFloat(t.montoNeto.toString());
+  const montoBruto = Number.parseFloat(t.montoBruto.toString());
   return {
     id: t.id,
     codigo: t.codigo,
     categoria: t.categoria,
     tipo: t.categoria,
     descripcion: t.descripcion,
-    montoNeto: Number.parseFloat(t.montoNeto.toString()),
-    monto_neto: Number.parseFloat(t.montoNeto.toString()),
-    montoBruto: Number.parseFloat(t.montoBruto.toString()),
-    monto_bruto: Number.parseFloat(t.montoBruto.toString()),
+    montoNeto, monto_neto: montoNeto,
+    montoBruto, monto_bruto: montoBruto,
     status: t.status,
     estado: t.status,
     createdAt: t.createdAt,
@@ -199,11 +199,12 @@ router.post('/qr/generar', authenticate, walletLimiter, async (req: Request, res
       },
     });
 
+    const monto = qr.monto ? Number.parseFloat(qr.monto.toString()) : null;
     res.json({
       ok: true,
       qr: {
         token: qr.token,
-        monto: qr.monto ? Number.parseFloat(qr.monto.toString()) : null,
+        monto,
         concepto: qr.concepto,
         expiresAt: qr.expiresAt,
       },
@@ -250,10 +251,11 @@ router.get('/qr/:token', authenticate, async (req: Request, res: Response) => {
     });
     if (!qr) return res.status(404).json({ ok: false, mensaje: 'QR no encontrado' });
 
+    const monto = qr.monto ? Number.parseFloat(qr.monto.toString()) : null;
     res.json({
       ok: true,
       qr: {
-        monto: qr.monto ? Number.parseFloat(qr.monto.toString()) : null,
+        monto,
         concepto: qr.concepto,
         expiresAt: qr.permanente ? null : qr.expiresAt,
         usado: qr.permanente ? false : qr.usado,

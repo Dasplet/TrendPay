@@ -29,16 +29,19 @@ router.get('/admin', authenticate, requireAdmin, async (req: Request, res: Respo
 
     res.json({
       ok: true,
-      referidos: filtered.map(r => ({
-        id:               r.id,
-        referidor_nombre: r.referidor.nombre,
-        referidor_cedula: r.referidor.cedula,
-        referido_nombre:  r.referido.nombre,
-        referido_cedula:  r.referido.cedula,
-        comision_valor:   Number.parseFloat(r.comisionValor.toString()),
-        status:           r.status,
-        created_at:       r.createdAt,
-      })),
+      referidos: filtered.map(r => {
+        const comision_valor = Number.parseFloat(r.comisionValor.toString());
+        return {
+          id:               r.id,
+          referidor_nombre: r.referidor.nombre,
+          referidor_cedula: r.referidor.cedula,
+          referido_nombre:  r.referido.nombre,
+          referido_cedula:  r.referido.cedula,
+          comision_valor,
+          status:           r.status,
+          created_at:       r.createdAt,
+        };
+      }),
       stats: { total: filtered.length, pagados, pendientes, total_pagado },
     });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
@@ -74,10 +77,10 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
       .reduce((s, r) => s + Number.parseFloat(r.comisionValor.toString()), 0);
     res.json({
       ok: true,
-      referidos: referrals.map(r => ({
-        id: r.id, nombre: r.referido.nombre, cedula: r.referido.cedula,
-        status: r.status, comision_valor: Number.parseFloat(r.comisionValor.toString()), created_at: r.createdAt,
-      })),
+      referidos: referrals.map(r => {
+        const comision_valor = Number.parseFloat(r.comisionValor.toString());
+        return { id: r.id, nombre: r.referido.nombre, cedula: r.referido.cedula, status: r.status, comision_valor, created_at: r.createdAt };
+      }),
       stats: { total: referrals.length, pagados: referrals.filter(r=>r.status==='pagado').length, pendientes: referrals.filter(r=>r.status==='pendiente').length, total_ganado },
     });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }

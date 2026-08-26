@@ -28,6 +28,7 @@ router.get('/profile', authenticate, async (req: Request, res: Response) => {
 
     if (!user) return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado' });
 
+    const saldo = Number.parseFloat(user.wallet?.saldo.toString() || '0');
     res.json({
       ok: true,
       usuario: {
@@ -42,7 +43,7 @@ router.get('/profile', authenticate, async (req: Request, res: Response) => {
         kycVerificado: user.kycVerificado,
         kycNivel: user.kycNivel,
         codigoReferido: user.codigoReferido,
-        saldo: Number.parseFloat(user.wallet?.saldo.toString() || '0'),
+        saldo,
         walletId: user.wallet?.id,
       },
     });
@@ -91,6 +92,7 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
       },
     }).catch(() => {});
 
+    const saldo = Number.parseFloat(updated.wallet?.saldo.toString() || '0');
     res.json({
       ok: true,
       mensaje: 'Perfil actualizado',
@@ -106,7 +108,7 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
         kycVerificado: updated.kycVerificado,
         kycNivel: updated.kycNivel,
         codigoReferido: updated.codigoReferido,
-        saldo: Number.parseFloat(updated.wallet?.saldo.toString() || '0'),
+        saldo,
         walletId: updated.wallet?.id,
       },
     });

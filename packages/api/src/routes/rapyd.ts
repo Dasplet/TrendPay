@@ -175,11 +175,8 @@ router.get('/verificar/:reference', authenticate, async (req: Request, res: Resp
     }
 
     const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.id } });
-    res.json({
-      ok: true,
-      estado: payment.estado,
-      saldo: Number.parseFloat(wallet?.saldo.toString() || '0'),
-    });
+    const saldo = Number.parseFloat(wallet?.saldo.toString() || '0');
+    res.json({ ok: true, estado: payment.estado, saldo });
   } catch (err: any) {
     if (err instanceof RapydError) return res.status(err.status).json({ ok: false, mensaje: err.message });
     logger.error('Error verificando consignación Rapyd', { err: err.message, reference: req.params.reference });

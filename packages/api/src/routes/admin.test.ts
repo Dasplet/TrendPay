@@ -189,6 +189,16 @@ describe('Admin API', () => {
     });
   });
 
+  describe('GET /api/admin/metrics', () => {
+    it('devuelve los totales convertidos a número', async () => {
+      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+      const res = await request(app).get('/api/admin/metrics').set('Authorization', `Bearer ${tokenPara(admin)}`);
+      expect(res.status).toBe(200);
+      expect(typeof res.body.metricas.total_volumen).toBe('number');
+      expect(typeof res.body.metricas.comision_pct).toBe('number');
+    });
+  });
+
   describe('GET /api/admin/users', () => {
     it('devuelve el saldo de cada usuario a partir de su billetera', async () => {
       const admin = await crearUsuarioDePrueba({ rol: 'admin' });
