@@ -126,6 +126,18 @@ describe('Withdrawals API', () => {
       expect(Number(wallet!.saldo)).toBe(100000); // saldo íntegramente devuelto
     });
 
+    it('GET /api/withdrawals devuelve el historial completo con el número de cuenta enmascarado', async () => {
+      const user = await crearUsuarioDePrueba({ saldo: 100000 });
+      const admin = await crearUsuarioDePrueba({ saldo: 0, rol: 'admin' });
+      await request(app).post('/api/withdrawals').set('Authorization', `Bearer ${tokenPara(user)}`).send({ ...datosRetiro, monto: 20000 });
+
+      const res = await request(app).get('/api/withdrawals').set('Authorization', `Bearer ${tokenPara(admin)}`);
+      expect(res.status).toBe(200);
+      expect(res.body.retiros).toHaveLength(1);
+      expect(res.body.retiros[0].numero_cuenta).toBeUndefined();
+      expect(res.body.retiros[0].numero_cuenta_masked).toBe('*******5678');
+    });
+
     it('no permite aprobar dos veces el mismo retiro', async () => {
       const user = await crearUsuarioDePrueba({ saldo: 100000 });
       const admin = await crearUsuarioDePrueba({ saldo: 0, rol: 'admin' });

@@ -111,6 +111,34 @@ describe('Admin API', () => {
       expect(datos.despues).toEqual({});
     });
 
+    it('permite al admin resetear el PIN del usuario', async () => {
+      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+      const target = await crearUsuarioDePrueba();
+      const hashAntes = target.pinHash;
+
+      const res = await request(app)
+        .put(`/api/admin/users/${target.id}`)
+        .set('Authorization', `Bearer ${tokenPara(admin)}`)
+        .send({ nuevo_pin: '9999' });
+
+      expect(res.status).toBe(200);
+      const actualizado = await prisma.user.findUnique({ where: { id: target.id } });
+      expect(actualizado!.pinHash).not.toBe(hashAntes);
+    });
+
+    it('actualiza el nivel de KYC cuando cambia', async () => {
+      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+      const target = await crearUsuarioDePrueba();
+
+      const res = await request(app)
+        .put(`/api/admin/users/${target.id}`)
+        .set('Authorization', `Bearer ${tokenPara(admin)}`)
+        .send({ kycNivel: 2 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.usuario.kycNivel).toBe(2);
+    });
+
     it('devuelve 404 si el usuario no existe', async () => {
       const admin = await crearUsuarioDePrueba({ rol: 'admin' });
       const res = await request(app)
@@ -158,6 +186,80 @@ describe('Admin API', () => {
       const log = res.body.logs.find((l: any) => l.accion === 'EDITAR_USUARIO' && l.registroId === target.id);
       expect(log.user.nombre).toBe('Admin Auditor');
       expect(log.user.cedula).toBe(admin.cedula);
+    });
+  });
+
+  describe('GET /api/admin/users', () => {
+    it('devuelve el saldo de cada usuario a partir de su billetera', async () => {
+      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+      await crearUsuarioDePrueba({ saldo: 42000 });
+
+      const res = await request(app).get('/api/admin/users').set('Authorization', `Bearer ${tokenPara(admin)}`);
+      expect(res.status).toBe(200);
+      expect(res.body.usuarios.some((u: any) => u.saldo === 42000)).toBe(true);
+    });
+  });
+
+  describe('GET /api/admin/transactions y /dashboard-chart', () => {
+    async function crearTransaccionDePrueba(userId: string) {
+      const wallet = await prisma.wallet.findUnique({ where: { userId } });
+      return prisma.transaction.create({
+        data: {
+          walletId: wallet!.id,
+          userId,
+          codigo: `TX-${Date.now()}`,
+          categoria: 'consigna',
+          descripcion: 'Transacción de prueba',
+          montoBruto: 20000,
+          comisionPct: 3,
+          comisionValor: 600,
+          montoNeto: 19400,
+          saldoAntes: 0,
+          saldoDespues: 19400,
+          status: 'exitosa',
+        },
+      });
+    }
+
+    it('GET /transactions convierte los montos Decimal a número', async () => {
+      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+      const user = await crearUsuarioDePrueba();
+      await crearTransaccionDePrueba(user.id);
+
+      const res = await request(app).get('/api/admin/transactions').set('Authorization', `Bearer ${tokenPara(admin)}`);
+      expect(res.status).toBe(200);
+      expect(res.body.transacciones[0].monto_neto).toBe(19400);
+      expect(res.body.transacciones[0].comision_valor).toBe(600);
+    });
+
+    it('GET /dashboard-chart agrupa el volumen y las comisiones por mes', async () => {
+      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+      const user = await crearUsuarioDePrueba();
+      await crearTransaccionDePrueba(user.id);
+
+      const res = await request(app).get('/api/admin/dashboard-chart').set('Authorization', `Bearer ${tokenPara(admin)}`);
+      expect(res.status).toBe(200);
+      const totalVolumen = res.body.datos.reduce((s: number, d: any) => s + d.volumen, 0);
+      expect(totalVolumen).toBeGreaterThanOrEqual(20000);
+    });
+  });
+
+  describe('PUT /api/admin/banks/:id', () => {
+    it('actualiza el orden del banco', async () => {
+      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+      const crear = await request(app)
+        .post('/api/admin/banks')
+        .set('Authorization', `Bearer ${tokenPara(admin)}`)
+        .send({ nombre: 'Banco De Prueba' });
+      expect(crear.status).toBe(201);
+
+      const res = await request(app)
+        .put(`/api/admin/banks/${crear.body.banco.id}`)
+        .set('Authorization', `Bearer ${tokenPara(admin)}`)
+        .send({ orden: 5 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.banco.orden).toBe(5);
     });
   });
 });

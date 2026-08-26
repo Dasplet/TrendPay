@@ -8,7 +8,7 @@ module.exports = {
   setupFiles: ['<rootDir>/jest.setup.js'],
   testTimeout: 15000,
   clearMocks: true,
-  collectCoverageFrom: ['src/**/*.ts', '!src/**/*.test.ts', '!src/tests/**', '!src/index.ts'],
+  collectCoverageFrom: ['src/**/*.ts', '!src/**/*.test.ts', '!src/tests/**'],
   coverageDirectory: '<rootDir>/coverage',
   coverageReporters: ['lcov', 'text-summary'],
 };
