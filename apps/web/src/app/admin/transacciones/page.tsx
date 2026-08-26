@@ -60,8 +60,8 @@ export default function TransaccionesPage() {
             <TD style={{ fontFamily:'monospace', fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{(t.codigo||'—').slice(0,16)}</TD>
             <TD style={{ fontSize:12, maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.descripcion}</TD>
             <TD style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.7)' }}>{t.usuario_nombre||'—'}</TD>
-            <TD style={{ fontWeight:700, color: parseFloat(t.monto_neto)>0?'#6CC998':'#C0392B' }}>
-              {parseFloat(t.monto_neto)>0?'+':''}{fmt(t.monto_neto||0)}
+            <TD style={{ fontWeight:700, color: Number.parseFloat(t.monto_neto)>0?'#6CC998':'#C0392B' }}>
+              {Number.parseFloat(t.monto_neto)>0?'+':''}{fmt(t.monto_neto||0)}
             </TD>
             <TD style={{ color:'#d4a017', fontWeight:600 }}>{fmt(t.comision_valor||0)}</TD>
             <TD><StatusBadge status={t.status} /></TD>

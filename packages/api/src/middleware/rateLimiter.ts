@@ -1,8 +1,8 @@
 import rateLimit from 'express-rate-limit';
 
 export const apiLimiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 min
-  max: parseInt(process.env.RATE_LIMIT_MAX || '100'),
+  windowMs: Number.parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 min
+  max: Number.parseInt(process.env.RATE_LIMIT_MAX || '100'),
   standardHeaders: true,
   legacyHeaders: false,
   message: { ok: false, mensaje: 'Demasiadas solicitudes. Intenta en 15 minutos.' },

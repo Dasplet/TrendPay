@@ -45,7 +45,7 @@ export default function AdminDashboard() {
   const { data:chartData }   = useQuery({ queryKey:['admin-chart',period], queryFn:()=>adminApi.chart(period), select:d=>d.data });
 
   const m=metricsData?.metricas||{}, txs=txData?.transacciones||[], users=usersData?.usuarios||[];
-  const totalSaldo=users.reduce((s:number,u:any)=>s+(parseFloat(u.saldo)||0),0);
+  const totalSaldo=users.reduce((s:number,u:any)=>s+(Number.parseFloat(u.saldo)||0),0);
   const meses=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   const now=new Date();
 
@@ -59,8 +59,8 @@ export default function AdminDashboard() {
         if(!t.created_at)return;
         const d=new Date(t.created_at);
         if(d.getFullYear()!==year||d.getMonth()!==month)return;
-        const idx=d.getDate()-1,vol=Math.abs(parseFloat(t.monto_neto)||0);
-        b[idx].vol+=vol;b[idx].com+=parseFloat(t.comision_valor||0);
+        const idx=d.getDate()-1,vol=Math.abs(Number.parseFloat(t.monto_neto)||0);
+        b[idx].vol+=vol;b[idx].com+=Number.parseFloat(t.comision_valor||0);
         const cat=(t.categoria||'').toLowerCase();
         if(cat.includes('consign'))b[idx].consigna+=vol;
         else if(cat.includes('cobro'))b[idx].cobro+=vol;
@@ -70,7 +70,7 @@ export default function AdminDashboard() {
       });
       return b.map(x=>({...x,vol:x.future?null:x.vol,com:x.future?null:x.com}));
     }
-    const months=parseInt(period)||6;
+    const months=Number.parseInt(period)||6;
     const bk:Record<string,any>={};
     for(let i=months-1;i>=0;i--){
       const d=new Date(now.getFullYear(),now.getMonth()-i,1);
@@ -83,8 +83,8 @@ export default function AdminDashboard() {
       const d=new Date(t.created_at);
       const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       if(!bk[key])return;
-      const vol=Math.abs(parseFloat(t.monto_neto)||0);
-      if(!chartData?.datos?.length){bk[key].vol+=vol;bk[key].com+=parseFloat(t.comision_valor||0);}
+      const vol=Math.abs(Number.parseFloat(t.monto_neto)||0);
+      if(!chartData?.datos?.length){bk[key].vol+=vol;bk[key].com+=Number.parseFloat(t.comision_valor||0);}
       const cat=(t.categoria||'').toLowerCase();
       if(cat.includes('consign'))bk[key].consigna+=vol;
       else if(cat.includes('cobro'))bk[key].cobro+=vol;
@@ -166,7 +166,7 @@ export default function AdminDashboard() {
             <div style={{ fontSize:28, fontWeight:900, color:'var(--adm-text)', letterSpacing:'-.5px', marginBottom:2 }}>{fmt(totalSaldo)}</div>
             <div style={{ fontSize:11, color:'var(--adm-muted)', marginBottom:16 }}>Total en billeteras activas</div>
             {users.slice(0,8).map((u:any,i:number)=>{
-              const saldo=parseFloat(u.saldo)||0,pct=totalSaldo>0?Math.round(saldo/totalSaldo*100):0;
+              const saldo=Number.parseFloat(u.saldo)||0,pct=totalSaldo>0?Math.round(saldo/totalSaldo*100):0;
               return (
                 <div key={u.id} style={{ marginBottom:12 }}>
                   <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4 }}>
@@ -208,7 +208,7 @@ export default function AdminDashboard() {
               <TD style={{ fontFamily:'monospace', fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{(t.codigo||'—').slice(0,14)}</TD>
               <TD style={{ fontSize:12, maxWidth:280, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.descripcion}</TD>
               <TD style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.65)' }}>{(t.usuario_nombre||'—').split(' ')[0]}</TD>
-              <TD style={{ fontWeight:700, color:parseFloat(t.monto_neto)>=0?'#6CC998':'#C0392B' }}>{fmt(t.monto_neto||0)}</TD>
+              <TD style={{ fontWeight:700, color:Number.parseFloat(t.monto_neto)>=0?'#6CC998':'#C0392B' }}>{fmt(t.monto_neto||0)}</TD>
               <TD><StatusBadge status={t.status} /></TD>
               <TD style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)', whiteSpace:'nowrap' }}>{fmtDate(t.created_at)}</TD>
             </TR>

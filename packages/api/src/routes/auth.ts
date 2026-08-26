@@ -76,7 +76,7 @@ async function completeLogin(req: Request, res: Response, user: any) {
       subRol: user.subRol,
       kycVerificado: user.kycVerificado,
       codigoReferido: user.codigoReferido,
-      saldo: parseFloat(user.wallet?.saldo.toString() || '0'),
+      saldo: Number.parseFloat(user.wallet?.saldo.toString() || '0'),
       walletId: user.wallet?.id,
     },
   });
@@ -231,7 +231,7 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
       if (referidor) referidorId = referidor.id;
     }
 
-    const pinHash      = await bcrypt.hash(pin, parseInt(process.env.BCRYPT_ROUNDS || '12'));
+    const pinHash      = await bcrypt.hash(pin, Number.parseInt(process.env.BCRYPT_ROUNDS || '12'));
     const codigoPropio = 'REF-' + cedula.slice(-6).padStart(6, '0');
     const userId       = randomUUID();
 
@@ -447,7 +447,7 @@ router.put('/change-pin', authenticate, async (req: Request, res: Response) => {
     const ok = await bcrypt.compare(pin_actual, user.pinHash);
     if (!ok) return res.status(400).json({ ok: false, mensaje: 'PIN actual incorrecto' });
 
-    const nuevoHash = await bcrypt.hash(pin_nuevo, parseInt(process.env.BCRYPT_ROUNDS || '12'));
+    const nuevoHash = await bcrypt.hash(pin_nuevo, Number.parseInt(process.env.BCRYPT_ROUNDS || '12'));
     await prisma.user.update({ where: { id: user.id }, data: { pinHash: nuevoHash } });
 
     // Audit
@@ -476,7 +476,7 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
         correo: user.correo, celular: user.celular, ciudad: user.ciudad,
         rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado,
         codigoReferido: user.codigoReferido,
-        saldo: parseFloat(user.wallet?.saldo.toString() || '0'),
+        saldo: Number.parseFloat(user.wallet?.saldo.toString() || '0'),
         walletId: user.wallet?.id,
       },
     });

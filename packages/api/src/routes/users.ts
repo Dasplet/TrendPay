@@ -42,7 +42,7 @@ router.get('/profile', authenticate, async (req: Request, res: Response) => {
         kycVerificado: user.kycVerificado,
         kycNivel: user.kycNivel,
         codigoReferido: user.codigoReferido,
-        saldo: parseFloat(user.wallet?.saldo.toString() || '0'),
+        saldo: Number.parseFloat(user.wallet?.saldo.toString() || '0'),
         walletId: user.wallet?.id,
       },
     });
@@ -106,7 +106,7 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
         kycVerificado: updated.kycVerificado,
         kycNivel: updated.kycNivel,
         codigoReferido: updated.codigoReferido,
-        saldo: parseFloat(updated.wallet?.saldo.toString() || '0'),
+        saldo: Number.parseFloat(updated.wallet?.saldo.toString() || '0'),
         walletId: updated.wallet?.id,
       },
     });

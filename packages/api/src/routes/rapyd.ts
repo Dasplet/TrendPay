@@ -22,9 +22,9 @@ async function acreditarPago(paymentId: string, rapydPaymentId: string | null) {
     const wallet = await tx.wallet.findUnique({ where: { userId: payment.userId } });
     if (!wallet) throw new Error('Billetera no encontrada para el pago Rapyd ' + payment.id);
 
-    const monto = parseFloat(payment.monto.toString());
+    const monto = Number.parseFloat(payment.monto.toString());
     const updated = await tx.wallet.update({ where: { id: wallet.id }, data: { saldo: { increment: monto } } });
-    const saldoDespues = parseFloat(updated.saldo.toString());
+    const saldoDespues = Number.parseFloat(updated.saldo.toString());
 
     await tx.transaction.create({
       data: {
@@ -178,7 +178,7 @@ router.get('/verificar/:reference', authenticate, async (req: Request, res: Resp
     res.json({
       ok: true,
       estado: payment.estado,
-      saldo: parseFloat(wallet?.saldo.toString() || '0'),
+      saldo: Number.parseFloat(wallet?.saldo.toString() || '0'),
     });
   } catch (err: any) {
     if (err instanceof RapydError) return res.status(err.status).json({ ok: false, mensaje: err.message });

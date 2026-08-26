@@ -25,7 +25,7 @@ router.get('/admin', authenticate, requireAdmin, async (req: Request, res: Respo
     const pagados    = filtered.filter(r => r.status === 'pagado').length;
     const pendientes = filtered.filter(r => r.status === 'pendiente').length;
     const total_pagado = filtered.filter(r => r.status === 'pagado')
-      .reduce((s, r) => s + parseFloat(r.comisionValor.toString()), 0);
+      .reduce((s, r) => s + Number.parseFloat(r.comisionValor.toString()), 0);
 
     res.json({
       ok: true,
@@ -35,7 +35,7 @@ router.get('/admin', authenticate, requireAdmin, async (req: Request, res: Respo
         referidor_cedula: r.referidor.cedula,
         referido_nombre:  r.referido.nombre,
         referido_cedula:  r.referido.cedula,
-        comision_valor:   parseFloat(r.comisionValor.toString()),
+        comision_valor:   Number.parseFloat(r.comisionValor.toString()),
         status:           r.status,
         created_at:       r.createdAt,
       })),
@@ -55,7 +55,7 @@ router.get('/admin/top', authenticate, requireAdmin, async (_req: Request, res: 
       const id = r.referidor.id;
       if (!map[id]) map[id] = { id, nombre: r.referidor.nombre, cedula: r.referidor.cedula, total_referidos: 0, total_ganado: 0 };
       map[id].total_referidos++;
-      if (r.status === 'pagado') map[id].total_ganado += parseFloat(r.comisionValor.toString());
+      if (r.status === 'pagado') map[id].total_ganado += Number.parseFloat(r.comisionValor.toString());
     }
     const ranking = Object.values(map).sort((a, b) => b.total_referidos - a.total_referidos).slice(0, 10);
     res.json({ ok: true, ranking });
@@ -71,12 +71,12 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
       orderBy: { createdAt: 'desc' },
     });
     const total_ganado = referrals.filter(r => r.status === 'pagado')
-      .reduce((s, r) => s + parseFloat(r.comisionValor.toString()), 0);
+      .reduce((s, r) => s + Number.parseFloat(r.comisionValor.toString()), 0);
     res.json({
       ok: true,
       referidos: referrals.map(r => ({
         id: r.id, nombre: r.referido.nombre, cedula: r.referido.cedula,
-        status: r.status, comision_valor: parseFloat(r.comisionValor.toString()), created_at: r.createdAt,
+        status: r.status, comision_valor: Number.parseFloat(r.comisionValor.toString()), created_at: r.createdAt,
       })),
       stats: { total: referrals.length, pagados: referrals.filter(r=>r.status==='pagado').length, pendientes: referrals.filter(r=>r.status==='pendiente').length, total_ganado },
     });
@@ -92,7 +92,7 @@ router.post('/admin/pagar/:id', authenticate, requireAdmin, async (req: Request,
     });
     const referidor = await prisma.user.findUnique({ where: { id: referral.referidorId }, include: { wallet: true } });
     if (referidor?.wallet) {
-      await prisma.wallet.update({ where: { id: referidor.wallet.id }, data: { saldo: { increment: parseFloat(referral.comisionValor.toString()) } } });
+      await prisma.wallet.update({ where: { id: referidor.wallet.id }, data: { saldo: { increment: Number.parseFloat(referral.comisionValor.toString()) } } });
     }
     res.json({ ok: true, mensaje: 'Comisión pagada y saldo acreditado' });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }

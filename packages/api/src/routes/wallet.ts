@@ -25,10 +25,10 @@ function mapTransaction(t: any) {
     categoria: t.categoria,
     tipo: t.categoria,
     descripcion: t.descripcion,
-    montoNeto: parseFloat(t.montoNeto.toString()),
-    monto_neto: parseFloat(t.montoNeto.toString()),
-    montoBruto: parseFloat(t.montoBruto.toString()),
-    monto_bruto: parseFloat(t.montoBruto.toString()),
+    montoNeto: Number.parseFloat(t.montoNeto.toString()),
+    monto_neto: Number.parseFloat(t.montoNeto.toString()),
+    montoBruto: Number.parseFloat(t.montoBruto.toString()),
+    monto_bruto: Number.parseFloat(t.montoBruto.toString()),
     status: t.status,
     estado: t.status,
     createdAt: t.createdAt,
@@ -41,7 +41,7 @@ router.get('/balance', authenticate, async (req: Request, res: Response) => {
   try {
     const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.id } });
     if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
-    res.json({ ok: true, saldo: parseFloat(wallet.saldo.toString()), walletId: wallet.id });
+    res.json({ ok: true, saldo: Number.parseFloat(wallet.saldo.toString()), walletId: wallet.id });
   } catch (err: any) {
     logger.error('Error consultando saldo', { err: err.message, userId: req.user?.id });
     res.status(500).json({ ok: false, mensaje: 'Error consultando saldo' });
@@ -107,7 +107,7 @@ router.post('/enviar', authenticate, walletLimiter, async (req: Request, res: Re
       if (debit.count === 0) throw new ApiError(400, 'Saldo insuficiente');
 
       const senderAfter = await tx.wallet.findUnique({ where: { id: senderWallet.id } });
-      const senderSaldoDespues = parseFloat(senderAfter!.saldo.toString());
+      const senderSaldoDespues = Number.parseFloat(senderAfter!.saldo.toString());
       const senderSaldoAntes = senderSaldoDespues + total;
 
       const receptorWalletBefore = await tx.wallet.findUnique({ where: { userId: receptor.id } });
@@ -117,7 +117,7 @@ router.post('/enviar', authenticate, walletLimiter, async (req: Request, res: Re
         where: { id: receptorWalletBefore.id },
         data: { saldo: { increment: monto } },
       });
-      const receptorSaldoDespues = parseFloat(receptorWalletAfter.saldo.toString());
+      const receptorSaldoDespues = Number.parseFloat(receptorWalletAfter.saldo.toString());
       const receptorSaldoAntes = receptorSaldoDespues - monto;
 
       await tx.transaction.create({
@@ -203,7 +203,7 @@ router.post('/qr/generar', authenticate, walletLimiter, async (req: Request, res
       ok: true,
       qr: {
         token: qr.token,
-        monto: qr.monto ? parseFloat(qr.monto.toString()) : null,
+        monto: qr.monto ? Number.parseFloat(qr.monto.toString()) : null,
         concepto: qr.concepto,
         expiresAt: qr.expiresAt,
       },
@@ -253,7 +253,7 @@ router.get('/qr/:token', authenticate, async (req: Request, res: Response) => {
     res.json({
       ok: true,
       qr: {
-        monto: qr.monto ? parseFloat(qr.monto.toString()) : null,
+        monto: qr.monto ? Number.parseFloat(qr.monto.toString()) : null,
         concepto: qr.concepto,
         expiresAt: qr.permanente ? null : qr.expiresAt,
         usado: qr.permanente ? false : qr.usado,
@@ -291,7 +291,7 @@ router.post('/qr/:token/pagar', authenticate, walletLimiter, async (req: Request
       }
       if (qr.wallet.userId === req.user!.id) throw new ApiError(400, 'No puedes pagar tu propio QR');
 
-      const monto = qr.monto ? parseFloat(qr.monto.toString()) : parse.data.monto;
+      const monto = qr.monto ? Number.parseFloat(qr.monto.toString()) : parse.data.monto;
       if (!monto || monto <= 0) throw new ApiError(400, 'Este QR requiere que indiques un monto');
 
       const payerWallet = await tx.wallet.findUnique({ where: { userId: req.user!.id } });
@@ -304,14 +304,14 @@ router.post('/qr/:token/pagar', authenticate, walletLimiter, async (req: Request
       if (debit.count === 0) throw new ApiError(400, 'Saldo insuficiente');
 
       const payerAfter = await tx.wallet.findUnique({ where: { id: payerWallet.id } });
-      const payerSaldoDespues = parseFloat(payerAfter!.saldo.toString());
+      const payerSaldoDespues = Number.parseFloat(payerAfter!.saldo.toString());
       const payerSaldoAntes = payerSaldoDespues + monto;
 
       const ownerWalletAfter = await tx.wallet.update({
         where: { id: qr.walletId },
         data: { saldo: { increment: monto } },
       });
-      const ownerSaldoDespues = parseFloat(ownerWalletAfter.saldo.toString());
+      const ownerSaldoDespues = Number.parseFloat(ownerWalletAfter.saldo.toString());
       const ownerSaldoAntes = ownerSaldoDespues - monto;
 
       if (!qr.permanente) {

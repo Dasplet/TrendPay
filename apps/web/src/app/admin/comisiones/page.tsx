@@ -17,7 +17,7 @@ export default function ComisionesPage() {
   const bycat: Record<string,number> = {};
   txs.forEach((t:any) => {
     const cat = t.categoria||'otros';
-    bycat[cat] = (bycat[cat]||0) + parseFloat(t.comision_valor||0);
+    bycat[cat] = (bycat[cat]||0) + Number.parseFloat(t.comision_valor||0);
   });
 
   const catLabels: Record<string,string> = { consigna:'Consignaciones', cobro_qr:'Cobros QR', retiro:'Retiros', envio:'Envíos' };
@@ -51,7 +51,7 @@ export default function ComisionesPage() {
           <div style={{ padding:20 }}>
             <div style={{ fontSize:13, color:'var(--adm-muted)', marginBottom:16 }}>Porcentaje aplicado a todas las transacciones</div>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:20 }}>
-              <input type="number" value={com} onChange={e => setCom(parseFloat(e.target.value)||0)} min={0} max={20} step={0.5}
+              <input type="number" value={com} onChange={e => setCom(Number.parseFloat(e.target.value)||0)} min={0} max={20} step={0.5}
                 style={{ width:80, background:'rgba(var(--adm-card-rgb),.7)', border:'1.5px solid rgba(133,46,199,.3)', borderRadius:10, padding:'10px 14px', fontSize:24, fontWeight:700, color:'var(--adm-text)', outline:'none', textAlign:'center' }} />
               <span style={{ fontSize:24, color:'var(--adm-muted)', fontWeight:700 }}>%</span>
             </div>

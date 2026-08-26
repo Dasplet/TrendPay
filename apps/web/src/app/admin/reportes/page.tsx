@@ -75,7 +75,7 @@ export default function ReportesPage() {
         const { data } = await adminApi.transactions({ limit: 1000 });
         const txs: any[] = data?.transacciones || [];
         const bycat: Record<string, number> = {};
-        txs.forEach((t: any) => { const cat = t.categoria || 'otros'; bycat[cat] = (bycat[cat] || 0) + parseFloat(t.comision_valor || 0); });
+        txs.forEach((t: any) => { const cat = t.categoria || 'otros'; bycat[cat] = (bycat[cat] || 0) + Number.parseFloat(t.comision_valor || 0); });
         headers = ['Categoría', 'Comisión total'];
         rows = Object.entries(bycat).map(([cat, val]) => [cat, val]);
       } else if (period === 'ref') {

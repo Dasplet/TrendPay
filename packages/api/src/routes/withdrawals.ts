@@ -18,7 +18,7 @@ class ApiError extends Error {
 
 async function getConfigNumber(clave: string, fallback: number): Promise<number> {
   const cfg = await prisma.config.findUnique({ where: { clave } });
-  return cfg ? parseFloat(cfg.valor) : fallback;
+  return cfg ? Number.parseFloat(cfg.valor) : fallback;
 }
 
 function mapWithdrawal(w: any, opts: { mask?: boolean } = {}) {
@@ -31,8 +31,8 @@ function mapWithdrawal(w: any, opts: { mask?: boolean } = {}) {
     cedula_titular: decrypt(w.cedulaTitular),
     numero_cuenta: opts.mask ? undefined : cuenta,
     numero_cuenta_masked: opts.mask ? maskAccount(cuenta) : undefined,
-    monto: parseFloat(w.monto.toString()),
-    monto_neto: parseFloat(w.montoNeto.toString()),
+    monto: Number.parseFloat(w.monto.toString()),
+    monto_neto: Number.parseFloat(w.montoNeto.toString()),
     status: w.status,
     motivo: w.motivo,
     usuario_nombre: w.user?.nombre,
@@ -73,7 +73,7 @@ router.post('/', authenticate, walletLimiter, async (req: Request, res: Response
       where: { userId: req.user!.id, createdAt: { gte: hoy }, status: { in: ['pendiente', 'procesado'] } },
       _sum: { monto: true },
     });
-    const totalHoy = parseFloat(retiradoHoy._sum.monto?.toString() || '0') + monto;
+    const totalHoy = Number.parseFloat(retiradoHoy._sum.monto?.toString() || '0') + monto;
     if (totalHoy > limiteDiario) {
       return res.status(400).json({ ok: false, mensaje: `Superas el límite diario de retiro (${limiteDiario.toLocaleString('es-CO')} COP)` });
     }
@@ -89,7 +89,7 @@ router.post('/', authenticate, walletLimiter, async (req: Request, res: Response
       if (debit.count === 0) throw new ApiError(400, 'Saldo insuficiente');
 
       const walletAfter = await tx.wallet.findUnique({ where: { id: wallet.id } });
-      const saldoDespues = parseFloat(walletAfter!.saldo.toString());
+      const saldoDespues = Number.parseFloat(walletAfter!.saldo.toString());
       const saldoAntes = saldoDespues + monto;
 
       const withdrawal = await tx.withdrawal.create({
@@ -169,7 +169,7 @@ router.get('/pending', authenticate, requireAdmin, async (_req: Request, res: Re
 // ══ GET /api/withdrawals ══ (admin — todos, para el historial del panel)
 router.get('/', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 200;
+    const limit = Number.parseInt(req.query.limit as string) || 200;
     const withdrawals = await prisma.withdrawal.findMany({
       orderBy: { createdAt: 'desc' },
       take: limit,
@@ -200,7 +200,7 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req: Request, res:
       });
       await tx.auditLog.create({
         data: { userId: req.user!.id, accion: 'RETIRO_APROBADO', tabla: 'withdrawals', registroId: withdrawal.id, ip: req.ip || null,
-          datos: { monto: parseFloat(withdrawal.monto.toString()), banco: withdrawal.bancoNombre, antes: { status: 'pendiente' }, despues: { status: 'procesado' } } },
+          datos: { monto: Number.parseFloat(withdrawal.monto.toString()), banco: withdrawal.bancoNombre, antes: { status: 'pendiente' }, despues: { status: 'procesado' } } },
       });
     });
 
@@ -227,9 +227,9 @@ router.put('/:id/reject', authenticate, requireAdmin, async (req: Request, res: 
       const wallet = await tx.wallet.findUnique({ where: { userId: withdrawal.userId } });
       if (!wallet) throw new Error('Billetera no encontrada');
 
-      const monto = parseFloat(withdrawal.monto.toString());
+      const monto = Number.parseFloat(withdrawal.monto.toString());
       const walletAfter = await tx.wallet.update({ where: { id: wallet.id }, data: { saldo: { increment: monto } } });
-      const saldoDespues = parseFloat(walletAfter.saldo.toString());
+      const saldoDespues = Number.parseFloat(walletAfter.saldo.toString());
 
       await tx.withdrawal.update({
         where: { id: withdrawal.id },

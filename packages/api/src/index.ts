@@ -33,7 +33,7 @@ export const prisma = new PrismaClient({
 });
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3001', 10);
+const PORT = Number.parseInt(process.env.PORT || '3001', 10);
 
 // ── Security headers ──
 app.use(helmet({

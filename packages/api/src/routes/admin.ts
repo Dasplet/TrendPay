@@ -20,10 +20,10 @@ router.get('/metrics', authenticate, requireAdmin, async (_req: Request, res: Re
       ok: true,
       metricas: {
         total_usuarios:     totalUsuarios,
-        total_volumen:      parseFloat(txAgg._sum.montoBruto?.toString() || '0'),
-        total_comisiones:   parseFloat(txAgg._sum.comisionValor?.toString() || '0'),
+        total_volumen:      Number.parseFloat(txAgg._sum.montoBruto?.toString() || '0'),
+        total_comisiones:   Number.parseFloat(txAgg._sum.comisionValor?.toString() || '0'),
         retiros_pendientes: retirosPend,
-        comision_pct:       parseFloat(comisionCfg?.valor || '3'),
+        comision_pct:       Number.parseFloat(comisionCfg?.valor || '3'),
       },
     });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
@@ -32,7 +32,7 @@ router.get('/metrics', authenticate, requireAdmin, async (_req: Request, res: Re
 // ══ GET /api/admin/users ══
 router.get('/users', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 200;
+    const limit = Number.parseInt(req.query.limit as string) || 200;
     const q     = (req.query.q as string) || '';
     const users = await prisma.user.findMany({
       take: limit,
@@ -51,7 +51,7 @@ router.get('/users', authenticate, requireAdmin, async (req: Request, res: Respo
         celular: u.celular, ciudad: u.ciudad, rol: u.rol, subRol: u.subRol,
         kycNivel: u.kycNivel, kycVerificado: u.kycVerificado,
         bloqueado: u.bloqueado, codigoReferido: u.codigoReferido,
-        saldo: parseFloat(u.wallet?.saldo.toString() || '0'),
+        saldo: Number.parseFloat(u.wallet?.saldo.toString() || '0'),
         ultimoLogin: u.ultimoLogin, createdAt: u.createdAt,
       })),
     });
@@ -81,7 +81,7 @@ router.post('/users', authenticate, requireAdmin, async (req: Request, res: Resp
       return res.status(400).json({ ok: false, mensaje: `Esta ${campo} ya está registrada` });
     }
 
-    const pinHash      = await bcrypt.hash(pin, parseInt(process.env.BCRYPT_ROUNDS || '12'));
+    const pinHash      = await bcrypt.hash(pin, Number.parseInt(process.env.BCRYPT_ROUNDS || '12'));
     const codigoPropio = 'REF-' + cedula.slice(-6).padStart(6, '0');
 
     const user = await prisma.user.create({
@@ -125,9 +125,9 @@ router.put('/users/:id', authenticate, requireAdmin, async (req: Request, res: R
     if (celular   !== undefined && celular   !== existing.celular)   { data.celular   = celular;   antes.celular = existing.celular;     despues.celular = celular; }
     if (ciudad    !== undefined && ciudad    !== existing.ciudad)    { data.ciudad    = ciudad;    antes.ciudad = existing.ciudad;       despues.ciudad = ciudad; }
     if (bloqueado !== undefined && bloqueado !== existing.bloqueado) { data.bloqueado = bloqueado; antes.bloqueado = existing.bloqueado; despues.bloqueado = bloqueado; }
-    if (kycNivel  !== undefined && parseInt(kycNivel) !== existing.kycNivel) { data.kycNivel = parseInt(kycNivel); antes.kycNivel = existing.kycNivel; despues.kycNivel = parseInt(kycNivel); }
+    if (kycNivel  !== undefined && Number.parseInt(kycNivel) !== existing.kycNivel) { data.kycNivel = Number.parseInt(kycNivel); antes.kycNivel = existing.kycNivel; despues.kycNivel = Number.parseInt(kycNivel); }
     if (nuevo_pin) {
-      data.pinHash = await bcrypt.hash(nuevo_pin, parseInt(process.env.BCRYPT_ROUNDS || '12'));
+      data.pinHash = await bcrypt.hash(nuevo_pin, Number.parseInt(process.env.BCRYPT_ROUNDS || '12'));
       antes.pin = '••••'; despues.pin = '••••';
     }
     const user = await prisma.user.update({ where: { id: req.params.id }, data });
@@ -162,7 +162,7 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req: Request, res
 // ══ GET /api/admin/transactions ══
 router.get('/transactions', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 300;
+    const limit = Number.parseInt(req.query.limit as string) || 300;
     const txs = await prisma.transaction.findMany({
       take: limit, orderBy: { createdAt: 'desc' },
       include: { user: { select: { nombre: true, cedula: true } } },
@@ -171,9 +171,9 @@ router.get('/transactions', authenticate, requireAdmin, async (req: Request, res
       ok: true,
       transacciones: txs.map(t => ({
         id: t.id, codigo: t.codigo, categoria: t.categoria, descripcion: t.descripcion,
-        monto_neto: parseFloat(t.montoNeto.toString()),
-        monto_bruto: parseFloat(t.montoBruto.toString()),
-        comision_valor: parseFloat(t.comisionValor.toString()),
+        monto_neto: Number.parseFloat(t.montoNeto.toString()),
+        monto_bruto: Number.parseFloat(t.montoBruto.toString()),
+        comision_valor: Number.parseFloat(t.comisionValor.toString()),
         status: t.status, created_at: t.createdAt,
         usuario_nombre: t.user.nombre, usuario_cedula: t.user.cedula,
       })),
@@ -184,7 +184,7 @@ router.get('/transactions', authenticate, requireAdmin, async (req: Request, res
 // ══ GET /api/admin/dashboard-chart ══
 router.get('/dashboard-chart', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const months = parseInt(req.query.months as string) || 6;
+    const months = Number.parseInt(req.query.months as string) || 6;
     const from   = new Date(); from.setMonth(from.getMonth() - months);
     const txs = await prisma.transaction.findMany({
       where: { createdAt: { gte: from } },
@@ -194,8 +194,8 @@ router.get('/dashboard-chart', authenticate, requireAdmin, async (req: Request, 
     txs.forEach(t => {
       const key = `${t.createdAt.getFullYear()}-${String(t.createdAt.getMonth()+1).padStart(2,'0')}`;
       if (!buckets[key]) buckets[key] = { mes: key, volumen: 0, comisiones: 0 };
-      buckets[key].volumen    += parseFloat(t.montoBruto.toString());
-      buckets[key].comisiones += parseFloat(t.comisionValor.toString());
+      buckets[key].volumen    += Number.parseFloat(t.montoBruto.toString());
+      buckets[key].comisiones += Number.parseFloat(t.comisionValor.toString());
     });
     res.json({ ok: true, datos: Object.values(buckets).sort((a,b) => a.mes.localeCompare(b.mes)) });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
@@ -245,7 +245,7 @@ router.post('/banks', authenticate, requireAdmin, async (req: Request, res: Resp
     while (await prisma.bank.findUnique({ where: { id } })) { id = `${slug}-${++suffix}`; }
 
     const bank = await prisma.bank.create({
-      data: { id, nombre: String(nombre).trim(), orden: orden ? parseInt(orden) : 99, nuevo: !!nuevo, habilitado: true },
+      data: { id, nombre: String(nombre).trim(), orden: orden ? Number.parseInt(orden) : 99, nuevo: !!nuevo, habilitado: true },
     });
 
     await prisma.auditLog.create({
@@ -265,7 +265,7 @@ router.put('/banks/:id', authenticate, requireAdmin, async (req: Request, res: R
     const { nombre, orden, nuevo, habilitado } = req.body;
     const data: any = {};
     if (nombre !== undefined) data.nombre = String(nombre).trim();
-    if (orden !== undefined) data.orden = parseInt(orden);
+    if (orden !== undefined) data.orden = Number.parseInt(orden);
     if (nuevo !== undefined) data.nuevo = !!nuevo;
     if (habilitado !== undefined) data.habilitado = !!habilitado;
 
