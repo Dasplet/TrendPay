@@ -2,8 +2,8 @@
 // OS path separator (backslashes on Windows). Sonar resolves coverage
 // against sonar.sources at the repo root, so those paths need to be
 // forward-slashed and prefixed with the package's own root-relative path.
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const lcovPath = path.join(__dirname, '..', 'coverage', 'lcov.info');
 if (!fs.existsSync(lcovPath)) {
