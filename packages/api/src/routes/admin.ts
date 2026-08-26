@@ -19,16 +19,7 @@ router.get('/metrics', authenticate, requireAdmin, async (_req: Request, res: Re
     const total_volumen    = Number.parseFloat(txAgg._sum.montoBruto?.toString() || '0');
     const total_comisiones = Number.parseFloat(txAgg._sum.comisionValor?.toString() || '0');
     const comision_pct     = Number.parseFloat(comisionCfg?.valor || '3');
-    res.json({
-      ok: true,
-      metricas: {
-        total_usuarios: totalUsuarios,
-        total_volumen,
-        total_comisiones,
-        retiros_pendientes: retirosPend,
-        comision_pct,
-      },
-    });
+    res.json({ ok: true, metricas: { total_usuarios: totalUsuarios, total_volumen, total_comisiones, retiros_pendientes: retirosPend, comision_pct } });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 
@@ -49,16 +40,7 @@ router.get('/users', authenticate, requireAdmin, async (req: Request, res: Respo
     });
     res.json({
       ok: true,
-      usuarios: users.map(u => {
-        const saldo = Number.parseFloat(u.wallet?.saldo.toString() || '0');
-        return {
-          id: u.id, cedula: u.cedula, nombre: u.nombre, correo: u.correo,
-          celular: u.celular, ciudad: u.ciudad, rol: u.rol, subRol: u.subRol,
-          kycNivel: u.kycNivel, kycVerificado: u.kycVerificado,
-          bloqueado: u.bloqueado, codigoReferido: u.codigoReferido,
-          saldo, ultimoLogin: u.ultimoLogin, createdAt: u.createdAt,
-        };
-      }),
+      usuarios: users.map(u => { const saldo = Number.parseFloat(u.wallet?.saldo.toString() || '0'); return { id: u.id, cedula: u.cedula, nombre: u.nombre, correo: u.correo, celular: u.celular, ciudad: u.ciudad, rol: u.rol, subRol: u.subRol, kycNivel: u.kycNivel, kycVerificado: u.kycVerificado, bloqueado: u.bloqueado, codigoReferido: u.codigoReferido, saldo, ultimoLogin: u.ultimoLogin, createdAt: u.createdAt }; }),
     });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
@@ -174,17 +156,7 @@ router.get('/transactions', authenticate, requireAdmin, async (req: Request, res
     });
     res.json({
       ok: true,
-      transacciones: txs.map(t => {
-        const monto_neto     = Number.parseFloat(t.montoNeto.toString());
-        const monto_bruto    = Number.parseFloat(t.montoBruto.toString());
-        const comision_valor = Number.parseFloat(t.comisionValor.toString());
-        return {
-          id: t.id, codigo: t.codigo, categoria: t.categoria, descripcion: t.descripcion,
-          monto_neto, monto_bruto, comision_valor,
-          status: t.status, created_at: t.createdAt,
-          usuario_nombre: t.user.nombre, usuario_cedula: t.user.cedula,
-        };
-      }),
+      transacciones: txs.map(t => { const monto_neto = Number.parseFloat(t.montoNeto.toString()); const monto_bruto = Number.parseFloat(t.montoBruto.toString()); const comision_valor = Number.parseFloat(t.comisionValor.toString()); return { id: t.id, codigo: t.codigo, categoria: t.categoria, descripcion: t.descripcion, monto_neto, monto_bruto, comision_valor, status: t.status, created_at: t.createdAt, usuario_nombre: t.user.nombre, usuario_cedula: t.user.cedula }; }),
     });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
@@ -253,9 +225,7 @@ router.post('/banks', authenticate, requireAdmin, async (req: Request, res: Resp
     while (await prisma.bank.findUnique({ where: { id } })) { id = `${slug}-${++suffix}`; }
 
     const ordenValor = orden ? Number.parseInt(orden) : 99;
-    const bank = await prisma.bank.create({
-      data: { id, nombre: String(nombre).trim(), orden: ordenValor, nuevo: !!nuevo, habilitado: true },
-    });
+    const bank = await prisma.bank.create({ data: { id, nombre: String(nombre).trim(), orden: ordenValor, nuevo: !!nuevo, habilitado: true } });
 
     await prisma.auditLog.create({
       data: { userId: req.user!.id, accion: 'BANCO_CREAR', tabla: 'banks', registroId: bank.id, ip: req.ip, datos: { nombre: bank.nombre } },

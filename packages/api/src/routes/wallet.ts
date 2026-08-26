@@ -21,19 +21,7 @@ class ApiError extends Error {
 function mapTransaction(t: any) {
   const montoNeto  = Number.parseFloat(t.montoNeto.toString());
   const montoBruto = Number.parseFloat(t.montoBruto.toString());
-  return {
-    id: t.id,
-    codigo: t.codigo,
-    categoria: t.categoria,
-    tipo: t.categoria,
-    descripcion: t.descripcion,
-    montoNeto, monto_neto: montoNeto,
-    montoBruto, monto_bruto: montoBruto,
-    status: t.status,
-    estado: t.status,
-    createdAt: t.createdAt,
-    created_at: t.createdAt,
-  };
+  return { id: t.id, codigo: t.codigo, categoria: t.categoria, tipo: t.categoria, descripcion: t.descripcion, montoNeto, monto_neto: montoNeto, montoBruto, monto_bruto: montoBruto, status: t.status, estado: t.status, createdAt: t.createdAt, created_at: t.createdAt };
 }
 
 // ══ GET /api/wallet/balance ══
@@ -200,15 +188,7 @@ router.post('/qr/generar', authenticate, walletLimiter, async (req: Request, res
     });
 
     const monto = qr.monto ? Number.parseFloat(qr.monto.toString()) : null;
-    res.json({
-      ok: true,
-      qr: {
-        token: qr.token,
-        monto,
-        concepto: qr.concepto,
-        expiresAt: qr.expiresAt,
-      },
-    });
+    res.json({ ok: true, qr: { token: qr.token, monto, concepto: qr.concepto, expiresAt: qr.expiresAt } });
   } catch (err: any) {
     logger.error('Error generando QR', { err: err.message, userId: req.user?.id });
     res.status(500).json({ ok: false, mensaje: 'Error generando QR' });
@@ -252,19 +232,7 @@ router.get('/qr/:token', authenticate, async (req: Request, res: Response) => {
     if (!qr) return res.status(404).json({ ok: false, mensaje: 'QR no encontrado' });
 
     const monto = qr.monto ? Number.parseFloat(qr.monto.toString()) : null;
-    res.json({
-      ok: true,
-      qr: {
-        monto,
-        concepto: qr.concepto,
-        expiresAt: qr.permanente ? null : qr.expiresAt,
-        usado: qr.permanente ? false : qr.usado,
-        expirado: qr.permanente ? false : qr.expiresAt < new Date(),
-        permanente: qr.permanente,
-        esPropio: qr.wallet.userId === req.user!.id,
-        propietario: { nombre: qr.wallet.user.nombre },
-      },
-    });
+    res.json({ ok: true, qr: { monto, concepto: qr.concepto, expiresAt: qr.permanente ? null : qr.expiresAt, usado: qr.permanente ? false : qr.usado, expirado: qr.permanente ? false : qr.expiresAt < new Date(), permanente: qr.permanente, esPropio: qr.wallet.userId === req.user!.id, propietario: { nombre: qr.wallet.user.nombre } } });
   } catch (err: any) {
     logger.error('Error consultando QR', { err: err.message, token: req.params.token });
     res.status(500).json({ ok: false, mensaje: 'Error consultando QR' });

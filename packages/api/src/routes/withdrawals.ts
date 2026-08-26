@@ -25,22 +25,7 @@ function mapWithdrawal(w: any, opts: { mask?: boolean } = {}) {
   const cuenta = decrypt(w.numeroCuenta);
   const monto = Number.parseFloat(w.monto.toString());
   const montoNeto = Number.parseFloat(w.montoNeto.toString());
-  return {
-    id: w.id,
-    banco_nombre: w.bancoNombre,
-    tipo_cuenta: w.tipoCuenta,
-    nombre_titular: w.nombreTitular,
-    cedula_titular: decrypt(w.cedulaTitular),
-    numero_cuenta: opts.mask ? undefined : cuenta,
-    numero_cuenta_masked: opts.mask ? maskAccount(cuenta) : undefined,
-    monto, monto_neto: montoNeto,
-    status: w.status,
-    motivo: w.motivo,
-    usuario_nombre: w.user?.nombre,
-    usuario_cedula: w.user?.cedula,
-    created_at: w.createdAt,
-    aprobado_at: w.aprobadoAt,
-  };
+  return { id: w.id, banco_nombre: w.bancoNombre, tipo_cuenta: w.tipoCuenta, nombre_titular: w.nombreTitular, cedula_titular: decrypt(w.cedulaTitular), numero_cuenta: opts.mask ? undefined : cuenta, numero_cuenta_masked: opts.mask ? maskAccount(cuenta) : undefined, monto, monto_neto: montoNeto, status: w.status, motivo: w.motivo, usuario_nombre: w.user?.nombre, usuario_cedula: w.user?.cedula, created_at: w.createdAt, aprobado_at: w.aprobadoAt };
 }
 
 // ══ POST /api/withdrawals ══
@@ -200,10 +185,7 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req: Request, res:
         data: { status: 'exitosa' },
       });
       const montoAprobado = Number.parseFloat(withdrawal.monto.toString());
-      await tx.auditLog.create({
-        data: { userId: req.user!.id, accion: 'RETIRO_APROBADO', tabla: 'withdrawals', registroId: withdrawal.id, ip: req.ip || null,
-          datos: { monto: montoAprobado, banco: withdrawal.bancoNombre, antes: { status: 'pendiente' }, despues: { status: 'procesado' } } },
-      });
+      await tx.auditLog.create({ data: { userId: req.user!.id, accion: 'RETIRO_APROBADO', tabla: 'withdrawals', registroId: withdrawal.id, ip: req.ip || null, datos: { monto: montoAprobado, banco: withdrawal.bancoNombre, antes: { status: 'pendiente' }, despues: { status: 'procesado' } } } });
     });
 
     res.json({ ok: true, mensaje: 'Retiro aprobado' });

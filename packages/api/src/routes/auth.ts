@@ -62,25 +62,7 @@ async function completeLogin(req: Request, res: Response, user: any) {
   logger.info('Login exitoso', { userId: user.id, cedula: user.cedula });
 
   const saldo = Number.parseFloat(user.wallet?.saldo.toString() || '0');
-  res.json({
-    ok: true,
-    accessToken,
-    refreshToken, // también en body para móvil
-    usuario: {
-      id: user.id,
-      cedula: user.cedula,
-      nombre: user.nombre,
-      correo: user.correo,
-      celular: user.celular,
-      ciudad: user.ciudad,
-      rol: user.rol,
-      subRol: user.subRol,
-      kycVerificado: user.kycVerificado,
-      codigoReferido: user.codigoReferido,
-      saldo,
-      walletId: user.wallet?.id,
-    },
-  });
+  res.json({ ok: true, accessToken, refreshToken /* también en body para móvil */, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, codigoReferido: user.codigoReferido, saldo, walletId: user.wallet?.id } });
 }
 
 // ── 2FA de login (paso extra por correo para cuentas marcadas como sensibles) ──
@@ -471,17 +453,7 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
     });
     if (!user) return res.status(404).json({ ok: false });
     const saldo = Number.parseFloat(user.wallet?.saldo.toString() || '0');
-    res.json({
-      ok: true,
-      usuario: {
-        id: user.id, cedula: user.cedula, nombre: user.nombre,
-        correo: user.correo, celular: user.celular, ciudad: user.ciudad,
-        rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado,
-        codigoReferido: user.codigoReferido,
-        saldo,
-        walletId: user.wallet?.id,
-      },
-    });
+    res.json({ ok: true, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, codigoReferido: user.codigoReferido, saldo, walletId: user.wallet?.id } });
   } catch {
     res.status(500).json({ ok: false });
   }
