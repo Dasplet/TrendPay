@@ -240,6 +240,28 @@ input::placeholder { color: rgba(174,147,170,.5); }
   justify-content: center;
   cursor: pointer;
 }
+.adm-audit-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 16px;
+  padding: 16px 24px;
+  transition: background .15s;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+}
+.adm-audit-row:hover,
+.adm-audit-row:focus-visible {
+  background: rgba(133,46,199,.04);
+}
+.adm-audit-row:focus-visible {
+  outline: 2px solid rgba(133,46,199,.5);
+  outline-offset: -2px;
+}
 .adm-icon-button {
   width: 38px;
   height: 38px;

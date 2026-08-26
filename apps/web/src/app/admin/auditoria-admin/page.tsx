@@ -91,31 +91,44 @@ export default function AuditoriaAdminPage() {
           const antes   = l.datos?.antes;
           const despues = l.datos?.despues;
           const hasDetail = isReal;
+          const rowContent = (
+            <>
+              {/* Colored dot */}
+              <div style={{ width:8, height:8, borderRadius:'50%', background:style.color, flexShrink:0 }} />
+              {/* Icon */}
+              <div style={{ width:36, height:36, borderRadius:10, background:`${style.color}18`, display:'flex', alignItems:'center', justifyContent:'center', color:style.color, flexShrink:0 }}>
+                <style.icon size={16} />
+              </div>
+              {/* Content */}
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:700, color:'var(--adm-text)', marginBottom:3 }}>{style.label}</div>
+                <div style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.45)' }}>
+                  {isReal ? (l.user?.nombre || 'Sistema') : desc}{desc && isReal ? ` · ${desc}` : ''}
+                </div>
+              </div>
+              {/* Time */}
+              <div style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.3)', whiteSpace:'nowrap', flexShrink:0 }}>{time}</div>
+              {hasDetail && (
+                <ChevronDown size={16} style={{ color:'var(--adm-muted)', flexShrink:0, transition:'transform .15s', transform: isOpen ? 'rotate(180deg)' : 'none' }} />
+              )}
+            </>
+          );
           return (
             <div key={l.id} style={{ borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:16, padding:'16px 24px', transition:'background .15s', cursor: hasDetail ? 'pointer' : 'default' }}
-                onClick={() => hasDetail && setExpanded(isOpen ? null : l.id)}
-                onMouseOver={e=>(e.currentTarget as HTMLDivElement).style.background='rgba(133,46,199,.04)'}
-                onMouseOut={e=>(e.currentTarget as HTMLDivElement).style.background=''}>
-                {/* Colored dot */}
-                <div style={{ width:8, height:8, borderRadius:'50%', background:style.color, flexShrink:0 }} />
-                {/* Icon */}
-                <div style={{ width:36, height:36, borderRadius:10, background:`${style.color}18`, display:'flex', alignItems:'center', justifyContent:'center', color:style.color, flexShrink:0 }}>
-                  <style.icon size={16} />
+              {hasDetail ? (
+                <button
+                  type="button"
+                  className="adm-audit-row"
+                  aria-expanded={isOpen}
+                  onClick={() => setExpanded(isOpen ? null : l.id)}
+                >
+                  {rowContent}
+                </button>
+              ) : (
+                <div style={{ display:'flex', alignItems:'center', gap:16, padding:'16px 24px' }}>
+                  {rowContent}
                 </div>
-                {/* Content */}
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:14, fontWeight:700, color:'var(--adm-text)', marginBottom:3 }}>{style.label}</div>
-                  <div style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.45)' }}>
-                    {isReal ? (l.user?.nombre || 'Sistema') : desc}{desc && isReal ? ` · ${desc}` : ''}
-                  </div>
-                </div>
-                {/* Time */}
-                <div style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.3)', whiteSpace:'nowrap', flexShrink:0 }}>{time}</div>
-                {hasDetail && (
-                  <ChevronDown size={16} style={{ color:'var(--adm-muted)', flexShrink:0, transition:'transform .15s', transform: isOpen ? 'rotate(180deg)' : 'none' }} />
-                )}
-              </div>
+              )}
 
               {isOpen && hasDetail && (
                 <div style={{ padding:'0 24px 20px 74px' }}>
