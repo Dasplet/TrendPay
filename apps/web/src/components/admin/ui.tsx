@@ -62,11 +62,9 @@ export function Table({ headers, children, empty }: { headers: string[]; childre
 }
 
 // ── Table row ──
-export function TR({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
+export function TR({ children }: { children: React.ReactNode }) {
   return (
-    <tr onClick={onClick} style={{ borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)', transition:'background .15s', cursor: onClick ? 'pointer' : 'default' }}
-      onMouseOver={e => (e.currentTarget as HTMLTableRowElement).style.background='rgba(133,46,199,.05)'}
-      onMouseOut={e  => (e.currentTarget as HTMLTableRowElement).style.background=''}>
+    <tr className="adm-table-row" style={{ borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)' }}>
       {children}
     </tr>
   );

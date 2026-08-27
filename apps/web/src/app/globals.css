@@ -277,6 +277,12 @@ input::placeholder { color: rgba(174,147,170,.5); }
 .adm-dialog::backdrop {
   background: rgba(0,0,0,.6);
 }
+.adm-table-row {
+  transition: background .15s;
+}
+.adm-table-row:hover {
+  background: rgba(133,46,199,.05);
+}
 .tp-balance-card {
   position: relative;
   overflow: hidden;
