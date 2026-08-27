@@ -16,7 +16,7 @@ const INPUT: React.CSSProperties = { width:'100%', background:'rgba(30,12,65,.7)
 
 type RegisterForm = { nombre: string; cedula: string; correo: string; celular: string; ciudad: string; codigo_referido: string };
 
-function Step1Identidad({ form, setField }: { form: RegisterForm; setField: (field: string, value: string) => void }) {
+function Step1Identidad({ form, setField }: Readonly<{ form: RegisterForm; setField: (field: string, value: string) => void }>) {
   return (
     <>
       <div style={{ fontSize:10, fontWeight:700, color:'#852EC7', textTransform:'uppercase', letterSpacing:'2px', marginBottom:8 }}>Paso 1 de 4</div>
@@ -34,17 +34,17 @@ function Step1Identidad({ form, setField }: { form: RegisterForm; setField: (fie
   );
 }
 
-function EmailStatusIcon({ checking, ok, hasAt }: { checking: boolean; ok: boolean; hasAt: boolean }) {
+function EmailStatusIcon({ checking, ok, hasAt }: Readonly<{ checking: boolean; ok: boolean; hasAt: boolean }>) {
   if (checking) return <RefreshCw size={14} color="#AE93AA" style={{ animation:'spin 1s linear infinite' }}/>;
   if (ok) return <CheckCircle size={14} color="#6CC998"/>;
   if (hasAt) return <AlertCircle size={14} color="#C0392B"/>;
   return null;
 }
 
-function OtpVerifier({ otpSent, sendOtp, sendingOtp, otp, setOtp, verifyOtp, verifyingOtp, otpDebug }: {
+function OtpVerifier({ otpSent, sendOtp, sendingOtp, otp, setOtp, verifyOtp, verifyingOtp, otpDebug }: Readonly<{
   otpSent: boolean; sendOtp: () => void; sendingOtp: boolean;
   otp: string; setOtp: (v: string) => void; verifyOtp: () => void; verifyingOtp: boolean; otpDebug: string;
-}) {
+}>) {
   if (!otpSent) {
     return (
       <button onClick={sendOtp} disabled={sendingOtp} style={{ width:'100%', padding:'11px', borderRadius:10, border:'none', background:'rgba(133,46,199,.3)', color:'#c088f0', fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
@@ -74,11 +74,11 @@ function OtpVerifier({ otpSent, sendOtp, sendingOtp, otp, setOtp, verifyOtp, ver
 function Step2Contacto({
   form, setField, checkEmail, checkingEmail, emailOk, otpVerified,
   otpSent, sendOtp, sendingOtp, otp, setOtp, verifyOtp, verifyingOtp, otpDebug,
-}: {
+}: Readonly<{
   form: RegisterForm; setField: (field: string, value: string) => void; checkEmail: () => void; checkingEmail: boolean;
   emailOk: boolean; otpVerified: boolean; otpSent: boolean; sendOtp: () => void; sendingOtp: boolean;
   otp: string; setOtp: (v: string) => void; verifyOtp: () => void; verifyingOtp: boolean; otpDebug: string;
-}) {
+}>) {
   return (
     <>
       <div style={{ fontSize:10, fontWeight:700, color:'#852EC7', textTransform:'uppercase', letterSpacing:'2px', marginBottom:8 }}>Paso 2 de 4</div>
@@ -132,7 +132,7 @@ function Step2Contacto({
   );
 }
 
-function PinDot({ filled }: { filled: boolean }) {
+function PinDot({ filled }: Readonly<{ filled: boolean }>) {
   return (
     <div style={{ width:56, height:56, borderRadius:16, border:`2px solid ${filled?'#852EC7':'rgba(133,46,199,.3)'}`, background:filled?'rgba(133,46,199,.3)':'rgba(30,12,65,.6)', display:'flex', alignItems:'center', justifyContent:'center', transition:'all .15s' }}>
       {filled ? <Lock size={20} color="#fff"/> : <span style={{ fontSize:28, color:'rgba(255,255,255,.2)' }}>·</span>}
@@ -140,7 +140,7 @@ function PinDot({ filled }: { filled: boolean }) {
   );
 }
 
-function PinKey({ k, pin, setPin }: { k: string; pin: string; setPin: React.Dispatch<React.SetStateAction<string>> }) {
+function PinKey({ k, pin, setPin }: Readonly<{ k: string; pin: string; setPin: React.Dispatch<React.SetStateAction<string>> }>) {
   const isDel = k === 'del';
   function press() {
     if (isDel) setPin(p => p.slice(0, -1));
@@ -154,7 +154,7 @@ function PinKey({ k, pin, setPin }: { k: string; pin: string; setPin: React.Disp
   );
 }
 
-function Step3Pin({ pin, setPin }: { pin: string; setPin: React.Dispatch<React.SetStateAction<string>> }) {
+function Step3Pin({ pin, setPin }: Readonly<{ pin: string; setPin: React.Dispatch<React.SetStateAction<string>> }>) {
   return (
     <>
       <div style={{ fontSize:10, fontWeight:700, color:'#852EC7', textTransform:'uppercase', letterSpacing:'2px', marginBottom:8 }}>Paso 3 de 4</div>
@@ -181,7 +181,7 @@ const SUMMARY_ROWS: { icon: React.ReactNode; label: string; field: keyof Registe
   { icon: <MapPin size={13}/>, label:'Ciudad', field:'ciudad', fallback:'—' },
 ];
 
-function Step4Resumen({ form, setField }: { form: RegisterForm; setField: (field: string, value: string) => void }) {
+function Step4Resumen({ form, setField }: Readonly<{ form: RegisterForm; setField: (field: string, value: string) => void }>) {
   return (
     <>
       <div style={{ fontSize:10, fontWeight:700, color:'#852EC7', textTransform:'uppercase', letterSpacing:'2px', marginBottom:8 }}>Paso 4 de 4</div>
@@ -216,7 +216,7 @@ function ctaContent(isLoading: boolean, step: number) {
   return <><CheckCircle size={16}/> Crear mi cuenta</>;
 }
 
-function RegisterCta({ step, isLoading, disabled, onClick }: { step: number; isLoading: boolean; disabled: boolean; onClick: () => void }) {
+function RegisterCta({ step, isLoading, disabled, onClick }: Readonly<{ step: number; isLoading: boolean; disabled: boolean; onClick: () => void }>) {
   return (
     <button onClick={onClick} disabled={disabled}
       style={{ width:'100%', padding:'15px', borderRadius:14, border:'none', background:disabled?'rgba(133,46,199,.3)':'linear-gradient(135deg,#852EC7,#5a1a8a)', color:'#fff', fontSize:15, fontWeight:700, cursor:disabled?'not-allowed':'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, opacity:disabled?.5:1 }}>
