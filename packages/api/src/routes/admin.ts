@@ -217,7 +217,7 @@ router.post('/banks', authenticate, requireAdmin, async (req: Request, res: Resp
     if (!nombre || !String(nombre).trim()) return res.status(400).json({ ok: false, mensaje: 'El nombre es obligatorio' });
 
     const slug = String(nombre).trim().toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '') // quita tildes
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita tildes
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     if (!slug) return res.status(400).json({ ok: false, mensaje: 'Nombre inválido' });
 
