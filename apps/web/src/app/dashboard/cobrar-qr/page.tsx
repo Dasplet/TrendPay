@@ -20,6 +20,11 @@ function shareUrlFor(token?: string) {
   return `${window.location.origin}/dashboard/pagar-qr/${token}`;
 }
 
+function copyLink(url: string) {
+  navigator.clipboard.writeText(url);
+  toast.success('Enlace copiado');
+}
+
 export default function CobrarQrPage() {
   const user = useAuthStore((s) => s.user);
   const [amount, setAmount] = useState('');
@@ -44,11 +49,6 @@ export default function CobrarQrPage() {
     },
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo generar el QR'),
   });
-
-  function copyLink(url: string) {
-    navigator.clipboard.writeText(url);
-    toast.success('Enlace copiado');
-  }
 
   const personalUrl = shareUrlFor(personalToken);
   const qrUrl = shareUrlFor(qr?.token);

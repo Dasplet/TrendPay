@@ -46,6 +46,35 @@ const MOCK = [
   { id:'7', accion:'BANCO_TOGGLE',           desc:'Banco Popular · Admin TrendPay',    tiempo:'Lun 22 jun' },
 ];
 
+function AuditLogDetail({ antes, despues, datos }: Readonly<{ antes: any; despues: any; datos: any }>) {
+  if (antes || despues) {
+    return (
+      <div>
+        <div style={{ fontSize:11, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700, marginBottom:6 }}>Cambios</div>
+        <div style={{ display:'grid', gap:4 }}>
+          {Object.keys({ ...(antes||{}), ...(despues||{}) }).map(campo => (
+            <div key={campo} style={{ display:'grid', gridTemplateColumns:'120px 1fr auto 1fr', alignItems:'center', gap:8, fontSize:12 }}>
+              <span style={{ color:'var(--adm-muted)' }}>{CAMPO_LABELS[campo] || campo}</span>
+              <span style={{ color:'#ff8f9a', fontFamily:'monospace' }}>{fmtValor(campo, antes?.[campo])}</span>
+              <span style={{ color:'var(--adm-muted)' }}>→</span>
+              <span style={{ color:'#6CC998', fontFamily:'monospace' }}>{fmtValor(campo, despues?.[campo])}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (datos && Object.keys(datos).length > 0) {
+    return (
+      <div>
+        <div style={{ fontSize:11, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700, marginBottom:6 }}>Detalle</div>
+        <pre style={{ margin:0, fontSize:12, color:'rgba(var(--adm-fg-rgb),.75)', fontFamily:'monospace', whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{JSON.stringify(datos, null, 2)}</pre>
+      </div>
+    );
+  }
+  return null;
+}
+
 function timeAgo(d: string) {
   const diff = Date.now() - new Date(d).getTime();
   if (diff < 60000) return 'Hace unos segundos';
@@ -140,26 +169,7 @@ export default function AuditoriaAdminPage() {
                       {l.registroId && <span><span style={{ color:'var(--adm-muted)' }}>Registro: </span><span style={{ color:'var(--adm-text)', fontFamily:'monospace' }}>{l.registroId}</span></span>}
                     </div>
 
-                    {(antes || despues) ? (
-                      <div>
-                        <div style={{ fontSize:11, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700, marginBottom:6 }}>Cambios</div>
-                        <div style={{ display:'grid', gap:4 }}>
-                          {Object.keys({ ...(antes||{}), ...(despues||{}) }).map(campo => (
-                            <div key={campo} style={{ display:'grid', gridTemplateColumns:'120px 1fr auto 1fr', alignItems:'center', gap:8, fontSize:12 }}>
-                              <span style={{ color:'var(--adm-muted)' }}>{CAMPO_LABELS[campo] || campo}</span>
-                              <span style={{ color:'#ff8f9a', fontFamily:'monospace' }}>{fmtValor(campo, antes?.[campo])}</span>
-                              <span style={{ color:'var(--adm-muted)' }}>→</span>
-                              <span style={{ color:'#6CC998', fontFamily:'monospace' }}>{fmtValor(campo, despues?.[campo])}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : l.datos && Object.keys(l.datos).length > 0 ? (
-                      <div>
-                        <div style={{ fontSize:11, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700, marginBottom:6 }}>Detalle</div>
-                        <pre style={{ margin:0, fontSize:12, color:'rgba(var(--adm-fg-rgb),.75)', fontFamily:'monospace', whiteSpace:'pre-wrap', wordBreak:'break-word' }}>{JSON.stringify(l.datos, null, 2)}</pre>
-                      </div>
-                    ) : null}
+                    <AuditLogDetail antes={antes} despues={despues} datos={l.datos} />
                   </div>
                 </div>
               )}

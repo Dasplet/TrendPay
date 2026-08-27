@@ -8,6 +8,8 @@ import { useAuthStore } from '@/store/authStore';
 import { notificationsApi, walletApi } from '@/lib/api';
 import { EmptyState, StatusPill, UserAvatar, compactCOP, firstName, fmtCOP } from '@/components/user/UserTheme';
 
+const CHART_MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
+
 function monthlyPath(values: number[]) {
   const max = Math.max(...values, 1);
   const min = Math.min(...values, 0);
@@ -202,11 +204,11 @@ export default function DashboardPage() {
               const min = Math.min(...chart, 0);
               const x = index * (100 / (chart.length - 1));
               const y = 44 - ((value - min) / Math.max(max - min, 1)) * 34 + 3;
-              return <circle key={index} cx={x} cy={y} r="1.1" fill="#9b35e7" />;
+              return <circle key={CHART_MONTHS[index]} cx={x} cy={y} r="1.1" fill="#9b35e7" />;
             })}
           </svg>
           <div className="tp-chart-labels">
-            {['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'].map((month) => <span key={month}>{month}</span>)}
+            {CHART_MONTHS.map((month) => <span key={month}>{month}</span>)}
           </div>
         </div>
       </section>
