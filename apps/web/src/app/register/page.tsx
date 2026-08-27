@@ -161,12 +161,15 @@ function Step3Pin({ pin, setPin }: Readonly<{ pin: string; setPin: React.Dispatc
       <div style={{ fontSize:24, fontWeight:800, color:'#fff', marginBottom:6 }}>Crea tu PIN secreto</div>
       <div style={{ fontSize:13, color:'rgba(255,255,255,.5)', marginBottom:20 }}>4 dígitos para aprobar tus transacciones. Nunca lo compartas.</div>
       <div style={{ display:'flex', justifyContent:'center', gap:14, marginBottom:16 }}>
-        {[0,1,2,3].map(i => <PinDot key={i} filled={i < pin.length} />)}
+        <PinDot filled={pin.length > 0} />
+        <PinDot filled={pin.length > 1} />
+        <PinDot filled={pin.length > 2} />
+        <PinDot filled={pin.length > 3} />
       </div>
       <div style={{ textAlign:'center', fontSize:12, color:'#AE93AA', marginBottom:18 }}>{pin.length} de 4 dígitos</div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10, maxWidth:260, margin:'0 auto' }}>
-        {['1','2','3','4','5','6','7','8','9','','0','del'].map((k,i) => (
-          k==='' ? <div key={i}/> : <PinKey key={i} k={k} pin={pin} setPin={setPin} />
+        {['1','2','3','4','5','6','7','8','9','gap','0','del'].map(k => (
+          k==='gap' ? <div key={k}/> : <PinKey key={k} k={k} pin={pin} setPin={setPin} />
         ))}
       </div>
     </>
