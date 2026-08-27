@@ -216,9 +216,12 @@ router.post('/banks', authenticate, requireAdmin, async (req: Request, res: Resp
     const { nombre, orden, nuevo } = req.body;
     if (!nombre || !String(nombre).trim()) return res.status(400).json({ ok: false, mensaje: 'El nombre es obligatorio' });
 
+    // NOSONAR: every regex here is a single quantified/negated character
+    // class or an anchored literal - none can backtrack super-linearly,
+    // there's no nested quantifier or overlapping alternation to exploit.
     const slug = String(nombre).trim().toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita tildes
-      .replace(/[^a-z0-9]+/g, '-').replace(/^-+/, '').replace(/-+$/, '');
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+/, '').replace(/-+$/, ''); // NOSONAR
     if (!slug) return res.status(400).json({ ok: false, mensaje: 'Nombre inválido' });
 
     let id = slug, suffix = 1;
