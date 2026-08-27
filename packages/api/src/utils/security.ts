@@ -27,6 +27,12 @@ export function maskAccount(num: string): string {
   return '*'.repeat(num.length - 4) + num.slice(-4);
 }
 
+export function maskEmail(correo: string): string {
+  const at = correo.indexOf('@');
+  if (at < 0) return correo;
+  return `${correo.slice(0, 2)}***${correo.slice(at)}`;
+}
+
 export function genCodigo(prefix: string): string {
   const numero = crypto.randomInt(100000, 1000000);
   return `${prefix}-${numero}`;

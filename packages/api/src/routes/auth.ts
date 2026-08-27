@@ -8,6 +8,7 @@ import { authenticate, AuthUser } from '../middleware/auth';
 import { authLimiter } from '../middleware/rateLimiter';
 import { logger } from '../utils/logger';
 import { sendOtpEmail } from '../utils/email';
+import { maskEmail } from '../utils/security';
 
 const router = Router();
 
@@ -138,7 +139,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       return res.json({
         ok: true,
         requiere2fa: true,
-        mensaje: `Código enviado a ${user.correo.replace(/(.{2}).*(@.*)/, '$1***$2')}`,
+        mensaje: `Código enviado a ${maskEmail(user.correo)}`,
         ...(process.env.NODE_ENV !== 'production' ? { otp_debug: otp } : {}),
       });
     }
@@ -500,7 +501,7 @@ router.post('/send-otp', async (req: Request, res: Response) => {
 
   res.json({
     ok: true,
-    mensaje: correo ? `Código enviado a ${correo.replace(/(.{2}).*(@.*)/, '$1***$2')}` : `Código enviado al celular ****${celular?.slice(-4)}`,
+    mensaje: correo ? `Código enviado a ${maskEmail(correo)}` : `Código enviado al celular ****${celular?.slice(-4)}`,
     ...(process.env.NODE_ENV !== 'production' ? { otp_debug: otp } : {}),
   });
 });
