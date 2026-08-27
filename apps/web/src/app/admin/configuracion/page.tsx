@@ -20,9 +20,10 @@ function ParamRow({ label, sub, value, onChange }: any) {
           <input value={val} onChange={e=>setVal(e.target.value)} onBlur={()=>{setEditing(false);onChange(val);}}
             style={{ width:80, background:'rgba(var(--adm-card-rgb),.8)', border:'1.5px solid #852EC7', borderRadius:8, padding:'6px 10px', fontSize:14, fontWeight:700, color:'var(--adm-text)', textAlign:'center', outline:'none' }} autoFocus />
         ) : (
-          <div style={{ background:'rgba(var(--adm-card-rgb),.7)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'6px 14px', fontSize:14, fontWeight:700, color:'var(--adm-text)', minWidth:80, textAlign:'center', cursor:'pointer' }} onClick={()=>setEditing(true)}>
+          <button type="button" onClick={()=>setEditing(true)}
+            style={{ font:'inherit', background:'rgba(var(--adm-card-rgb),.7)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'6px 14px', fontSize:14, fontWeight:700, color:'var(--adm-text)', minWidth:80, textAlign:'center', cursor:'pointer' }}>
             {val}
-          </div>
+          </button>
         )}
         <button onClick={()=>{setEditing(false);onChange(val);toast.success('Guardado');}} style={{ width:32, height:32, borderRadius:8, background:'rgba(133,46,199,.2)', border:'1px solid rgba(133,46,199,.3)', color:'#c088f0', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><Check size={16} /></button>
       </div>
