@@ -12,7 +12,7 @@ const MOCK_ALERTS: { id:number; tipo:string; titulo:string; desc:string; tiempo:
 
 export default function AlertasPage() {
   const [alerts, setAlerts] = useState(MOCK_ALERTS);
-  const [params, setParams] = useState({ umbral: 2000000, intentos: 3, dispositivos: true });
+  const [params] = useState({ umbral: 2000000, intentos: 3, dispositivos: true });
 
   function dismiss(id: number) {
     setAlerts(a => a.filter(x => x.id !== id));
