@@ -94,7 +94,7 @@ export default function LoginPage() {
               </div>
 
               {/* PIN dots */}
-              <fieldset className="mb-4" style={{ border: 0, margin: 0, padding: 0 }}>
+              <fieldset className="mb-8" style={{ border: 0, padding: 0 }}>
                 <legend className="block text-xs font-semibold text-[var(--tp-muted)] uppercase tracking-wider mb-3" style={{ padding: 0 }}>
                   PIN de 4 dígitos
                 </legend>
