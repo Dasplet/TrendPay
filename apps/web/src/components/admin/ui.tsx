@@ -147,15 +147,15 @@ export function Modal({ open, onClose, title, children }: { open:boolean; onClos
   }, [open]);
 
   return (
-    // NOSONAR: MDN's own recommended pattern for closing a native <dialog> on
-    // backdrop click (e.target === dialog) — the linter doesn't special-case
-    // <dialog> as interactive, but Escape/focus-trap are handled natively.
-    <dialog
+    // MDN's own recommended pattern for closing a native <dialog> on backdrop
+    // click (e.target === dialog) — the linter doesn't special-case <dialog>
+    // as interactive, but Escape/focus-trap are handled natively.
+    <dialog // NOSONAR
       ref={dialogRef}
       className="adm-dialog"
       aria-label={title}
       onClose={onClose}
-      onClick={e => { if (e.target === dialogRef.current) onClose(); }} // NOSONAR
+      onClick={e => { if (e.target === dialogRef.current) onClose(); }}
       style={{ background:'var(--adm-panel)', border:'1px solid rgba(133,46,199,.3)', borderRadius:20, width:'100%', maxWidth:480, maxHeight:'90vh', overflowY:'auto', padding:28, color:'inherit' }}
     >
       <button onClick={onClose} style={{ position:'absolute', top:16, right:16, width:28, height:28, borderRadius:8, background:'rgba(133,46,199,.12)', border:'none', color:'var(--adm-text)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><X size={16} /></button>
