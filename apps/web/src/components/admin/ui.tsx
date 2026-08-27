@@ -1,7 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
-import { useId } from 'react';
+import { useEffect, useId } from 'react';
 import type { ReactNode } from 'react';
 
 // ── Metric card ──
@@ -137,10 +137,20 @@ export function Btn({ children, onClick, variant = 'default', disabled, style, t
 
 // ── Modal ──
 export function Modal({ open, onClose, title, children }: { open:boolean; onClose:()=>void; title:string; children:React.ReactNode }) {
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }} onClick={onClose}>
-      <div style={{ background:'var(--adm-panel)', border:'1px solid rgba(133,46,199,.3)', borderRadius:20, width:'100%', maxWidth:480, maxHeight:'90vh', overflowY:'auto', padding:28, position:'relative' }} onClick={e => e.stopPropagation()}>
+    <div style={{ position:'fixed', inset:0, display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:20 }}>
+      <div aria-hidden="true" onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,.6)' }} />
+      <div role="dialog" aria-modal="true" aria-label={title} style={{ background:'var(--adm-panel)', border:'1px solid rgba(133,46,199,.3)', borderRadius:20, width:'100%', maxWidth:480, maxHeight:'90vh', overflowY:'auto', padding:28, position:'relative', zIndex:1 }}>
         <button onClick={onClose} style={{ position:'absolute', top:16, right:16, width:28, height:28, borderRadius:8, background:'rgba(133,46,199,.12)', border:'none', color:'var(--adm-text)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><X size={16} /></button>
         <div style={{ fontSize:18, fontWeight:800, color:'var(--adm-text)', marginBottom:20 }}>{title}</div>
         {children}

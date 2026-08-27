@@ -33,6 +33,15 @@ export function NotificationBell() {
 
   useEffect(() => { setDismissed(loadDismissed()); }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
   function persistDismissed(ids: string[]) {
     setDismissed(ids);
     localStorage.setItem(DISMISSED_KEY, JSON.stringify(ids));
@@ -72,7 +81,7 @@ export function NotificationBell() {
 
       {open && (
         <>
-          <div style={{ position:'fixed', inset:0, zIndex:49 }} onClick={() => setOpen(false)}/>
+          <div aria-hidden="true" style={{ position:'fixed', inset:0, zIndex:49 }} onClick={() => setOpen(false)}/>
           <div style={{ position:'absolute', top:46, right:0, width:340, maxHeight:480, background:'var(--adm-panel)', border:'1px solid rgba(133,46,199,.3)', borderRadius:16, overflow:'hidden', zIndex:50, boxShadow:'0 16px 48px rgba(0,0,0,.5)' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 18px', borderBottom:'1px solid rgba(133,46,199,.15)' }}>
               <div style={{ fontSize:14, fontWeight:700, color:'var(--adm-text)' }}>
