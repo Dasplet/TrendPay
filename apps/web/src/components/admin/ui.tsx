@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { useId } from 'react';
 import type { ReactNode } from 'react';
 
 // ── Metric card ──
@@ -149,21 +150,25 @@ export function Modal({ open, onClose, title, children }: { open:boolean; onClos
 }
 
 // ── Input ──
-export function Input({ label, ...props }: { label?: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ label, id, ...props }: { label?: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+  const generatedId = useId();
+  const inputId = id || generatedId;
   return (
     <div style={{ marginBottom:14 }}>
-      {label && <label style={{ display:'block', fontSize:11, fontWeight:600, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>{label}</label>}
-      <input {...props} style={{ width:'100%', background:'rgba(var(--adm-card-rgb),.7)', border:'1.5px solid rgba(133,46,199,.25)', borderRadius:10, padding:'10px 12px', fontSize:13, color:'var(--adm-text)', outline:'none', fontFamily:'inherit', boxSizing:'border-box', ...props.style }} />
+      {label && <label htmlFor={inputId} style={{ display:'block', fontSize:11, fontWeight:600, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>{label}</label>}
+      <input id={inputId} {...props} style={{ width:'100%', background:'rgba(var(--adm-card-rgb),.7)', border:'1.5px solid rgba(133,46,199,.25)', borderRadius:10, padding:'10px 12px', fontSize:13, color:'var(--adm-text)', outline:'none', fontFamily:'inherit', boxSizing:'border-box', ...props.style }} />
     </div>
   );
 }
 
 // ── Select ──
-export function Select({ label, children, ...props }: { label?: string; children: React.ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>) {
+export function Select({ label, children, id, ...props }: { label?: string; children: React.ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>) {
+  const generatedId = useId();
+  const selectId = id || generatedId;
   return (
     <div style={{ marginBottom:14 }}>
-      {label && <label style={{ display:'block', fontSize:11, fontWeight:600, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>{label}</label>}
-      <select {...props} style={{ width:'100%', background:'rgba(var(--adm-card-rgb),.7)', border:'1.5px solid rgba(133,46,199,.25)', borderRadius:10, padding:'10px 12px', fontSize:13, color:'var(--adm-text)', outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer', ...props.style }}>
+      {label && <label htmlFor={selectId} style={{ display:'block', fontSize:11, fontWeight:600, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>{label}</label>}
+      <select id={selectId} {...props} style={{ width:'100%', background:'rgba(var(--adm-card-rgb),.7)', border:'1.5px solid rgba(133,46,199,.25)', borderRadius:10, padding:'10px 12px', fontSize:13, color:'var(--adm-text)', outline:'none', fontFamily:'inherit', boxSizing:'border-box', cursor:'pointer', ...props.style }}>
         {children}
       </select>
     </div>

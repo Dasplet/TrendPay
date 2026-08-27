@@ -125,12 +125,12 @@ export default function RegisterPage() {
             <div style={{ fontSize:24, fontWeight:800, color:'#fff', marginBottom:6 }}>¿Cómo te llamas?</div>
             <div style={{ fontSize:13, color:'rgba(255,255,255,.5)', marginBottom:24 }}>Tu nombre e identificación para verificar tu identidad.</div>
             <div style={{ marginBottom:16 }}>
-              <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><User size={11}/> Nombre completo *</label>
-              <input value={form.nombre} onChange={e=>setField('nombre',e.target.value)} placeholder="Ej. María Fernanda Ruiz" style={INPUT} onFocus={e=>e.currentTarget.style.borderColor='#852EC7'} onBlur={e=>e.currentTarget.style.borderColor='rgba(133,46,199,.25)'}/>
+              <label htmlFor="reg-nombre" style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><User size={11}/> Nombre completo *</label>
+              <input id="reg-nombre" value={form.nombre} onChange={e=>setField('nombre',e.target.value)} placeholder="Ej. María Fernanda Ruiz" style={INPUT} onFocus={e=>e.currentTarget.style.borderColor='#852EC7'} onBlur={e=>e.currentTarget.style.borderColor='rgba(133,46,199,.25)'}/>
             </div>
             <div style={{ marginBottom:16 }}>
-              <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><CreditCard size={11}/> Número de cédula *</label>
-              <input type="tel" inputMode="numeric" value={form.cedula} onChange={e=>setField('cedula',e.target.value.replace(/\D/g,''))} placeholder="Ej. 1098765432" maxLength={12} style={{ ...INPUT, fontFamily:'monospace', letterSpacing:'2px' }} onFocus={e=>e.currentTarget.style.borderColor='#852EC7'} onBlur={e=>e.currentTarget.style.borderColor='rgba(133,46,199,.25)'}/>
+              <label htmlFor="reg-cedula" style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><CreditCard size={11}/> Número de cédula *</label>
+              <input id="reg-cedula" type="tel" inputMode="numeric" value={form.cedula} onChange={e=>setField('cedula',e.target.value.replace(/\D/g,''))} placeholder="Ej. 1098765432" maxLength={12} style={{ ...INPUT, fontFamily:'monospace', letterSpacing:'2px' }} onFocus={e=>e.currentTarget.style.borderColor='#852EC7'} onBlur={e=>e.currentTarget.style.borderColor='rgba(133,46,199,.25)'}/>
             </div>
           </>}
 
@@ -142,9 +142,9 @@ export default function RegisterPage() {
 
             {/* Email */}
             <div style={{ marginBottom:14 }}>
-              <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><Mail size={11}/> Correo electrónico *</label>
+              <label htmlFor="reg-correo" style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><Mail size={11}/> Correo electrónico *</label>
               <div style={{ position:'relative' }}>
-                <input type="email" value={form.correo} onChange={e=>setField('correo',e.target.value)} onBlur={checkEmail} placeholder="correo@ejemplo.com" style={{ ...INPUT, paddingRight:44 }} onFocus={e=>e.currentTarget.style.borderColor='#852EC7'}/>
+                <input id="reg-correo" type="email" value={form.correo} onChange={e=>setField('correo',e.target.value)} onBlur={checkEmail} placeholder="correo@ejemplo.com" style={{ ...INPUT, paddingRight:44 }} onFocus={e=>e.currentTarget.style.borderColor='#852EC7'}/>
                 <div style={{ position:'absolute', right:14, top:'50%', transform:'translateY(-50%)' }}>
                   {checkingEmail ? <RefreshCw size={14} color="#AE93AA" style={{ animation:'spin 1s linear infinite' }}/> :
                    emailOk ? <CheckCircle size={14} color="#6CC998"/> :
@@ -156,14 +156,14 @@ export default function RegisterPage() {
 
             {/* Celular */}
             <div style={{ marginBottom:14 }}>
-              <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><Phone size={11}/> Celular *</label>
-              <input type="tel" value={form.celular} onChange={e=>setField('celular',e.target.value)} placeholder="300 000 0000" style={INPUT} onFocus={e=>e.currentTarget.style.borderColor='#852EC7'} onBlur={e=>e.currentTarget.style.borderColor='rgba(133,46,199,.25)'}/>
+              <label htmlFor="reg-celular" style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><Phone size={11}/> Celular *</label>
+              <input id="reg-celular" type="tel" value={form.celular} onChange={e=>setField('celular',e.target.value)} placeholder="300 000 0000" style={INPUT} onFocus={e=>e.currentTarget.style.borderColor='#852EC7'} onBlur={e=>e.currentTarget.style.borderColor='rgba(133,46,199,.25)'}/>
             </div>
 
             {/* Ciudad */}
             <div style={{ marginBottom:20 }}>
-              <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><MapPin size={11}/> Ciudad</label>
-              <select value={form.ciudad} onChange={e=>setField('ciudad',e.target.value)} style={{ ...INPUT, appearance:'none', cursor:'pointer' }}>
+              <label htmlFor="reg-ciudad" style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><MapPin size={11}/> Ciudad</label>
+              <select id="reg-ciudad" value={form.ciudad} onChange={e=>setField('ciudad',e.target.value)} style={{ ...INPUT, appearance:'none', cursor:'pointer' }}>
                 <option value="">— Selecciona tu ciudad —</option>
                 {CIUDADES.map(c=><option key={c} value={c}>{c}</option>)}
               </select>
@@ -246,8 +246,8 @@ export default function RegisterPage() {
               ))}
             </div>
             <div style={{ background:'rgba(133,46,199,.08)', border:'1px solid rgba(133,46,199,.18)', borderRadius:14, padding:'14px 18px', marginBottom:16 }}>
-              <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><Gift size={11}/> Código de referido (opcional)</label>
-              <input value={form.codigo_referido} onChange={e=>setField('codigo_referido',e.target.value.toUpperCase())} placeholder="REF-XXXXXX" style={{ ...INPUT, fontFamily:'monospace', letterSpacing:'2px', textTransform:'uppercase' }} onFocus={e=>e.currentTarget.style.borderColor='#852EC7'} onBlur={e=>e.currentTarget.style.borderColor='rgba(133,46,199,.25)'}/>
+              <label htmlFor="reg-codigo-referido" style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><Gift size={11}/> Código de referido (opcional)</label>
+              <input id="reg-codigo-referido" value={form.codigo_referido} onChange={e=>setField('codigo_referido',e.target.value.toUpperCase())} placeholder="REF-XXXXXX" style={{ ...INPUT, fontFamily:'monospace', letterSpacing:'2px', textTransform:'uppercase' }} onFocus={e=>e.currentTarget.style.borderColor='#852EC7'} onBlur={e=>e.currentTarget.style.borderColor='rgba(133,46,199,.25)'}/>
               <div style={{ fontSize:11, color:'rgba(174,147,170,.5)', marginTop:8, display:'flex', alignItems:'center', gap:5 }}><Gift size={11} color="#6CC998"/> Tú y quien te refirió ganan $1.000 en tu primera transacción</div>
             </div>
           </>}

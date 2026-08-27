@@ -79,10 +79,11 @@ export default function LoginPage() {
             <>
               {/* Cédula */}
               <div className="mb-5">
-                <label className="block text-xs font-semibold text-[var(--tp-muted)] uppercase tracking-wider mb-2">
+                <label htmlFor="login-cedula" className="block text-xs font-semibold text-[var(--tp-muted)] uppercase tracking-wider mb-2">
                   Número de cédula
                 </label>
                 <input
+                  id="login-cedula"
                   type="tel"
                   inputMode="numeric"
                   placeholder="Ej. 1023456789"
@@ -93,10 +94,10 @@ export default function LoginPage() {
               </div>
 
               {/* PIN dots */}
-              <div className="mb-4">
-                <label className="block text-xs font-semibold text-[var(--tp-muted)] uppercase tracking-wider mb-3">
+              <div role="group" aria-labelledby="login-pin-label" className="mb-4">
+                <div id="login-pin-label" className="block text-xs font-semibold text-[var(--tp-muted)] uppercase tracking-wider mb-3">
                   PIN de 4 dígitos
-                </label>
+                </div>
                 <div className="flex justify-center gap-4 mb-4">
                   {[0,1,2,3].map(i => (
                     <div key={i} className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-2xl transition-all ${
@@ -154,10 +155,11 @@ export default function LoginPage() {
               </div>
 
               <div className="mb-5">
-                <label className="block text-xs font-semibold text-[var(--tp-muted)] uppercase tracking-wider mb-2">
+                <label htmlFor="login-otp" className="block text-xs font-semibold text-[var(--tp-muted)] uppercase tracking-wider mb-2">
                   Código de verificación
                 </label>
                 <input
+                  id="login-otp"
                   type="tel"
                   inputMode="numeric"
                   autoFocus
