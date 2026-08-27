@@ -70,6 +70,44 @@ async function completeLogin(req: Request, res: Response, user: any) {
 const login2faStore = new Map<string, { otp: string; expires: Date; userId: string }>();
 const LOGIN_2FA_TTL_MS = 10 * 60 * 1000;
 
+function checkAccountBlocked(user: { bloqueado: boolean; bloqueadoHasta: Date | null }): string | null {
+  if (!user.bloqueado || !user.bloqueadoHasta || user.bloqueadoHasta <= new Date()) return null;
+  const mins = Math.ceil((user.bloqueadoHasta.getTime() - Date.now()) / 60000);
+  return `Cuenta bloqueada. Intenta en ${mins} minutos.`;
+}
+
+async function registerFailedPinAttempt(userId: string, intentosPinActual: number): Promise<string> {
+  const intentos = intentosPinActual + 1;
+  const update: any = { intentosPin: intentos };
+  if (intentos >= 5) {
+    update.bloqueado = true;
+    update.bloqueadoHasta = new Date(Date.now() + 30 * 60 * 1000); // 30 min
+    update.intentosPin = 0;
+  }
+  await prisma.user.update({ where: { id: userId }, data: update });
+  const restantes = Math.max(0, 5 - intentos);
+  return intentos >= 5 ? 'Cuenta bloqueada por 30 minutos' : `PIN incorrecto. ${restantes} intentos restantes`;
+}
+
+type Login2faStart = { ok: true; otp: string } | { ok: false; status: number; mensaje: string };
+
+async function startLogin2fa(cedula: string, user: { id: string; correo: string | null }): Promise<Login2faStart> {
+  if (!user.correo) {
+    return { ok: false, status: 500, mensaje: 'Esta cuenta requiere verificación en dos pasos pero no tiene un correo configurado' };
+  }
+  const otp = String(randomInt(100000, 1000000));
+  login2faStore.set(cedula, { otp, expires: new Date(Date.now() + LOGIN_2FA_TTL_MS), userId: user.id });
+  try {
+    const enviado = await sendOtpEmail(user.correo, otp);
+    if (!enviado) logger.info(`2FA login para ${cedula}: ${otp} (correo no configurado, modo debug)`);
+  } catch (err: any) {
+    login2faStore.delete(cedula);
+    logger.error('Error enviando código 2FA de login', { err: err.message, cedula });
+    return { ok: false, status: 500, mensaje: 'No pudimos enviar el código de verificación. Intenta de nuevo.' };
+  }
+  return { ok: true, otp };
+}
+
 // ══ POST /api/auth/login ══
 const loginSchema = z.object({
   cedula: z.string().min(6).max(20),
@@ -93,27 +131,13 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       return res.status(401).json({ ok: false, mensaje: 'Cédula o PIN incorrectos' });
     }
 
-    // Check if blocked
-    if (user.bloqueado && user.bloqueadoHasta && user.bloqueadoHasta > new Date()) {
-      const mins = Math.ceil((user.bloqueadoHasta.getTime() - Date.now()) / 60000);
-      return res.status(423).json({ ok: false, mensaje: `Cuenta bloqueada. Intenta en ${mins} minutos.` });
-    }
+    const blockedMsg = checkAccountBlocked(user);
+    if (blockedMsg) return res.status(423).json({ ok: false, mensaje: blockedMsg });
 
     const pinOk = await bcrypt.compare(pin, user.pinHash);
     if (!pinOk) {
-      const intentos = user.intentosPin + 1;
-      const update: any = { intentosPin: intentos };
-      if (intentos >= 5) {
-        update.bloqueado = true;
-        update.bloqueadoHasta = new Date(Date.now() + 30 * 60 * 1000); // 30 min
-        update.intentosPin = 0;
-      }
-      await prisma.user.update({ where: { id: user.id }, data: update });
-      const restantes = Math.max(0, 5 - intentos);
-      return res.status(401).json({
-        ok: false,
-        mensaje: intentos >= 5 ? 'Cuenta bloqueada por 30 minutos' : `PIN incorrecto. ${restantes} intentos restantes`,
-      });
+      const mensaje = await registerFailedPinAttempt(user.id, user.intentosPin);
+      return res.status(401).json({ ok: false, mensaje });
     }
 
     // Reset intentos
@@ -123,24 +147,13 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     });
 
     if (user.requiere2fa) {
-      if (!user.correo) {
-        return res.status(500).json({ ok: false, mensaje: 'Esta cuenta requiere verificación en dos pasos pero no tiene un correo configurado' });
-      }
-      const otp = String(randomInt(100000, 1000000));
-      login2faStore.set(cedula, { otp, expires: new Date(Date.now() + LOGIN_2FA_TTL_MS), userId: user.id });
-      try {
-        const enviado = await sendOtpEmail(user.correo, otp);
-        if (!enviado) logger.info(`2FA login para ${cedula}: ${otp} (correo no configurado, modo debug)`);
-      } catch (err: any) {
-        login2faStore.delete(cedula);
-        logger.error('Error enviando código 2FA de login', { err: err.message, cedula });
-        return res.status(500).json({ ok: false, mensaje: 'No pudimos enviar el código de verificación. Intenta de nuevo.' });
-      }
+      const result = await startLogin2fa(cedula, user);
+      if (!result.ok) return res.status(result.status).json({ ok: false, mensaje: result.mensaje });
       return res.json({
         ok: true,
         requiere2fa: true,
-        mensaje: `Código enviado a ${maskEmail(user.correo)}`,
-        ...(process.env.NODE_ENV !== 'production' ? { otp_debug: otp } : {}),
+        mensaje: `Código enviado a ${maskEmail(user.correo!)}`,
+        ...(process.env.NODE_ENV !== 'production' ? { otp_debug: result.otp } : {}),
       });
     }
 
