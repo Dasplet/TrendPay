@@ -45,6 +45,56 @@ export default function RetirosPage() {
       procesados.map((w: any) => [w.banco_nombre || '', w.nombre_titular || '', w.numero_cuenta_masked || '', w.usuario_nombre || '', w.monto || 0, w.status || '', fmtDate(w.created_at)]));
   }
 
+  let pendRows: React.ReactNode;
+  if (pendLoading) {
+    pendRows = <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Cargando...</Td></Tr>;
+  } else if (pendientes.length === 0) {
+    pendRows = (
+      <Tr><Td style={{ textAlign:'center', padding:36, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>
+        <div style={{ display:'flex', justifyContent:'center', color:'#6CC998', marginBottom:8 }}><CheckCircle2 size={28} /></div>
+        Sin retiros pendientes · Todo al día
+      </Td></Tr>
+    );
+  } else {
+    pendRows = pendientes.map((w:any) => (
+      <Tr key={w.id}>
+        <Td style={{ fontFamily:'monospace', fontSize:10, color:'rgba(var(--adm-fg-rgb),.4)' }}>{(w.id||'').slice(0,8)}…</Td>
+        <Td>
+          <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)' }}>{w.usuario_nombre||'—'}</div>
+          <div style={{ fontSize:10, color:'rgba(var(--adm-fg-rgb),.35)' }}>CC {w.usuario_cedula}</div>
+        </Td>
+        <Td>
+          <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)' }}>{w.banco_nombre||'—'}</div>
+          <div style={{ fontSize:10, color:'rgba(var(--adm-fg-rgb),.4)' }}>{w.tipo_cuenta}</div>
+        </Td>
+        <Td>
+          <div style={{ background:'rgba(212,160,23,.08)', border:'1px solid rgba(212,160,23,.2)', borderRadius:8, padding:'8px 10px', fontSize:11, minWidth:180 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
+              <span style={{ color:'rgba(var(--adm-fg-rgb),.4)' }}>Titular</span>
+              <span style={{ color:'var(--adm-text)', fontWeight:600 }}>{w.nombre_titular||'—'}</span>
+            </div>
+            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
+              <span style={{ color:'rgba(var(--adm-fg-rgb),.4)' }}>Cédula</span>
+              <span style={{ color:'var(--adm-text)', fontFamily:'monospace' }}>{w.cedula_titular||'—'}</span>
+            </div>
+            <div style={{ display:'flex', justifyContent:'space-between' }}>
+              <span style={{ color:'rgba(var(--adm-fg-rgb),.4)' }}>Cuenta</span>
+              <span style={{ color:'#d4a017', fontFamily:'monospace', fontWeight:700 }}>{w.numero_cuenta||'—'}</span>
+            </div>
+          </div>
+        </Td>
+        <Td style={{ fontSize:16, fontWeight:800, color:'#C0392B' }}>−{fmt(w.monto)}</Td>
+        <Td style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.35)', whiteSpace:'nowrap' }}>{fmtDate(w.created_at)}</Td>
+        <Td>
+          <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+            <Btn variant="primary" onClick={() => approveMut.mutate(w.id)} disabled={approveMut.isPending}><Check size={14} /> Transferido</Btn>
+            <Btn variant="danger"  onClick={() => { setShowReject(w); setMotivo(''); }}><X size={14} /> Rechazar</Btn>
+          </div>
+        </Td>
+      </Tr>
+    ));
+  }
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
 
@@ -54,50 +104,7 @@ export default function RetirosPage() {
           actions={<span style={{ fontSize:11, color:'rgba(212,160,23,.7)' }}>Para procesar: transfiere manualmente y marca como aprobado</span>}
         />
         <Table headers={['Referencia','Usuario','Banco destino','Datos de transferencia','Monto','Solicitado','Acciones']}>
-          {pendLoading ? (
-            <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Cargando...</Td></Tr>
-          ) : pendientes.length === 0 ? (
-            <Tr><Td style={{ textAlign:'center', padding:36, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>
-              <div style={{ display:'flex', justifyContent:'center', color:'#6CC998', marginBottom:8 }}><CheckCircle2 size={28} /></div>
-              Sin retiros pendientes · Todo al día
-            </Td></Tr>
-          ) : pendientes.map((w:any) => (
-            <Tr key={w.id}>
-              <Td style={{ fontFamily:'monospace', fontSize:10, color:'rgba(var(--adm-fg-rgb),.4)' }}>{(w.id||'').slice(0,8)}…</Td>
-              <Td>
-                <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)' }}>{w.usuario_nombre||'—'}</div>
-                <div style={{ fontSize:10, color:'rgba(var(--adm-fg-rgb),.35)' }}>CC {w.usuario_cedula}</div>
-              </Td>
-              <Td>
-                <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)' }}>{w.banco_nombre||'—'}</div>
-                <div style={{ fontSize:10, color:'rgba(var(--adm-fg-rgb),.4)' }}>{w.tipo_cuenta}</div>
-              </Td>
-              <Td>
-                <div style={{ background:'rgba(212,160,23,.08)', border:'1px solid rgba(212,160,23,.2)', borderRadius:8, padding:'8px 10px', fontSize:11, minWidth:180 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
-                    <span style={{ color:'rgba(var(--adm-fg-rgb),.4)' }}>Titular</span>
-                    <span style={{ color:'var(--adm-text)', fontWeight:600 }}>{w.nombre_titular||'—'}</span>
-                  </div>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
-                    <span style={{ color:'rgba(var(--adm-fg-rgb),.4)' }}>Cédula</span>
-                    <span style={{ color:'var(--adm-text)', fontFamily:'monospace' }}>{w.cedula_titular||'—'}</span>
-                  </div>
-                  <div style={{ display:'flex', justifyContent:'space-between' }}>
-                    <span style={{ color:'rgba(var(--adm-fg-rgb),.4)' }}>Cuenta</span>
-                    <span style={{ color:'#d4a017', fontFamily:'monospace', fontWeight:700 }}>{w.numero_cuenta||'—'}</span>
-                  </div>
-                </div>
-              </Td>
-              <Td style={{ fontSize:16, fontWeight:800, color:'#C0392B' }}>−{fmt(w.monto)}</Td>
-              <Td style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.35)', whiteSpace:'nowrap' }}>{fmtDate(w.created_at)}</Td>
-              <Td>
-                <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-                  <Btn variant="primary" onClick={() => approveMut.mutate(w.id)} disabled={approveMut.isPending}><Check size={14} /> Transferido</Btn>
-                  <Btn variant="danger"  onClick={() => { setShowReject(w); setMotivo(''); }}><X size={14} /> Rechazar</Btn>
-                </div>
-              </Td>
-            </Tr>
-          ))}
+          {pendRows}
         </Table>
       </Panel>
 

@@ -36,6 +36,38 @@ export default function BancosPage() {
     }
   }
 
+  let content: React.ReactNode;
+  if (isLoading) {
+    content = <p>Cargando bancos...</p>;
+  } else if (!cuentas?.length) {
+    content = <EmptyState title="Aún no has vinculado ningún banco" icon={<Building2 size={40} />} />;
+  } else {
+    content = cuentas.map((c) => (
+      <article key={c.id} className="tp-profile-option">
+        <span className="tp-bank-logo">{c.bancoNombre.slice(0, 2).toUpperCase()}</span>
+        <div>
+          <strong>{c.alias || c.bancoNombre}</strong>
+          <small>{c.bancoNombre} · {c.tipoCuenta} · {c.numeroCuentaMasked}</small>
+        </div>
+        {confirmandoId === c.id ? (
+          <button
+            className="tp-icon-button"
+            aria-label="Confirmar eliminación"
+            disabled={eliminarMutation.isPending}
+            onClick={() => onEliminarClick(c.id)}
+            style={{ color: '#C0392B' }}
+          >
+            <Check size={18} />
+          </button>
+        ) : (
+          <button className="tp-icon-button" aria-label="Eliminar banco" onClick={() => onEliminarClick(c.id)}>
+            <Trash2 size={18} />
+          </button>
+        )}
+      </article>
+    ));
+  }
+
   return (
     <div className="tp-user-page">
       <header className="tp-page-header">
@@ -44,36 +76,7 @@ export default function BancosPage() {
       </header>
 
       <section className="tp-profile-list">
-        {isLoading ? (
-          <p>Cargando bancos...</p>
-        ) : !cuentas?.length ? (
-          <EmptyState title="Aún no has vinculado ningún banco" icon={<Building2 size={40} />} />
-        ) : (
-          cuentas.map((c) => (
-            <article key={c.id} className="tp-profile-option">
-              <span className="tp-bank-logo">{c.bancoNombre.slice(0, 2).toUpperCase()}</span>
-              <div>
-                <strong>{c.alias || c.bancoNombre}</strong>
-                <small>{c.bancoNombre} · {c.tipoCuenta} · {c.numeroCuentaMasked}</small>
-              </div>
-              {confirmandoId === c.id ? (
-                <button
-                  className="tp-icon-button"
-                  aria-label="Confirmar eliminación"
-                  disabled={eliminarMutation.isPending}
-                  onClick={() => onEliminarClick(c.id)}
-                  style={{ color: '#C0392B' }}
-                >
-                  <Check size={18} />
-                </button>
-              ) : (
-                <button className="tp-icon-button" aria-label="Eliminar banco" onClick={() => onEliminarClick(c.id)}>
-                  <Trash2 size={18} />
-                </button>
-              )}
-            </article>
-          ))
-        )}
+        {content}
       </section>
 
       <ThemeButton href="/dashboard/bancos/nuevo"><Building2 size={18} /> Vincular nuevo banco</ThemeButton>

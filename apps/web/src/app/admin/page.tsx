@@ -27,6 +27,12 @@ function MetricCard({ icon, value, label, color, badge }: any) {
   );
 }
 
+function fmtAxis(v: number) {
+  if (v >= 1000000) return `$${(v / 1000000).toFixed(1)}M`;
+  if (v >= 1000) return `$${Math.round(v / 1000)}k`;
+  return '$0';
+}
+
 function ChartTooltip({ active, payload, label }: any) {
   if (!active||!payload?.length) return null;
   return (
@@ -96,7 +102,6 @@ export default function AdminDashboard() {
   }
 
   const pts=buildData();
-  const fmtAxis=(v:number)=>v>=1000000?`$${(v/1000000).toFixed(1)}M`:v>=1000?`$${Math.round(v/1000)}k`:'$0';
   const barColors=['#852EC7','#6CC998','var(--adm-muted)','#C0392B','#d4a017','#4a90d9','#e87575','#7cc47c'];
   const step=period==='current'?Math.ceil(pts.length/10)-1:0;
 

@@ -27,6 +27,27 @@ export default function TransaccionesPage() {
       txs.map((t: any) => [t.codigo || '', t.descripcion || '', t.usuario_nombre || '', t.monto_neto || 0, t.comision_valor || 0, t.status || '', fmtDate(t.created_at)]));
   }
 
+  let rows: React.ReactNode;
+  if (isLoading) {
+    rows = <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Cargando...</Td></Tr>;
+  } else if (txs.length === 0) {
+    rows = <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Sin transacciones</Td></Tr>;
+  } else {
+    rows = txs.map((t:any) => (
+      <Tr key={t.id}>
+        <Td style={{ fontFamily:'monospace', fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{(t.codigo||'—').slice(0,16)}</Td>
+        <Td style={{ fontSize:12, maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.descripcion}</Td>
+        <Td style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.7)' }}>{t.usuario_nombre||'—'}</Td>
+        <Td style={{ fontWeight:700, color: Number.parseFloat(t.monto_neto)>0?'#6CC998':'#C0392B' }}>
+          {Number.parseFloat(t.monto_neto)>0?'+':''}{fmt(t.monto_neto||0)}
+        </Td>
+        <Td style={{ color:'#d4a017', fontWeight:600 }}>{fmt(t.comision_valor||0)}</Td>
+        <Td><StatusBadge status={t.status} /></Td>
+        <Td style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)', whiteSpace:'nowrap' }}>{fmtDate(t.created_at)}</Td>
+      </Tr>
+    ));
+  }
+
   return (
     <Panel>
       <PanelHeader title={`${txs.length} transacciones`} icon={<ArrowLeftRight size={16} />}
@@ -51,23 +72,7 @@ export default function TransaccionesPage() {
       </div>
 
       <Table headers={['Referencia','Descripción','Usuario','Monto','Comisión 3%','Estado','Fecha']}>
-        {isLoading ? (
-          <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Cargando...</Td></Tr>
-        ) : txs.length === 0 ? (
-          <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Sin transacciones</Td></Tr>
-        ) : txs.map((t:any) => (
-          <Tr key={t.id}>
-            <Td style={{ fontFamily:'monospace', fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{(t.codigo||'—').slice(0,16)}</Td>
-            <Td style={{ fontSize:12, maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.descripcion}</Td>
-            <Td style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.7)' }}>{t.usuario_nombre||'—'}</Td>
-            <Td style={{ fontWeight:700, color: Number.parseFloat(t.monto_neto)>0?'#6CC998':'#C0392B' }}>
-              {Number.parseFloat(t.monto_neto)>0?'+':''}{fmt(t.monto_neto||0)}
-            </Td>
-            <Td style={{ color:'#d4a017', fontWeight:600 }}>{fmt(t.comision_valor||0)}</Td>
-            <Td><StatusBadge status={t.status} /></Td>
-            <Td style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)', whiteSpace:'nowrap' }}>{fmtDate(t.created_at)}</Td>
-          </Tr>
-        ))}
+        {rows}
       </Table>
     </Panel>
   );
