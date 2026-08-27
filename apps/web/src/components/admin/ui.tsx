@@ -108,7 +108,7 @@ export function KycBadge({ nivel }: { nivel: number }) {
 export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
   const initials = name.split(' ').slice(0,2).map((w:string) => w[0]||'').join('').toUpperCase();
   const colors = ['#852EC7','#6CC998','#AE93AA','#C0392B','#d4a017'];
-  const color  = colors[name.charCodeAt(0) % colors.length];
+  const color  = colors[(name.codePointAt(0) ?? 0) % colors.length];
   return (
     <div style={{ width:size, height:size, borderRadius:size/3, background:`${color}33`, border:`1px solid ${color}55`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:size*0.33, fontWeight:700, color, flexShrink:0 }}>
       {initials}
