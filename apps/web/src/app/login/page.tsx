@@ -88,7 +88,7 @@ export default function LoginPage() {
                   inputMode="numeric"
                   placeholder="Ej. 1023456789"
                   value={cedula}
-                  onChange={e => setCedula(e.target.value.replace(/\D/g, ''))}
+                  onChange={e => setCedula(e.target.value.replaceAll(/\D/g, ''))}
                   className="w-full bg-[rgba(var(--tp-card-rgb),.7)] border border-[rgba(133,46,199,.3)] rounded-xl px-4 py-3 text-[var(--tp-text)] text-base font-mono tracking-widest focus:border-brand-accent outline-none"
                 />
               </div>
@@ -166,7 +166,7 @@ export default function LoginPage() {
                   maxLength={6}
                   placeholder="000000"
                   value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                  onChange={e => setOtp(e.target.value.replaceAll(/\D/g, ''))}
                   className="w-full bg-[rgba(var(--tp-card-rgb),.7)] border border-[rgba(133,46,199,.3)] rounded-xl px-4 py-3 text-[var(--tp-text)] text-2xl font-mono tracking-[0.4em] text-center focus:border-brand-accent outline-none"
                 />
               </div>

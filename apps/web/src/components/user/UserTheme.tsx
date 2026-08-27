@@ -64,7 +64,7 @@ export function initials(user?: User | null) {
 }
 
 export function maskPhone(phone?: string | null) {
-  const clean = String(phone || '3001234567').replace(/\D/g, '');
+  const clean = String(phone || '3001234567').replaceAll(/\D/g, '');
   if (clean.length < 4) return '300****678';
   return `${clean.slice(0, 3)}****${clean.slice(-2)}`;
 }
@@ -273,7 +273,7 @@ export function BankAccountFields({
       </label>
       <label className="tp-form-field">
         <span>Número de cuenta</span>
-        <input value={numeroCuenta} onChange={(e) => setNumeroCuenta(e.target.value.replace(/\D/g, ''))} placeholder="Ej. 04512345678" inputMode="numeric" />
+        <input value={numeroCuenta} onChange={(e) => setNumeroCuenta(e.target.value.replaceAll(/\D/g, ''))} placeholder="Ej. 04512345678" inputMode="numeric" />
       </label>
       <label className="tp-form-field">
         <span>Nombre del titular</span>
@@ -281,7 +281,7 @@ export function BankAccountFields({
       </label>
       <label className="tp-form-field">
         <span>Cédula del titular</span>
-        <input value={cedulaTitular} onChange={(e) => setCedulaTitular(e.target.value.replace(/\D/g, ''))} placeholder="Ej. 1023456789" inputMode="numeric" />
+        <input value={cedulaTitular} onChange={(e) => setCedulaTitular(e.target.value.replaceAll(/\D/g, ''))} placeholder="Ej. 1023456789" inputMode="numeric" />
       </label>
     </>
   );

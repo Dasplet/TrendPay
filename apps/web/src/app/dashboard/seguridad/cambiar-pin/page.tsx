@@ -40,7 +40,7 @@ export default function CambiarPinPage() {
           <span>PIN actual</span>
           <input
             value={pinActual}
-            onChange={(e) => setPinActual(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            onChange={(e) => setPinActual(e.target.value.replaceAll(/\D/g, '').slice(0, 4))}
             type="password"
             inputMode="numeric"
             maxLength={4}
@@ -51,7 +51,7 @@ export default function CambiarPinPage() {
           <span>PIN nuevo</span>
           <input
             value={pinNuevo}
-            onChange={(e) => setPinNuevo(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            onChange={(e) => setPinNuevo(e.target.value.replaceAll(/\D/g, '').slice(0, 4))}
             type="password"
             inputMode="numeric"
             maxLength={4}
@@ -62,7 +62,7 @@ export default function CambiarPinPage() {
           <span>Confirmar PIN nuevo</span>
           <input
             value={pinConfirmar}
-            onChange={(e) => setPinConfirmar(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            onChange={(e) => setPinConfirmar(e.target.value.replaceAll(/\D/g, '').slice(0, 4))}
             type="password"
             inputMode="numeric"
             maxLength={4}

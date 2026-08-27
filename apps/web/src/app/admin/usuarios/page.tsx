@@ -141,11 +141,11 @@ export default function UsuariosPage() {
       <Modal open={showNew} onClose={() => setShowNew(false)} title="Nuevo usuario">
         <div>
           <Input label="Nombre completo" value={newUser.nombre} onChange={e => setNewUser(p => ({...p, nombre:e.target.value}))} />
-          <Input label="Cédula" value={newUser.cedula} onChange={e => setNewUser(p => ({...p, cedula:e.target.value.replace(/\D/g,'')}))} />
+          <Input label="Cédula" value={newUser.cedula} onChange={e => setNewUser(p => ({...p, cedula:e.target.value.replaceAll(/\D/g,'')}))} />
           <Input label="Correo" type="email" value={newUser.correo} onChange={e => setNewUser(p => ({...p, correo:e.target.value}))} />
-          <Input label="Celular (opcional)" value={newUser.celular} onChange={e => setNewUser(p => ({...p, celular:e.target.value.replace(/\D/g,'')}))} />
+          <Input label="Celular (opcional)" value={newUser.celular} onChange={e => setNewUser(p => ({...p, celular:e.target.value.replaceAll(/\D/g,'')}))} />
           <Input label="Ciudad (opcional)" value={newUser.ciudad} onChange={e => setNewUser(p => ({...p, ciudad:e.target.value}))} />
-          <Input label="PIN de 4 dígitos" type="password" maxLength={4} value={newUser.pin} onChange={e => setNewUser(p => ({...p, pin:e.target.value.replace(/\D/g,'').slice(0,4)}))} />
+          <Input label="PIN de 4 dígitos" type="password" maxLength={4} value={newUser.pin} onChange={e => setNewUser(p => ({...p, pin:e.target.value.replaceAll(/\D/g,'').slice(0,4)}))} />
           <Select label="Rol" value={newUser.rol} onChange={e => setNewUser(p => ({...p, rol:e.target.value}))}>
             <option value="usuario">Usuario</option>
             <option value="admin">Admin</option>

@@ -130,7 +130,7 @@ export default function RegisterPage() {
             </div>
             <div style={{ marginBottom:16 }}>
               <label htmlFor="reg-cedula" style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><CreditCard size={11}/> Número de cédula *</label>
-              <input id="reg-cedula" type="tel" inputMode="numeric" value={form.cedula} onChange={e=>setField('cedula',e.target.value.replace(/\D/g,''))} placeholder="Ej. 1098765432" maxLength={12} style={{ ...INPUT, fontFamily:'monospace', letterSpacing:'2px' }} onFocus={e=>e.currentTarget.style.borderColor='#852EC7'} onBlur={e=>e.currentTarget.style.borderColor='rgba(133,46,199,.25)'}/>
+              <input id="reg-cedula" type="tel" inputMode="numeric" value={form.cedula} onChange={e=>setField('cedula',e.target.value.replaceAll(/\D/g,''))} placeholder="Ej. 1098765432" maxLength={12} style={{ ...INPUT, fontFamily:'monospace', letterSpacing:'2px' }} onFocus={e=>e.currentTarget.style.borderColor='#852EC7'} onBlur={e=>e.currentTarget.style.borderColor='rgba(133,46,199,.25)'}/>
             </div>
           </>}
 
@@ -186,7 +186,7 @@ export default function RegisterPage() {
                       {otpDebug && <span style={{ color:'#d4a017', fontWeight:700, marginLeft:8 }}>[Sandbox: {otpDebug}]</span>}
                     </div>
                     <div style={{ display:'flex', gap:8 }}>
-                      <input type="tel" inputMode="numeric" maxLength={6} value={otp} onChange={e=>setOtp(e.target.value.replace(/\D/g,''))} placeholder="000000"
+                      <input type="tel" inputMode="numeric" maxLength={6} value={otp} onChange={e=>setOtp(e.target.value.replaceAll(/\D/g,''))} placeholder="000000"
                         style={{ ...INPUT, fontFamily:'monospace', letterSpacing:'6px', textAlign:'center', flex:1, fontSize:20 }}/>
                       <button onClick={verifyOtp} disabled={otp.length<6||verifyingOtp}
                         style={{ padding:'0 16px', borderRadius:10, border:'none', background:'#852EC7', color:'#fff', fontSize:13, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:6, opacity:otp.length<6?.5:1 }}>

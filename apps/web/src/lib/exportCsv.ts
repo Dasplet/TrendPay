@@ -1,6 +1,6 @@
 function escapeCsvCell(value: unknown): string {
   const str = value === null || value === undefined ? '' : String(value);
-  if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+  if (/[",\n]/.test(str)) return `"${str.replaceAll('"', '""')}"`;
   return str;
 }
 

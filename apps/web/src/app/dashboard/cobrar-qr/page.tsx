@@ -80,7 +80,7 @@ export default function CobrarQrPage() {
           <>
             <label className="tp-form-field">
               <span>Monto a cobrar (opcional)</span>
-              <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))} placeholder="Vacío = monto libre" inputMode="numeric" />
+              <input value={amount} onChange={(e) => setAmount(e.target.value.replaceAll(/\D/g, ''))} placeholder="Vacío = monto libre" inputMode="numeric" />
             </label>
             <label className="tp-form-field">
               <span>Concepto</span>

@@ -48,7 +48,7 @@ export default function EditarPerfilPage() {
         </label>
         <label className="tp-form-field">
           <span>Celular</span>
-          <input value={celular} onChange={(e) => setCelular(e.target.value.replace(/\D/g, ''))} inputMode="numeric" placeholder="Ej. 3001234567" />
+          <input value={celular} onChange={(e) => setCelular(e.target.value.replaceAll(/\D/g, ''))} inputMode="numeric" placeholder="Ej. 3001234567" />
         </label>
         <label className="tp-form-field">
           <span>Ciudad</span>
