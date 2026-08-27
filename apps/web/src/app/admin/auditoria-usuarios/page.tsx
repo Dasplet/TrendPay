@@ -41,6 +41,34 @@ export default function AuditoriaUsuariosPage() {
       }));
   }
 
+  let rows: React.ReactNode;
+  if (isLoading) {
+    rows = <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Cargando...</TD></TR>;
+  } else if (logs.length === 0) {
+    rows = (
+      <TR><TD style={{ textAlign:'center', padding:36, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>
+        Sin cambios registrados aún.<br />
+        <span style={{ fontSize:12, opacity:.7 }}>Edita el perfil de un usuario para ver los cambios aquí.</span>
+      </TD></TR>
+    );
+  } else {
+    rows = logs.map((l:any) => {
+      const ac = ACTION_COLORS[l.accion] || { c:'var(--adm-muted)', bg:'rgba(var(--adm-muted-rgb),.15)' };
+      const isPIN = l.campo === 'pin';
+      return (
+        <TR key={l.id}>
+          <TD><span style={{ background:ac.bg, color:ac.c, padding:'3px 8px', borderRadius:6, fontSize:11, fontWeight:600, whiteSpace:'nowrap' }}>{ACTION_LABELS[l.accion]||l.accion}</span></TD>
+          <TD style={{ fontSize:12, fontWeight:600, color:'rgba(var(--adm-fg-rgb),.7)' }}>{CAMPO_LABELS[l.campo]||l.campo||'—'}</TD>
+          <TD style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.4)', fontFamily:isPIN?'inherit':'monospace' }}>{isPIN?'••••':(l.valorAntes||l.valor_antes||'—')}</TD>
+          <TD style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.8)', fontFamily:isPIN?'inherit':'monospace' }}>{isPIN?'••••':(l.valorDespues||l.valor_despues||'—')}</TD>
+          <TD style={{ fontSize:12, fontWeight:600, color:'var(--adm-text)' }}>{l.usuario_nombre||'—'}</TD>
+          <TD style={{ fontFamily:'monospace', fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{l.usuario_cedula||'—'}</TD>
+          <TD style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.35)', whiteSpace:'nowrap' }}>{fmtDate(l.createdAt||l.created_at)}</TD>
+        </TR>
+      );
+    });
+  }
+
   return (
     <Panel>
       <PanelHeader title={`${logs.length} cambios registrados`} icon={<Users size={16} />}
@@ -64,28 +92,7 @@ export default function AuditoriaUsuariosPage() {
       </div>
 
       <Table headers={['Acción','Campo','Valor anterior','Valor nuevo','Usuario','Cédula','Fecha y hora']}>
-        {isLoading ? (
-          <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Cargando...</TD></TR>
-        ) : logs.length === 0 ? (
-          <TR><TD style={{ textAlign:'center', padding:36, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>
-            Sin cambios registrados aún.<br />
-            <span style={{ fontSize:12, opacity:.7 }}>Edita el perfil de un usuario para ver los cambios aquí.</span>
-          </TD></TR>
-        ) : logs.map((l:any) => {
-          const ac = ACTION_COLORS[l.accion] || { c:'var(--adm-muted)', bg:'rgba(var(--adm-muted-rgb),.15)' };
-          const isPIN = l.campo === 'pin';
-          return (
-            <TR key={l.id}>
-              <TD><span style={{ background:ac.bg, color:ac.c, padding:'3px 8px', borderRadius:6, fontSize:11, fontWeight:600, whiteSpace:'nowrap' }}>{ACTION_LABELS[l.accion]||l.accion}</span></TD>
-              <TD style={{ fontSize:12, fontWeight:600, color:'rgba(var(--adm-fg-rgb),.7)' }}>{CAMPO_LABELS[l.campo]||l.campo||'—'}</TD>
-              <TD style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.4)', fontFamily:isPIN?'inherit':'monospace' }}>{isPIN?'••••':(l.valorAntes||l.valor_antes||'—')}</TD>
-              <TD style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.8)', fontFamily:isPIN?'inherit':'monospace' }}>{isPIN?'••••':(l.valorDespues||l.valor_despues||'—')}</TD>
-              <TD style={{ fontSize:12, fontWeight:600, color:'var(--adm-text)' }}>{l.usuario_nombre||'—'}</TD>
-              <TD style={{ fontFamily:'monospace', fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{l.usuario_cedula||'—'}</TD>
-              <TD style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.35)', whiteSpace:'nowrap' }}>{fmtDate(l.createdAt||l.created_at)}</TD>
-            </TR>
-          );
-        })}
+        {rows}
       </Table>
     </Panel>
   );

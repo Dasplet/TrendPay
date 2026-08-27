@@ -53,6 +53,49 @@ export default function BancosPage() {
     onError: (e: any) => toast.error(e.response?.data?.mensaje || 'Error actualizando el banco'),
   });
 
+  let rows: React.ReactNode;
+  if (isLoading) {
+    rows = <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={5 as any}>Cargando...</TD></TR>;
+  } else if (bancos.length === 0) {
+    rows = <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={5 as any}>Sin bancos registrados</TD></TR>;
+  } else {
+    rows = bancos.map((b: any) => (
+      <TR key={b.id}>
+        <TD>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <BankLogo id={b.id} nombre={b.nombre} />
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)' }}>{b.nombre}</div>
+              <div style={{ fontSize:10, color:'rgba(var(--adm-fg-rgb),.35)', fontFamily:'monospace' }}>{b.id}</div>
+            </div>
+          </div>
+        </TD>
+        <TD style={{ color:'rgba(var(--adm-fg-rgb),.6)' }}>{b.orden}</TD>
+        <TD>
+          {b.nuevo && <span style={{ fontSize:10, fontWeight:700, color:'#fff', background:'#5d1ca9', borderRadius:5, padding:'2px 8px' }}>Nuevo</span>}
+        </TD>
+        <TD>
+          <span style={{ background: b.habilitado ? 'rgba(108,201,152,.15)' : 'rgba(192,57,43,.15)', color: b.habilitado ? '#6CC998' : '#C0392B', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600 }}>
+            {b.habilitado ? 'Habilitado' : 'Deshabilitado'}
+          </span>
+        </TD>
+        <TD>
+          <div style={{ display:'flex', gap:6 }}>
+            <Btn variant="ghost" style={{ padding:'5px 8px' }} onClick={() => { setShowEdit(b); setForm({ nombre:b.nombre, orden:String(b.orden), nuevo:b.nuevo }); }}><Pencil size={14} /></Btn>
+            <Btn
+              variant={b.habilitado ? 'danger' : 'default'}
+              style={{ padding:'5px 8px' }}
+              disabled={updateMut.isPending}
+              onClick={() => updateMut.mutate({ id:b.id, data:{ habilitado: !b.habilitado } })}
+            >
+              <Power size={14} />
+            </Btn>
+          </div>
+        </TD>
+      </TR>
+    ));
+  }
+
   return (
     <div>
       <Panel>
@@ -61,45 +104,7 @@ export default function BancosPage() {
           actions={<Btn variant="primary" onClick={() => setShowNew(true)}>+ Nuevo banco</Btn>}
         />
         <Table headers={['Banco', 'Orden', 'Nuevo', 'Estado', 'Acciones']}>
-          {isLoading ? (
-            <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={5 as any}>Cargando...</TD></TR>
-          ) : bancos.length === 0 ? (
-            <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={5 as any}>Sin bancos registrados</TD></TR>
-          ) : bancos.map((b: any) => (
-            <TR key={b.id}>
-              <TD>
-                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                  <BankLogo id={b.id} nombre={b.nombre} />
-                  <div>
-                    <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)' }}>{b.nombre}</div>
-                    <div style={{ fontSize:10, color:'rgba(var(--adm-fg-rgb),.35)', fontFamily:'monospace' }}>{b.id}</div>
-                  </div>
-                </div>
-              </TD>
-              <TD style={{ color:'rgba(var(--adm-fg-rgb),.6)' }}>{b.orden}</TD>
-              <TD>
-                {b.nuevo && <span style={{ fontSize:10, fontWeight:700, color:'#fff', background:'#5d1ca9', borderRadius:5, padding:'2px 8px' }}>Nuevo</span>}
-              </TD>
-              <TD>
-                <span style={{ background: b.habilitado ? 'rgba(108,201,152,.15)' : 'rgba(192,57,43,.15)', color: b.habilitado ? '#6CC998' : '#C0392B', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600 }}>
-                  {b.habilitado ? 'Habilitado' : 'Deshabilitado'}
-                </span>
-              </TD>
-              <TD>
-                <div style={{ display:'flex', gap:6 }}>
-                  <Btn variant="ghost" style={{ padding:'5px 8px' }} onClick={() => { setShowEdit(b); setForm({ nombre:b.nombre, orden:String(b.orden), nuevo:b.nuevo }); }}><Pencil size={14} /></Btn>
-                  <Btn
-                    variant={b.habilitado ? 'danger' : 'default'}
-                    style={{ padding:'5px 8px' }}
-                    disabled={updateMut.isPending}
-                    onClick={() => updateMut.mutate({ id:b.id, data:{ habilitado: !b.habilitado } })}
-                  >
-                    <Power size={14} />
-                  </Btn>
-                </div>
-              </TD>
-            </TR>
-          ))}
+          {rows}
         </Table>
       </Panel>
 
