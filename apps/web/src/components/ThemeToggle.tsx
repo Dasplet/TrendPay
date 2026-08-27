@@ -21,7 +21,7 @@ export function useTheme() {
   function toggle() {
     const next = theme === 'dark' ? 'light' : 'dark';
     setTheme(next);
-    document.documentElement.setAttribute('data-theme', next);
+    document.documentElement.dataset.theme = next;
     localStorage.setItem(STORAGE_KEY, next);
   }
 

@@ -53,12 +53,12 @@ api.interceptors.response.use(
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         window.location.href = '/login';
-        return Promise.reject(err);
+        throw err;
       } finally {
         isRefreshing = false;
       }
     }
-    return Promise.reject(error);
+    throw error;
   }
 );
 
