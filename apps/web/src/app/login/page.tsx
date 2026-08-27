@@ -94,10 +94,10 @@ export default function LoginPage() {
               </div>
 
               {/* PIN dots */}
-              <div role="group" aria-labelledby="login-pin-label" className="mb-4">
-                <div id="login-pin-label" className="block text-xs font-semibold text-[var(--tp-muted)] uppercase tracking-wider mb-3">
+              <fieldset className="mb-4" style={{ border: 0, margin: 0, padding: 0 }}>
+                <legend className="block text-xs font-semibold text-[var(--tp-muted)] uppercase tracking-wider mb-3" style={{ padding: 0 }}>
                   PIN de 4 dígitos
-                </div>
+                </legend>
                 <div className="flex justify-center gap-4 mb-4">
                   {[0,1,2,3].map(i => (
                     <div key={i} className={`w-12 h-12 rounded-xl border-2 flex items-center justify-center text-2xl transition-all ${
@@ -127,7 +127,7 @@ export default function LoginPage() {
                     </button>
                   ))}
                 </div>
-              </div>
+              </fieldset>
 
               {/* Error */}
               {error && (
