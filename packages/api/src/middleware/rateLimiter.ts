@@ -10,6 +10,7 @@ export const authLimiter = rateLimit({
   max: 10, // Max 10 login attempts per 15 min
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
   message: { ok: false, mensaje: 'Demasiados intentos de acceso. Intenta en 15 minutos.' },
 });
 

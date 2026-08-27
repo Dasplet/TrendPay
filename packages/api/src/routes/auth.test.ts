@@ -2,6 +2,12 @@ import request from 'supertest';
 import app, { prisma } from '../index';
 import { limpiarBaseDeDatos, crearUsuarioDePrueba, tokenPara } from '../tests/testUtils';
 
+jest.mock('../utils/email', () => {
+  const actual = jest.requireActual('../utils/email');
+  return { ...actual, sendOtpEmail: jest.fn() };
+});
+import { sendOtpEmail } from '../utils/email';
+
 describe('Auth API', () => {
   afterAll(async () => {
     await limpiarBaseDeDatos();
@@ -10,6 +16,8 @@ describe('Auth API', () => {
 
   beforeEach(async () => {
     await limpiarBaseDeDatos();
+    jest.clearAllMocks();
+    (sendOtpEmail as jest.Mock).mockResolvedValue(false);
   });
 
   describe('POST /api/auth/register', () => {
@@ -64,6 +72,50 @@ describe('Auth API', () => {
 
       expect(verify.status).toBe(200);
       expect(verify.body.accessToken).toBeDefined();
+    });
+
+    it('rechaza cuando faltan cédula o PIN', async () => {
+      const res = await request(app).post('/api/auth/login').send({ cedula: '1023456789' });
+      expect(res.status).toBe(400);
+    });
+
+    it('rechaza una cédula que no existe', async () => {
+      const res = await request(app).post('/api/auth/login').send({ cedula: '9999999999', pin: '1234' });
+      expect(res.status).toBe(401);
+    });
+
+    it('bloquea la cuenta por 30 minutos tras 5 intentos fallidos de PIN', async () => {
+      const user = await crearUsuarioDePrueba();
+
+      let ultimaRespuesta;
+      for (let i = 0; i < 5; i++) {
+        ultimaRespuesta = await request(app).post('/api/auth/login').send({ cedula: user.cedula, pin: '0000' });
+      }
+      expect(ultimaRespuesta!.status).toBe(401);
+      expect(ultimaRespuesta!.body.mensaje).toMatch(/bloqueada por 30 minutos/);
+
+      const bloqueado = await prisma.user.findUnique({ where: { id: user.id } });
+      expect(bloqueado!.bloqueado).toBe(true);
+
+      const intentoConPinCorrecto = await request(app).post('/api/auth/login').send({ cedula: user.cedula, pin: '1234' });
+      expect(intentoConPinCorrecto.status).toBe(423);
+    });
+
+    it('devuelve 500 si requiere 2FA pero la cuenta no tiene correo configurado', async () => {
+      const user = await crearUsuarioDePrueba();
+      await prisma.user.update({ where: { id: user.id }, data: { requiere2fa: true, correo: '' } });
+
+      const res = await request(app).post('/api/auth/login').send({ cedula: user.cedula, pin: '1234' });
+      expect(res.status).toBe(500);
+    });
+
+    it('devuelve 500 si falla el envío del código 2FA por correo', async () => {
+      const user = await crearUsuarioDePrueba();
+      await prisma.user.update({ where: { id: user.id }, data: { requiere2fa: true } });
+      (sendOtpEmail as jest.Mock).mockRejectedValueOnce(new Error('SMTP caído'));
+
+      const res = await request(app).post('/api/auth/login').send({ cedula: user.cedula, pin: '1234' });
+      expect(res.status).toBe(500);
     });
   });
 
