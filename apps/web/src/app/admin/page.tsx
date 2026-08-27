@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
-import { Panel, PanelHeader, Table, TR, TD, StatusBadge, fmt, fmtDate } from '@/components/admin/ui';
+import { Panel, PanelHeader, Table, Tr, Td, StatusBadge, fmt, fmtDate } from '@/components/admin/ui';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { TrendingUp, CircleDollarSign, Users, Clock, PieChart, ArrowLeftRight, Download, Check, Activity } from 'lucide-react';
 
@@ -202,16 +202,16 @@ export default function AdminDashboard() {
         />
         <Table headers={['Referencia','Descripción','Usuario','Monto','Estado','Fecha']}>
           {txs.length===0 ? (
-            <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={6 as any}>Sin transacciones</TD></TR>
+            <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={6 as any}>Sin transacciones</Td></Tr>
           ):txs.slice(0,8).map((t:any)=>(
-            <TR key={t.id}>
-              <TD style={{ fontFamily:'monospace', fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{(t.codigo||'—').slice(0,14)}</TD>
-              <TD style={{ fontSize:12, maxWidth:280, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.descripcion}</TD>
-              <TD style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.65)' }}>{(t.usuario_nombre||'—').split(' ')[0]}</TD>
-              <TD style={{ fontWeight:700, color:Number.parseFloat(t.monto_neto)>=0?'#6CC998':'#C0392B' }}>{fmt(t.monto_neto||0)}</TD>
-              <TD><StatusBadge status={t.status} /></TD>
-              <TD style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)', whiteSpace:'nowrap' }}>{fmtDate(t.created_at)}</TD>
-            </TR>
+            <Tr key={t.id}>
+              <Td style={{ fontFamily:'monospace', fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{(t.codigo||'—').slice(0,14)}</Td>
+              <Td style={{ fontSize:12, maxWidth:280, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.descripcion}</Td>
+              <Td style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.65)' }}>{(t.usuario_nombre||'—').split(' ')[0]}</Td>
+              <Td style={{ fontWeight:700, color:Number.parseFloat(t.monto_neto)>=0?'#6CC998':'#C0392B' }}>{fmt(t.monto_neto||0)}</Td>
+              <Td><StatusBadge status={t.status} /></Td>
+              <Td style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)', whiteSpace:'nowrap' }}>{fmtDate(t.created_at)}</Td>
+            </Tr>
           ))}
         </Table>
       </Panel>

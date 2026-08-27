@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
-import { Panel, PanelHeader, Table, TR, TD, StatusBadge, Btn, fmt, fmtDate } from '@/components/admin/ui';
+import { Panel, PanelHeader, Table, Tr, Td, StatusBadge, Btn, fmt, fmtDate } from '@/components/admin/ui';
 import { ArrowLeftRight, Download, FileSpreadsheet } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
 
@@ -52,21 +52,21 @@ export default function TransaccionesPage() {
 
       <Table headers={['Referencia','Descripción','Usuario','Monto','Comisión 3%','Estado','Fecha']}>
         {isLoading ? (
-          <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Cargando...</TD></TR>
+          <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Cargando...</Td></Tr>
         ) : txs.length === 0 ? (
-          <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Sin transacciones</TD></TR>
+          <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Sin transacciones</Td></Tr>
         ) : txs.map((t:any) => (
-          <TR key={t.id}>
-            <TD style={{ fontFamily:'monospace', fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{(t.codigo||'—').slice(0,16)}</TD>
-            <TD style={{ fontSize:12, maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.descripcion}</TD>
-            <TD style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.7)' }}>{t.usuario_nombre||'—'}</TD>
-            <TD style={{ fontWeight:700, color: Number.parseFloat(t.monto_neto)>0?'#6CC998':'#C0392B' }}>
+          <Tr key={t.id}>
+            <Td style={{ fontFamily:'monospace', fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{(t.codigo||'—').slice(0,16)}</Td>
+            <Td style={{ fontSize:12, maxWidth:220, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.descripcion}</Td>
+            <Td style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.7)' }}>{t.usuario_nombre||'—'}</Td>
+            <Td style={{ fontWeight:700, color: Number.parseFloat(t.monto_neto)>0?'#6CC998':'#C0392B' }}>
               {Number.parseFloat(t.monto_neto)>0?'+':''}{fmt(t.monto_neto||0)}
-            </TD>
-            <TD style={{ color:'#d4a017', fontWeight:600 }}>{fmt(t.comision_valor||0)}</TD>
-            <TD><StatusBadge status={t.status} /></TD>
-            <TD style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)', whiteSpace:'nowrap' }}>{fmtDate(t.created_at)}</TD>
-          </TR>
+            </Td>
+            <Td style={{ color:'#d4a017', fontWeight:600 }}>{fmt(t.comision_valor||0)}</Td>
+            <Td><StatusBadge status={t.status} /></Td>
+            <Td style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)', whiteSpace:'nowrap' }}>{fmtDate(t.created_at)}</Td>
+          </Tr>
         ))}
       </Table>
     </Panel>

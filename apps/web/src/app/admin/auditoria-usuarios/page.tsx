@@ -1,7 +1,7 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Panel, PanelHeader, Table, TR, TD, Btn, fmtDate } from '@/components/admin/ui';
+import { Panel, PanelHeader, Table, Tr, Td, Btn, fmtDate } from '@/components/admin/ui';
 import { Users, RotateCcw, Download, AlertTriangle } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
 
@@ -43,28 +43,28 @@ export default function AuditoriaUsuariosPage() {
 
   let rows: React.ReactNode;
   if (isLoading) {
-    rows = <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Cargando...</TD></TR>;
+    rows = <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>Cargando...</Td></Tr>;
   } else if (logs.length === 0) {
     rows = (
-      <TR><TD style={{ textAlign:'center', padding:36, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>
+      <Tr><Td style={{ textAlign:'center', padding:36, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={7 as any}>
         Sin cambios registrados aún.<br />
         <span style={{ fontSize:12, opacity:.7 }}>Edita el perfil de un usuario para ver los cambios aquí.</span>
-      </TD></TR>
+      </Td></Tr>
     );
   } else {
     rows = logs.map((l:any) => {
       const ac = ACTION_COLORS[l.accion] || { c:'var(--adm-muted)', bg:'rgba(var(--adm-muted-rgb),.15)' };
       const isPIN = l.campo === 'pin';
       return (
-        <TR key={l.id}>
-          <TD><span style={{ background:ac.bg, color:ac.c, padding:'3px 8px', borderRadius:6, fontSize:11, fontWeight:600, whiteSpace:'nowrap' }}>{ACTION_LABELS[l.accion]||l.accion}</span></TD>
-          <TD style={{ fontSize:12, fontWeight:600, color:'rgba(var(--adm-fg-rgb),.7)' }}>{CAMPO_LABELS[l.campo]||l.campo||'—'}</TD>
-          <TD style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.4)', fontFamily:isPIN?'inherit':'monospace' }}>{isPIN?'••••':(l.valorAntes||l.valor_antes||'—')}</TD>
-          <TD style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.8)', fontFamily:isPIN?'inherit':'monospace' }}>{isPIN?'••••':(l.valorDespues||l.valor_despues||'—')}</TD>
-          <TD style={{ fontSize:12, fontWeight:600, color:'var(--adm-text)' }}>{l.usuario_nombre||'—'}</TD>
-          <TD style={{ fontFamily:'monospace', fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{l.usuario_cedula||'—'}</TD>
-          <TD style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.35)', whiteSpace:'nowrap' }}>{fmtDate(l.createdAt||l.created_at)}</TD>
-        </TR>
+        <Tr key={l.id}>
+          <Td><span style={{ background:ac.bg, color:ac.c, padding:'3px 8px', borderRadius:6, fontSize:11, fontWeight:600, whiteSpace:'nowrap' }}>{ACTION_LABELS[l.accion]||l.accion}</span></Td>
+          <Td style={{ fontSize:12, fontWeight:600, color:'rgba(var(--adm-fg-rgb),.7)' }}>{CAMPO_LABELS[l.campo]||l.campo||'—'}</Td>
+          <Td style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.4)', fontFamily:isPIN?'inherit':'monospace' }}>{isPIN?'••••':(l.valorAntes||l.valor_antes||'—')}</Td>
+          <Td style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.8)', fontFamily:isPIN?'inherit':'monospace' }}>{isPIN?'••••':(l.valorDespues||l.valor_despues||'—')}</Td>
+          <Td style={{ fontSize:12, fontWeight:600, color:'var(--adm-text)' }}>{l.usuario_nombre||'—'}</Td>
+          <Td style={{ fontFamily:'monospace', fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{l.usuario_cedula||'—'}</Td>
+          <Td style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.35)', whiteSpace:'nowrap' }}>{fmtDate(l.createdAt||l.created_at)}</Td>
+        </Tr>
       );
     });
   }

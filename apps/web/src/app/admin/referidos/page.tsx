@@ -1,7 +1,7 @@
 'use client';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { MetricCard, Panel, PanelHeader, Table, TR, TD, StatusBadge, Btn, fmt, fmtDate } from '@/components/admin/ui';
+import { MetricCard, Panel, PanelHeader, Table, Tr, Td, StatusBadge, Btn, fmt, fmtDate } from '@/components/admin/ui';
 import { Share2, Check, Clock, CircleDollarSign, Download, Trophy, Medal } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
 
@@ -49,21 +49,21 @@ export default function ReferidosPage() {
           />
           <Table headers={['Referidor','Referido','Comisión','Estado','Fecha']}>
             {referidos.length === 0 ? (
-              <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={5 as any}>Sin referidos</TD></TR>
+              <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={5 as any}>Sin referidos</Td></Tr>
             ) : referidos.map((r:any) => (
-              <TR key={r.id}>
-                <TD>
+              <Tr key={r.id}>
+                <Td>
                   <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)' }}>{r.referidor_nombre}</div>
                   <div style={{ fontSize:11, color:'var(--adm-muted)' }}>{r.referidor_cedula}</div>
-                </TD>
-                <TD>
+                </Td>
+                <Td>
                   <div style={{ fontSize:13, fontWeight:600, color:'var(--adm-text)' }}>{r.referido_nombre}</div>
                   <div style={{ fontSize:11, color:'var(--adm-muted)' }}>{r.referido_cedula}</div>
-                </TD>
-                <TD style={{ color:'#6CC998', fontWeight:700 }}>{fmt(r.comision_valor||1000)}</TD>
-                <TD><StatusBadge status={r.status} /></TD>
-                <TD style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{fmtDate(r.created_at)}</TD>
-              </TR>
+                </Td>
+                <Td style={{ color:'#6CC998', fontWeight:700 }}>{fmt(r.comision_valor||1000)}</Td>
+                <Td><StatusBadge status={r.status} /></Td>
+                <Td style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)' }}>{fmtDate(r.created_at)}</Td>
+              </Tr>
             ))}
           </Table>
         </Panel>

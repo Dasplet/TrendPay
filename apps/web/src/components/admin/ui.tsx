@@ -62,7 +62,7 @@ export function Table({ headers, children, empty }: { headers: string[]; childre
 }
 
 // ── Table row ──
-export function TR({ children }: { children: React.ReactNode }) {
+export function Tr({ children }: { children: React.ReactNode }) {
   return (
     <tr className="adm-table-row" style={{ borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)' }}>
       {children}
@@ -70,8 +70,8 @@ export function TR({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── TD ──
-export function TD({ children, style, colSpan }: { children: React.ReactNode; style?: React.CSSProperties; colSpan?: number }) {
+// ── Td ──
+export function Td({ children, style, colSpan }: { children: React.ReactNode; style?: React.CSSProperties; colSpan?: number }) {
   return <td colSpan={colSpan} style={{ padding:'12px 16px', color:'rgba(var(--adm-fg-rgb),.85)', verticalAlign:'middle', ...style }}>{children}</td>;
 }
 

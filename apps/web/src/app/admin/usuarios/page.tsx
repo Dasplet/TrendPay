@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
-import { Panel, PanelHeader, Table, TR, TD, StatusBadge, KycBadge, Avatar, Btn, Modal, Input, Select, fmt, fmtDate } from '@/components/admin/ui';
+import { Panel, PanelHeader, Table, Tr, Td, StatusBadge, KycBadge, Avatar, Btn, Modal, Input, Select, fmt, fmtDate } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
 import { Users, Download, Eye, Pencil, Lock, Trash2, AlertTriangle } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
@@ -80,10 +80,10 @@ export default function UsuariosPage() {
         />
         <Table headers={['Usuario','Cédula','Rol','Saldo','KYC','Transacciones','Estado','Acciones']}>
           {isLoading ? (
-            <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={8 as any}>Cargando...</TD></TR>
+            <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={8 as any}>Cargando...</Td></Tr>
           ) : users.map((u:any) => (
-            <TR key={u.id}>
-              <TD>
+            <Tr key={u.id}>
+              <Td>
                 <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                   <Avatar name={u.nombre||'?'} size={34} />
                   <div>
@@ -91,26 +91,26 @@ export default function UsuariosPage() {
                     <div style={{ fontSize:11, color:'var(--adm-muted)' }}>{u.correo}</div>
                   </div>
                 </div>
-              </TD>
-              <TD style={{ fontFamily:'monospace', fontSize:12 }}>{u.cedula}</TD>
-              <TD>
+              </Td>
+              <Td style={{ fontFamily:'monospace', fontSize:12 }}>{u.cedula}</Td>
+              <Td>
                 <span style={{ background: u.rol==='admin'?'rgba(133,46,199,.2)':'rgba(var(--adm-muted-rgb),.1)', color: u.rol==='admin'?'#c088f0':'var(--adm-muted)', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600 }}>
                   {u.rol==='admin'?'Admin':'Usuario'}
                 </span>
-              </TD>
-              <TD style={{ fontWeight:700, color:'#6CC998' }}>{fmt(u.saldo||0)}</TD>
-              <TD><KycBadge nivel={u.kycNivel||u.kyc_nivel||1} /></TD>
-              <TD style={{ color:'rgba(var(--adm-fg-rgb),.6)' }}>{u._txCount||0}</TD>
-              <TD><StatusBadge status={u.bloqueado?'bloqueado':'activo'} /></TD>
-              <TD>
+              </Td>
+              <Td style={{ fontWeight:700, color:'#6CC998' }}>{fmt(u.saldo||0)}</Td>
+              <Td><KycBadge nivel={u.kycNivel||u.kyc_nivel||1} /></Td>
+              <Td style={{ color:'rgba(var(--adm-fg-rgb),.6)' }}>{u._txCount||0}</Td>
+              <Td><StatusBadge status={u.bloqueado?'bloqueado':'activo'} /></Td>
+              <Td>
                 <div style={{ display:'flex', gap:6 }}>
                   <Btn variant="ghost" onClick={() => setSelected(u)} style={{ padding:'5px 8px' }}><Eye size={14} /></Btn>
                   <Btn variant="ghost" onClick={() => setShowEdit({...u})} style={{ padding:'5px 8px' }}><Pencil size={14} /></Btn>
                   <Btn variant="ghost" onClick={() => updateMut.mutate({ id:u.id, data:{ bloqueado: !u.bloqueado } })} style={{ padding:'5px 8px' }}><Lock size={14} /></Btn>
                   <Btn variant="danger" onClick={() => setShowDel(u)} style={{ padding:'5px 8px' }}><Trash2 size={14} /></Btn>
                 </div>
-              </TD>
-            </TR>
+              </Td>
+            </Tr>
           ))}
         </Table>
       </Panel>

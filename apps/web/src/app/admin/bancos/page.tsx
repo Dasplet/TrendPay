@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { adminApi } from '@/lib/api';
-import { Panel, PanelHeader, Table, TR, TD, Btn, Modal, Input } from '@/components/admin/ui';
+import { Panel, PanelHeader, Table, Tr, Td, Btn, Modal, Input } from '@/components/admin/ui';
 import { Landmark, Pencil, Power } from 'lucide-react';
 
 function BankLogo({ id, nombre }: { id: string; nombre: string }) {
@@ -55,13 +55,13 @@ export default function BancosPage() {
 
   let rows: React.ReactNode;
   if (isLoading) {
-    rows = <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={5 as any}>Cargando...</TD></TR>;
+    rows = <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={5 as any}>Cargando...</Td></Tr>;
   } else if (bancos.length === 0) {
-    rows = <TR><TD style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={5 as any}>Sin bancos registrados</TD></TR>;
+    rows = <Tr><Td style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)' }} colSpan={5 as any}>Sin bancos registrados</Td></Tr>;
   } else {
     rows = bancos.map((b: any) => (
-      <TR key={b.id}>
-        <TD>
+      <Tr key={b.id}>
+        <Td>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <BankLogo id={b.id} nombre={b.nombre} />
             <div>
@@ -69,17 +69,17 @@ export default function BancosPage() {
               <div style={{ fontSize:10, color:'rgba(var(--adm-fg-rgb),.35)', fontFamily:'monospace' }}>{b.id}</div>
             </div>
           </div>
-        </TD>
-        <TD style={{ color:'rgba(var(--adm-fg-rgb),.6)' }}>{b.orden}</TD>
-        <TD>
+        </Td>
+        <Td style={{ color:'rgba(var(--adm-fg-rgb),.6)' }}>{b.orden}</Td>
+        <Td>
           {b.nuevo && <span style={{ fontSize:10, fontWeight:700, color:'#fff', background:'#5d1ca9', borderRadius:5, padding:'2px 8px' }}>Nuevo</span>}
-        </TD>
-        <TD>
+        </Td>
+        <Td>
           <span style={{ background: b.habilitado ? 'rgba(108,201,152,.15)' : 'rgba(192,57,43,.15)', color: b.habilitado ? '#6CC998' : '#C0392B', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600 }}>
             {b.habilitado ? 'Habilitado' : 'Deshabilitado'}
           </span>
-        </TD>
-        <TD>
+        </Td>
+        <Td>
           <div style={{ display:'flex', gap:6 }}>
             <Btn variant="ghost" style={{ padding:'5px 8px' }} onClick={() => { setShowEdit(b); setForm({ nombre:b.nombre, orden:String(b.orden), nuevo:b.nuevo }); }}><Pencil size={14} /></Btn>
             <Btn
@@ -91,8 +91,8 @@ export default function BancosPage() {
               <Power size={14} />
             </Btn>
           </div>
-        </TD>
-      </TR>
+        </Td>
+      </Tr>
     ));
   }
 
