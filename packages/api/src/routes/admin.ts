@@ -218,7 +218,7 @@ router.post('/banks', authenticate, requireAdmin, async (req: Request, res: Resp
 
     const slug = String(nombre).trim().toLowerCase()
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // quita tildes
-      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+/, '').replace(/-+$/, '');
     if (!slug) return res.status(400).json({ ok: false, mensaje: 'Nombre inválido' });
 
     let id = slug, suffix = 1;
