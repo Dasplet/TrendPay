@@ -160,7 +160,7 @@ router.post('/consignar', authenticate, walletLimiter, async (req: Request, res:
 router.get('/verificar/:reference', authenticate, async (req: Request, res: Response) => {
   try {
     let payment = await prisma.rapydPayment.findUnique({ where: { reference: req.params.reference } });
-    if (!payment || payment.userId !== req.user!.id) {
+    if (payment?.userId !== req.user!.id) {
       return res.status(404).json({ ok: false, mensaje: 'Consignación no encontrada' });
     }
 
