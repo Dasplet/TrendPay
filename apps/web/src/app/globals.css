@@ -314,6 +314,9 @@ input::placeholder { color: rgba(174,147,170,.5); }
 .tp-pill-purple { color: #d7a7ff; background: rgba(133,46,199,.27); }
 .tp-pill-danger { color: #ff6f91; background: rgba(255,111,145,.15); }
 .tp-pill-muted { color: var(--tp-muted); background: rgba(var(--tp-fg-rgb),.08); }
+:root[data-theme="light"] .tp-pill-success { color: #166534; }
+:root[data-theme="light"] .tp-pill-purple { color: #5a1a8a; }
+:root[data-theme="light"] .tp-pill-danger { color: #a52a1f; background: rgba(192,57,43,.15); }
 .tp-action-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 22px; margin: 34px 0 22px; }
 .tp-action-card {
   min-height: 132px;
