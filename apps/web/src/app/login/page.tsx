@@ -112,10 +112,10 @@ export default function LoginPage() {
 
                 {/* Numpad */}
                 <div className="grid grid-cols-3 gap-3">
-                  {['1','2','3','4','5','6','7','8','9','','0','x'].map((k, i) => (
-                    k === '' ? <div key={i} /> :
+                  {['1','2','3','4','5','6','7','8','9','gap','0','x'].map((k) => (
+                    k === 'gap' ? <div key={k} /> :
                     <button
-                      key={i}
+                      key={k}
                       onClick={() => handlePinKey(k)}
                       className={`h-14 rounded-xl font-semibold text-xl transition-all ${
                         k === 'x'
