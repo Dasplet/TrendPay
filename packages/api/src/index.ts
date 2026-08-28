@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import dns from 'dns';
+import dns from 'node:dns';
 // Algunos entornos de hosting (ej. Railway) no tienen salida IPv6; Node 18+ puede
 // resolver hosts externos con la dirección IPv6 primero y fallar con ENETUNREACH.
 // Forzamos IPv4 primero para todas las conexiones salientes (SMTP, APIs externas, etc).
@@ -10,7 +10,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
-import path from 'path';
+import path from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { logger } from './utils/logger';
 import { apiLimiter } from './middleware/rateLimiter';
@@ -114,7 +114,7 @@ app.use('/api/user-audit',  userAuditRouter);
 
 // ── Serve frontend static files ──
 const publicPath = path.join(__dirname, '../../web/dist');
-const fs = require('fs');
+const fs = require('node:fs');
 if (fs.existsSync(publicPath)) {
   app.use(express.static(publicPath));
   app.get('*', (req, res) => {

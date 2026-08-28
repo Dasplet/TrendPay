@@ -39,14 +39,14 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.user || req.user.rol !== 'admin') {
+  if (req.user?.rol !== 'admin') {
     return res.status(403).json({ ok: false, mensaje: 'Acceso restringido a administradores' });
   }
   next();
 }
 
 export function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.user || req.user.rol !== 'admin') {
+  if (req.user?.rol !== 'admin') {
     return res.status(403).json({ ok: false, mensaje: 'Acceso restringido' });
   }
   next();
