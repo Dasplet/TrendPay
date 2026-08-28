@@ -300,11 +300,15 @@ export function InfoDestination({ saldo, label = 'Destino: Tu billetera virtual'
   );
 }
 
+// Rejilla decorativa de un QR falso — sin datos reales por celda, así que
+// las claves son ids estables generados una sola vez, no el índice del map.
+const FAKE_QR_CELL_KEYS = Array.from({ length: 36 }, () => Math.random().toString(36).slice(2));
+
 export function FakeQr({ user, amount, concept }: { user?: User | null; amount?: number; concept?: string }) {
   return (
     <div className="tp-qr-box">
       <div className="tp-fake-qr" aria-label="QR demo">
-        {Array.from({ length: 36 }).map((_, idx) => <i key={idx} />)}
+        {FAKE_QR_CELL_KEYS.map((key) => <i key={key} />)}
       </div>
       <p>{user?.correo || 'usuario@trendpay.co'} · CC {user?.cedula || '1023456789'}</p>
       {(amount || concept) && <small>{amount ? compactCOP(amount) : 'Monto libre'}{concept ? ` · ${concept}` : ''}</small>}
@@ -330,7 +334,7 @@ export function RealQr({ value, size = 220 }: { value: string; size?: number }) 
         <img src={dataUrl} width={size} height={size} alt="Código QR para pagar" style={{ borderRadius: 12, display: 'block', margin: '0 auto' }} />
       ) : (
         <div className="tp-fake-qr" aria-hidden="true">
-          {Array.from({ length: 36 }).map((_, idx) => <i key={idx} />)}
+          {FAKE_QR_CELL_KEYS.map((key) => <i key={key} />)}
         </div>
       )}
     </div>
