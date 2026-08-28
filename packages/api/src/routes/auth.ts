@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import { randomUUID, randomInt } from 'crypto';
+import { randomUUID, randomInt } from 'node:crypto';
 import { prisma } from '../index';
 import { authenticate, AuthUser } from '../middleware/auth';
 import { authLimiter } from '../middleware/rateLimiter';

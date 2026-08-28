@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import { verifyWebhookSignature } from './rapyd';
 
 // Firma un payload de la misma forma en que lo haría Rapyd, de forma

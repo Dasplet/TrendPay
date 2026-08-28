@@ -1,5 +1,5 @@
 import axios from 'axios';
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 
 const BASE_URL   = process.env.RAPYD_BASE_URL || 'https://sandboxapi.rapyd.net';
 const ACCESS_KEY = process.env.RAPYD_ACCESS_KEY || '';
