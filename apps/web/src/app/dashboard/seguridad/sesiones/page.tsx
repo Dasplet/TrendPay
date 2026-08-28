@@ -55,6 +55,26 @@ export default function SesionesPage() {
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo completar la acción'),
   });
 
+  let content: React.ReactNode;
+  if (isLoading) {
+    content = <p>Cargando sesiones...</p>;
+  } else if (!sesiones?.length) {
+    content = <EmptyState title="Sin sesiones activas" icon={<Monitor size={40} />} />;
+  } else {
+    content = sesiones.map((s) => (
+      <article key={s.id} className="tp-profile-option">
+        <span className="tp-op-icon tp-op-purple"><Monitor size={20} /></span>
+        <div>
+          <strong>{resumenDispositivo(s.userAgent)}{s.actual ? ' · Esta sesión' : ''}</strong>
+          <small>{s.ip || 'IP desconocida'} · {new Date(s.createdAt).toLocaleString('es-CO')}</small>
+        </div>
+        <button className="tp-icon-button" aria-label="Cerrar sesión" disabled={revokeMutation.isPending} onClick={() => revokeMutation.mutate(s.id)}>
+          <Trash2 size={18} />
+        </button>
+      </article>
+    ));
+  }
+
   return (
     <div className="tp-user-page">
       <header className="tp-page-header"><h1>Sesiones activas</h1></header>
@@ -66,24 +86,7 @@ export default function SesionesPage() {
       )}
 
       <section className="tp-profile-list" style={{ marginTop: 16 }}>
-        {isLoading ? (
-          <p>Cargando sesiones...</p>
-        ) : !sesiones?.length ? (
-          <EmptyState title="Sin sesiones activas" icon={<Monitor size={40} />} />
-        ) : (
-          sesiones.map((s) => (
-            <article key={s.id} className="tp-profile-option">
-              <span className="tp-op-icon tp-op-purple"><Monitor size={20} /></span>
-              <div>
-                <strong>{resumenDispositivo(s.userAgent)}{s.actual ? ' · Esta sesión' : ''}</strong>
-                <small>{s.ip || 'IP desconocida'} · {new Date(s.createdAt).toLocaleString('es-CO')}</small>
-              </div>
-              <button className="tp-icon-button" aria-label="Cerrar sesión" disabled={revokeMutation.isPending} onClick={() => revokeMutation.mutate(s.id)}>
-                <Trash2 size={18} />
-              </button>
-            </article>
-          ))
-        )}
+        {content}
       </section>
     </div>
   );

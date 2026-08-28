@@ -5,6 +5,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Fingerprint, KeyRound, Lock, ShieldCheck } from 'lucide-react';
 import { authApi } from '@/lib/api';
 
+function sesionesLabel(count: number | null | undefined) {
+  if (count == null) return '...';
+  const palabra = count === 1 ? 'sesión' : 'sesiones';
+  return `${count} ${palabra}`;
+}
+
 export default function SeguridadPage() {
   const { data: sesionesCount } = useQuery({
     queryKey: ['auth-sessions-count'],
@@ -17,7 +23,7 @@ export default function SeguridadPage() {
     { icon: <KeyRound size={24} />, title: 'Cambiar PIN', desc: 'Actualiza tus 4 dígitos de seguridad', status: 'Editar', href: '/dashboard/seguridad/cambiar-pin' },
     { icon: <ShieldCheck size={24} />, title: 'Verificación 2FA', desc: 'Código adicional para operaciones sensibles', status: 'Próximamente' },
     { icon: <Fingerprint size={24} />, title: 'Biometría', desc: 'Disponible en la app móvil', status: 'Próximamente' },
-    { icon: <Lock size={24} />, title: 'Sesiones activas', desc: 'Controla dónde está abierta tu cuenta', status: sesionesCount != null ? `${sesionesCount} ${sesionesCount === 1 ? 'sesión' : 'sesiones'}` : '...', href: '/dashboard/seguridad/sesiones' },
+    { icon: <Lock size={24} />, title: 'Sesiones activas', desc: 'Controla dónde está abierta tu cuenta', status: sesionesLabel(sesionesCount), href: '/dashboard/seguridad/sesiones' },
   ];
 
   return (
