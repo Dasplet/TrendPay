@@ -81,8 +81,9 @@ router.post('/enviar', authenticate, walletLimiter, async (req: Request, res: Re
     const comisionValor = Math.ceil(monto * 0.03);
     const total = monto + comisionValor;
     const codigo = genCodigo('ENV');
-    const descripcionEnvio = `Envío a ${receptor.nombre}${nota ? ` · ${nota}` : ''}`;
-    const descripcionRecibo = `Recibido de ${req.user!.nombre}${nota ? ` · ${nota}` : ''}`;
+    const notaSuffix = nota ? ` · ${nota}` : '';
+    const descripcionEnvio = `Envío a ${receptor.nombre}${notaSuffix}`;
+    const descripcionRecibo = `Recibido de ${req.user!.nombre}${notaSuffix}`;
 
     const nuevoSaldo = await prisma.$transaction(async (tx) => {
       const senderWallet = await tx.wallet.findUnique({ where: { userId: req.user!.id } });
