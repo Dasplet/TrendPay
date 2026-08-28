@@ -55,6 +55,11 @@ export default function RetirarBancoPage() {
     withdrawMutation.mutate();
   }
 
+  let ctaLabel: string;
+  if (withdrawMutation.isPending) ctaLabel = 'Enviando...';
+  else if (banco) ctaLabel = `Retirar a ${banco.nombre}`;
+  else ctaLabel = 'Selecciona un banco';
+
   return (
     <UserModal title="Retirar a banco" subtitle="El dinero sale de tu billetera · procesamiento manual en 1 día hábil" size="lg">
       <div className="tp-modal-content">
@@ -77,7 +82,7 @@ export default function RetirarBancoPage() {
 
         <AmountPicker value={amount} setValue={setAmount} options={[50000, 100000, 200000, 500000]} />
         <ThemeButton disabled={!bancoId || withdrawMutation.isPending} onClick={withdraw}>
-          <Building2 size={18} /> {withdrawMutation.isPending ? 'Enviando...' : banco ? `Retirar a ${banco.nombre}` : 'Selecciona un banco'}
+          <Building2 size={18} /> {ctaLabel}
         </ThemeButton>
       </div>
     </UserModal>
