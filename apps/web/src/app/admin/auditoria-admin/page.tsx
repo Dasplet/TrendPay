@@ -52,7 +52,7 @@ function AuditLogDetail({ antes, despues, datos }: Readonly<{ antes: any; despue
       <div>
         <div style={{ fontSize:11, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.05em', fontWeight:700, marginBottom:6 }}>Cambios</div>
         <div style={{ display:'grid', gap:4 }}>
-          {Object.keys({ ...(antes||{}), ...(despues||{}) }).map(campo => (
+          {Object.keys({ ...antes, ...despues }).map(campo => (
             <div key={campo} style={{ display:'grid', gridTemplateColumns:'120px 1fr auto 1fr', alignItems:'center', gap:8, fontSize:12 }}>
               <span style={{ color:'var(--adm-muted)' }}>{CAMPO_LABELS[campo] || campo}</span>
               <span style={{ color:'#ff8f9a', fontFamily:'monospace' }}>{fmtValor(campo, antes?.[campo])}</span>
