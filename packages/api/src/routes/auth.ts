@@ -20,7 +20,7 @@ function generateTokens(user: AuthUser) {
     { expiresIn: process.env.JWT_EXPIRES_IN || '15m' } as jwt.SignOptions
   );
   const refreshToken = jwt.sign(
-    { id: user.id },
+    { id: user.id, jti: randomUUID() }, // jti evita colisiones si se emiten dos tokens en el mismo segundo
     process.env.JWT_REFRESH_SECRET!,
     { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' } as jwt.SignOptions
   );
@@ -302,7 +302,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
   if (!token) return res.status(401).json({ ok: false, mensaje: 'Refresh token requerido' });
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_REFRESH_SECRET!) as { id: string };
+    jwt.verify(token, process.env.JWT_REFRESH_SECRET!);
 
     const session = await prisma.session.findFirst({
       where: { refreshToken: token, revokedAt: null, expiresAt: { gt: new Date() } },

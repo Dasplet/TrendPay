@@ -119,6 +119,40 @@ describe('Auth API', () => {
     });
   });
 
+  describe('POST /api/auth/refresh', () => {
+    it('rechaza cuando no se envía refresh token', async () => {
+      const res = await request(app).post('/api/auth/refresh').send({});
+      expect(res.status).toBe(401);
+    });
+
+    it('rechaza un refresh token con formato inválido', async () => {
+      const res = await request(app).post('/api/auth/refresh').send({ refreshToken: 'no-es-un-jwt' });
+      expect(res.status).toBe(401);
+    });
+
+    it('rechaza un refresh token válido pero sin sesión activa', async () => {
+      const user = await crearUsuarioDePrueba();
+      const login = await request(app).post('/api/auth/login').send({ cedula: user.cedula, pin: '1234' });
+      await prisma.session.updateMany({ where: { userId: user.id }, data: { revokedAt: new Date() } });
+
+      const res = await request(app).post('/api/auth/refresh').send({ refreshToken: login.body.refreshToken });
+      expect(res.status).toBe(401);
+    });
+
+    it('rota el refresh token y emite un nuevo access token', async () => {
+      const user = await crearUsuarioDePrueba();
+      const login = await request(app).post('/api/auth/login').send({ cedula: user.cedula, pin: '1234' });
+
+      const res = await request(app).post('/api/auth/refresh').send({ refreshToken: login.body.refreshToken });
+      expect(res.status).toBe(200);
+      expect(res.body.accessToken).toBeDefined();
+      expect(res.body.refreshToken).not.toBe(login.body.refreshToken);
+
+      const sesionVieja = await prisma.session.findFirst({ where: { refreshToken: login.body.refreshToken } });
+      expect(sesionVieja!.revokedAt).not.toBeNull();
+    });
+  });
+
   describe('GET /api/auth/me', () => {
     it('devuelve el usuario autenticado con su saldo', async () => {
       const user = await crearUsuarioDePrueba({ saldo: 7000 });
