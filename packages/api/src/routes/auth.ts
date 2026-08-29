@@ -376,7 +376,7 @@ router.get('/sessions', authenticate, async (req: Request, res: Response) => {
 router.delete('/sessions/:id', authenticate, async (req: Request, res: Response) => {
   try {
     const session = await prisma.session.findUnique({ where: { id: req.params.id } });
-    if (!session || session.userId !== req.user!.id) {
+    if (session?.userId !== req.user!.id) {
       return res.status(404).json({ ok: false, mensaje: 'Sesión no encontrada' });
     }
     await prisma.session.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
@@ -481,7 +481,7 @@ const otpStore = new Map<string, { otp: string; expires: Date }>();
 router.post('/validate-email', async (req: Request, res: Response) => {
   const { correo } = req.body;
   if (!correo) return res.status(400).json({ ok: false });
-  const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (!emailRegex.test(correo)) return res.json({ ok: false, mensaje: 'Formato de correo inválido' });
   const disposable = ['mailinator','guerrillamail','tempmail','yopmail','throwam','sharklasers','fakeinbox'];
   const domain = correo.split('@')[1]?.toLowerCase();

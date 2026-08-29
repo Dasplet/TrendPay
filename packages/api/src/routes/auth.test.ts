@@ -153,6 +153,73 @@ describe('Auth API', () => {
     });
   });
 
+  describe('DELETE /api/auth/sessions/:id', () => {
+    it('cierra una sesión propia', async () => {
+      const user = await crearUsuarioDePrueba();
+      const login = await request(app).post('/api/auth/login').send({ cedula: user.cedula, pin: '1234' });
+      const sesion = await prisma.session.findFirst({ where: { userId: user.id } });
+
+      const res = await request(app)
+        .delete(`/api/auth/sessions/${sesion!.id}`)
+        .set('Authorization', `Bearer ${tokenPara(user)}`);
+
+      expect(res.status).toBe(200);
+      const actualizada = await prisma.session.findUnique({ where: { id: sesion!.id } });
+      expect(actualizada!.revokedAt).not.toBeNull();
+    });
+
+    it('rechaza cerrar la sesión de otro usuario', async () => {
+      const user = await crearUsuarioDePrueba();
+      const otro = await crearUsuarioDePrueba();
+      await request(app).post('/api/auth/login').send({ cedula: otro.cedula, pin: '1234' });
+      const sesionDeOtro = await prisma.session.findFirst({ where: { userId: otro.id } });
+
+      const res = await request(app)
+        .delete(`/api/auth/sessions/${sesionDeOtro!.id}`)
+        .set('Authorization', `Bearer ${tokenPara(user)}`);
+
+      expect(res.status).toBe(404);
+    });
+
+    it('devuelve 404 si la sesión no existe', async () => {
+      const user = await crearUsuarioDePrueba();
+      const res = await request(app)
+        .delete('/api/auth/sessions/no-existe')
+        .set('Authorization', `Bearer ${tokenPara(user)}`);
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('POST /api/auth/validate-email', () => {
+    it('rechaza cuando no se envía correo', async () => {
+      const res = await request(app).post('/api/auth/validate-email').send({});
+      expect(res.status).toBe(400);
+    });
+
+    it('rechaza un formato de correo inválido', async () => {
+      const res = await request(app).post('/api/auth/validate-email').send({ correo: 'no-es-un-correo' });
+      expect(res.body.ok).toBe(false);
+    });
+
+    it('rechaza dominios desechables', async () => {
+      const res = await request(app).post('/api/auth/validate-email').send({ correo: 'test@mailinator.com' });
+      expect(res.body.ok).toBe(false);
+      expect(res.body.mensaje).toMatch(/desechables/);
+    });
+
+    it('rechaza un correo ya registrado', async () => {
+      const user = await crearUsuarioDePrueba();
+      const res = await request(app).post('/api/auth/validate-email').send({ correo: user.correo });
+      expect(res.body.ok).toBe(false);
+      expect(res.body.mensaje).toMatch(/ya está registrado/);
+    });
+
+    it('acepta un correo válido y disponible', async () => {
+      const res = await request(app).post('/api/auth/validate-email').send({ correo: 'nuevo.correo@ejemplo.com' });
+      expect(res.body.ok).toBe(true);
+    });
+  });
+
   describe('GET /api/auth/me', () => {
     it('devuelve el usuario autenticado con su saldo', async () => {
       const user = await crearUsuarioDePrueba({ saldo: 7000 });

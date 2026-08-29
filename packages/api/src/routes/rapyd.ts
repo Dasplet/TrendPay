@@ -16,7 +16,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 // no puede alcanzarnos, p. ej. en desarrollo local sin URL pública).
 async function acreditarPago(paymentId: string, rapydPaymentId: string | null) {
   const payment = await prisma.rapydPayment.findUnique({ where: { id: paymentId } });
-  if (!payment || payment.estado !== 'pendiente') return payment;
+  if (payment?.estado !== 'pendiente') return payment;
 
   await prisma.$transaction(async (tx) => {
     const wallet = await tx.wallet.findUnique({ where: { userId: payment.userId } });

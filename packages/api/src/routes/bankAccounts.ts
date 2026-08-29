@@ -77,7 +77,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
 router.delete('/:id', authenticate, async (req: Request, res: Response) => {
   try {
     const cuenta = await prisma.bankAccount.findUnique({ where: { id: req.params.id } });
-    if (!cuenta || cuenta.userId !== req.user!.id) {
+    if (cuenta?.userId !== req.user!.id) {
       return res.status(404).json({ ok: false, mensaje: 'Cuenta bancaria no encontrada' });
     }
     await prisma.bankAccount.delete({ where: { id: cuenta.id } });
