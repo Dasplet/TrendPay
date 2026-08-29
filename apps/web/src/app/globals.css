@@ -452,7 +452,7 @@ input::placeholder { color: rgba(174,147,170,.5); }
 .tp-button:disabled { opacity: .42; cursor: not-allowed; filter: grayscale(.7); }
 .tp-button-primary { color: #fff; background: linear-gradient(135deg, #9b35e7, #4e138a); }
 .tp-button-secondary { color: var(--tp-text); background: rgba(var(--tp-fg-rgb),.12); }
-.tp-button-danger { color: #fff; background: linear-gradient(135deg, #e0446e, #a32d2d); }
+.tp-button-danger { color: #fff; background: linear-gradient(135deg, #c0304f, #a32d2d); }
 .tp-button-ghost { color: var(--tp-muted); background: transparent; }
 .tp-qr-box { padding: 28px; border-radius: 20px; text-align: center; background: rgba(var(--tp-card-rgb), .48); }
 .tp-fake-qr { width: 230px; height: 230px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: repeat(6, 1fr); grid-auto-rows: 1fr; gap: 3px; background: #f8fbff; border: 3px solid #9b35e7; border-radius: 18px; overflow: hidden; }
