@@ -2,7 +2,7 @@ function escapeCsvCell(value: unknown): string {
   let str: string;
   if (value === null || value === undefined) str = '';
   else if (typeof value === 'object') str = JSON.stringify(value);
-  else str = String(value);
+  else str = String(value as string | number | boolean | bigint);
   if (/[",\n]/.test(str)) return `"${str.replaceAll('"', '""')}"`;
   return str;
 }
