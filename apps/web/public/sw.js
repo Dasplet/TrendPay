@@ -1,6 +1,6 @@
 // Cachea solo assets estáticos (JS/CSS con hash, íconos, manifest) para
-// cargas más rápidas en visitas repetidas. Todo lo demás — páginas, y
-// sobre todo cualquier llamada al API — va siempre a la red. Los datos
+// cargas más rápidas en visitas repetidas. El resto — páginas, y en
+// especial cualquier llamada al API — va siempre a la red. Los datos
 // financieros nunca deben servirse desde una copia offline.
 const CACHE_NAME = 'trendpay-static-v1';
 const STATIC_PATTERNS = [

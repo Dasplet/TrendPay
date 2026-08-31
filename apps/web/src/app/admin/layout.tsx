@@ -59,7 +59,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
 
   // Espera a que zustand rehidrate desde localStorage antes de decidir si redirige.
   // Sin esto, una recarga completa manda al admin ya autenticado a /login.
-  // useAuthStore.persist no existe durante el render en el servidor — todo esto debe vivir en useEffect.
+  // useAuthStore.persist no existe durante el render en el servidor — esto debe vivir por completo en useEffect.
   useEffect(() => {
     if (useAuthStore.persist.hasHydrated()) { setHydrated(true); return; }
     return useAuthStore.persist.onFinishHydration(() => setHydrated(true));

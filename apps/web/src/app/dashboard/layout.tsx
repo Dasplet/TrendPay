@@ -32,7 +32,7 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
   // Espera a que zustand rehidrate desde localStorage antes de decidir si redirige a /login.
   // Sin esto, una recarga completa (p. ej. abrir un enlace de pago QR compartido en una pestaña nueva)
   // manda al usuario ya autenticado a /login porque el store todavía está vacío en el primer render.
-  // useAuthStore.persist no existe durante el render en el servidor — todo esto debe vivir en useEffect.
+  // useAuthStore.persist no existe durante el render en el servidor — esto debe vivir por completo en useEffect.
   useEffect(() => {
     if (useAuthStore.persist.hasHydrated()) {
       setHydrated(true);
