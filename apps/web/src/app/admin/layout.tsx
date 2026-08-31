@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   LayoutDashboard, Users, GitBranch, ArrowLeftRight,
   Landmark, Percent, Building2, AlertTriangle, FileText,
-  Settings, ClipboardList, UserCheck, LogOut, Bell, Search
+  Settings, ClipboardList, UserCheck, LogOut, Search
 } from 'lucide-react';
 import { NotificationBell } from '@/components/admin/NotificationBell';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -68,7 +68,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
   useEffect(() => {
     if (!hydrated) return;
     if (!user) { router.push('/login'); return; }
-    if (user.rol !== 'admin') { router.push('/dashboard'); return; }
+    if (user.rol !== 'admin') router.push('/dashboard');
   }, [user, hydrated]);
 
   if (!hydrated || !user) return null;
