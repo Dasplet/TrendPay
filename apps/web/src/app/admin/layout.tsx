@@ -49,7 +49,7 @@ const PAGE_TITLES: Record<string, { title: string; sub: string }> = {
   '/admin/auditoria-usuarios': { title: 'Auditoria Usuarios',  sub: 'Cambios en cuentas de usuario'           },
 };
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const router   = useRouter();
   const pathname = usePathname();
   const user     = useAuthStore(s => s.user);

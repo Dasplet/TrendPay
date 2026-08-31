@@ -69,7 +69,7 @@ export function maskPhone(phone?: string | null) {
   return `${clean.slice(0, 3)}****${clean.slice(-2)}`;
 }
 
-export function BrandLogo({ compact = false }: { compact?: boolean }) {
+export function BrandLogo({ compact = false }: Readonly<{ compact?: boolean }>) {
   const size = compact ? 28 : 36;
   return (
     <div className="tp-logo" aria-label="TrendPay">
@@ -78,7 +78,7 @@ export function BrandLogo({ compact = false }: { compact?: boolean }) {
   );
 }
 
-export function UserAvatar({ user, size = 'md' }: { user?: User | null; size?: 'sm' | 'md' | 'lg' }) {
+export function UserAvatar({ user, size = 'md' }: Readonly<{ user?: User | null; size?: 'sm' | 'md' | 'lg' }>) {
   const avatar = user?.avatarDataUrl;
   return (
     <div className={`tp-avatar tp-avatar-${size} ${avatar ? 'has-image' : ''}`}>
@@ -87,7 +87,7 @@ export function UserAvatar({ user, size = 'md' }: { user?: User | null; size?: '
   );
 }
 
-export function StatusPill({ children, tone = 'success' }: { children: ReactNode; tone?: 'success' | 'purple' | 'danger' | 'muted' }) {
+export function StatusPill({ children, tone = 'success' }: Readonly<{ children: ReactNode; tone?: 'success' | 'purple' | 'danger' | 'muted' }>) {
   return <span className={`tp-pill tp-pill-${tone}`}>{children}</span>;
 }
 
@@ -98,14 +98,14 @@ export function ThemeButton({
   href,
   tone = 'primary',
   type = 'button',
-}: {
+}: Readonly<{
   children: ReactNode;
   disabled?: boolean;
   onClick?: () => void;
   href?: string;
   tone?: 'primary' | 'secondary' | 'danger' | 'ghost';
   type?: 'button' | 'submit';
-}) {
+}>) {
   const className = `tp-button tp-button-${tone}`;
   if (href) {
     return (
@@ -128,14 +128,14 @@ export function OperationCard({
   href,
   accent = 'purple',
   selected,
-}: {
+}: Readonly<{
   icon: ReactNode;
   title: string;
   description: string;
   href?: string;
   accent?: 'purple' | 'green' | 'pink' | 'red' | 'blue';
   selected?: boolean;
-}) {
+}>) {
   const body = (
     <>
       <span className={`tp-op-icon tp-op-${accent}`}>{icon}</span>
@@ -156,7 +156,7 @@ export function OperationCard({
   return <button className={`tp-op-card ${selected ? 'is-selected' : ''}`}>{body}</button>;
 }
 
-export function UserModal({ title, subtitle, children, size = 'md' }: { title: string; subtitle?: string; children: ReactNode; size?: 'sm' | 'md' | 'lg' }) {
+export function UserModal({ title, subtitle, children, size = 'md' }: Readonly<{ title: string; subtitle?: string; children: ReactNode; size?: 'sm' | 'md' | 'lg' }>) {
   const router = useRouter();
   return (
     <div className="tp-modal-stage">
@@ -176,7 +176,7 @@ export function UserModal({ title, subtitle, children, size = 'md' }: { title: s
   );
 }
 
-export function AmountPicker({ value, setValue, options = [10000, 20000, 50000, 100000] }: { value: number; setValue: (n: number) => void; options?: number[] }) {
+export function AmountPicker({ value, setValue, options = [10000, 20000, 50000, 100000] }: Readonly<{ value: number; setValue: (n: number) => void; options?: number[] }>) {
   return (
     <div className="tp-amount-block">
       <span>Monto (COP)</span>
@@ -202,7 +202,7 @@ export function useBanksList() {
 
 const BANK_LOGO_EXTENSIONS = ['png', 'jpg'];
 
-function BankLogo({ id, nombre }: { id: string; nombre: string }) {
+function BankLogo({ id, nombre }: Readonly<{ id: string; nombre: string }>) {
   const [attempt, setAttempt] = useState(0);
   if (attempt >= BANK_LOGO_EXTENSIONS.length) {
     return <span className="tp-bank-tile-fallback">{nombre.slice(0, 2).toUpperCase()}</span>;
@@ -287,7 +287,7 @@ export function BankAccountFields({
   );
 }
 
-export function InfoDestination({ saldo, label = 'Destino: Tu billetera virtual', description = 'El dinero llega a tu saldo · No a un banco' }: { saldo?: number; label?: string; description?: string }) {
+export function InfoDestination({ saldo, label = 'Destino: Tu billetera virtual', description = 'El dinero llega a tu saldo · No a un banco' }: Readonly<{ saldo?: number; label?: string; description?: string }>) {
   return (
     <div className="tp-info-dest">
       <div className="tp-info-icon"><Wallet size={22} /></div>
@@ -306,7 +306,7 @@ export function InfoDestination({ saldo, label = 'Destino: Tu billetera virtual'
 // celdas decorativas, no tokens, sesiones ni nada que deba ser impredecible.
 const FAKE_QR_CELL_KEYS = Array.from({ length: 36 }, () => Math.random().toString(36).slice(2)); // NOSONAR
 
-export function FakeQr({ user, amount, concept }: { user?: User | null; amount?: number; concept?: string }) {
+export function FakeQr({ user, amount, concept }: Readonly<{ user?: User | null; amount?: number; concept?: string }>) {
   return (
     <div className="tp-qr-box">
       <div className="tp-fake-qr" aria-label="QR demo">
@@ -318,7 +318,7 @@ export function FakeQr({ user, amount, concept }: { user?: User | null; amount?:
   );
 }
 
-export function RealQr({ value, size = 220 }: { value: string; size?: number }) {
+export function RealQr({ value, size = 220 }: Readonly<{ value: string; size?: number }>) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -343,7 +343,7 @@ export function RealQr({ value, size = 220 }: { value: string; size?: number }) 
   );
 }
 
-export function EmptyState({ title = 'Sin movimientos', icon = <History size={40} /> }: { title?: string; icon?: ReactNode }) {
+export function EmptyState({ title = 'Sin movimientos', icon = <History size={40} /> }: Readonly<{ title?: string; icon?: ReactNode }>) {
   return (
     <div className="tp-empty">
       <div>{icon}</div>

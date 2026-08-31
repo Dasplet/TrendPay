@@ -28,7 +28,7 @@ export function useTheme() {
   return { theme, toggle };
 }
 
-export function ThemeToggle({ className = 'tp-theme-toggle', iconSize = 19 }: { className?: string; iconSize?: number }) {
+export function ThemeToggle({ className = 'tp-theme-toggle', iconSize = 19 }: Readonly<{ className?: string; iconSize?: number }>) {
   const { theme, toggle } = useTheme();
   return (
     <button

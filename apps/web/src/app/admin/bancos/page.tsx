@@ -6,7 +6,7 @@ import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, Tr, Td, Btn, Modal, Input } from '@/components/admin/ui';
 import { Landmark, Pencil, Power } from 'lucide-react';
 
-function BankLogo({ id, nombre }: { id: string; nombre: string }) {
+function BankLogo({ id, nombre }: Readonly<{ id: string; nombre: string }>) {
   const [attempt, setAttempt] = useState(0);
   const exts = ['png', 'jpg'];
   if (attempt >= exts.length) {

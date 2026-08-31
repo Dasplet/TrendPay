@@ -22,7 +22,7 @@ function ThemeSwitchButton() {
   );
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const router = useRouter();
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);

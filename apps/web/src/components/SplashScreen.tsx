@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 
-export function SplashScreen({ onDone }: { onDone: () => void }) {
+export function SplashScreen({ onDone }: Readonly<{ onDone: () => void }>) {
   const [progress, setProgress] = useState(0);
   const [phase, setPhase]       = useState(0);
   const phases = ['Iniciando TrendPay...','Verificando sesión...','Cargando tu billetera...','¡Listo!'];

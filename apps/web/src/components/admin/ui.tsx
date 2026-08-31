@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 
 // ── Metric card ──
 export function MetricCard({ icon, value, label, color = '#852EC7', bg = 'rgba(133,46,199,.15)' }:
-  { icon: ReactNode; value: string; label: string; color?: string; bg?: string }) {
+  Readonly<{ icon: ReactNode; value: string; label: string; color?: string; bg?: string }>) {
   return (
     <div style={{ background:'var(--adm-panel)', border:'1px solid rgba(133,46,199,.18)', borderRadius:16, padding:'24px 24px', position:'relative', overflow:'hidden' }}>
       <div style={{ position:'absolute', top:-20, right:-20, width:100, height:100, borderRadius:'50%', background: bg, opacity:.4 }} />
@@ -20,7 +20,7 @@ export function MetricCard({ icon, value, label, color = '#852EC7', bg = 'rgba(1
 }
 
 // ── Panel wrapper ──
-export function Panel({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+export function Panel({ children, style }: Readonly<{ children: React.ReactNode; style?: React.CSSProperties }>) {
   return (
     <div style={{ background:'var(--adm-panel)', border:'1px solid rgba(133,46,199,.18)', borderRadius:16, overflow:'hidden', ...style }}>
       {children}
@@ -29,7 +29,7 @@ export function Panel({ children, style }: { children: React.ReactNode; style?: 
 }
 
 // ── Panel header ──
-export function PanelHeader({ title, icon, actions }: { title: string; icon?: ReactNode; actions?: React.ReactNode }) {
+export function PanelHeader({ title, icon, actions }: Readonly<{ title: string; icon?: ReactNode; actions?: React.ReactNode }>) {
   return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 20px', borderBottom:'1px solid rgba(133,46,199,.12)' }}>
       <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:14, fontWeight:700, color:'var(--adm-text)' }}>
@@ -42,7 +42,7 @@ export function PanelHeader({ title, icon, actions }: { title: string; icon?: Re
 }
 
 // ── Table ──
-export function Table({ headers, children, empty }: { headers: string[]; children: React.ReactNode; empty?: string }) {
+export function Table({ headers, children, empty }: Readonly<{ headers: string[]; children: React.ReactNode; empty?: string }>) {
   return (
     <div style={{ overflowX:'auto' }}>
       <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
@@ -62,7 +62,7 @@ export function Table({ headers, children, empty }: { headers: string[]; childre
 }
 
 // ── Table row ──
-export function Tr({ children }: { children: React.ReactNode }) {
+export function Tr({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <tr className="adm-table-row" style={{ borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)' }}>
       {children}
@@ -71,12 +71,12 @@ export function Tr({ children }: { children: React.ReactNode }) {
 }
 
 // ── Td ──
-export function Td({ children, style, colSpan }: { children: React.ReactNode; style?: React.CSSProperties; colSpan?: number }) {
+export function Td({ children, style, colSpan }: Readonly<{ children: React.ReactNode; style?: React.CSSProperties; colSpan?: number }>) {
   return <td colSpan={colSpan} style={{ padding:'12px 16px', color:'rgba(var(--adm-fg-rgb),.85)', verticalAlign:'middle', ...style }}>{children}</td>;
 }
 
 // ── Status badge ──
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status }: Readonly<{ status: string }>) {
   const map: Record<string, { label: string; color: string; bg: string }> = {
     exitosa:   { label:'Exitosa',   color:'#6CC998', bg:'rgba(108,201,152,.15)' },
     pendiente: { label:'Pendiente', color:'#d4a017', bg:'rgba(212,160,23,.15)'  },
@@ -95,7 +95,7 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 // ── KYC badge ──
-export function KycBadge({ nivel }: { nivel: number }) {
+export function KycBadge({ nivel }: Readonly<{ nivel: number }>) {
   const colors = ['#d4a017','#6CC998','#852EC7'];
   return (
     <span style={{ background:`${colors[nivel]||'#AE93AA'}22`, color:colors[nivel]||'#AE93AA', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600 }}>
@@ -105,7 +105,7 @@ export function KycBadge({ nivel }: { nivel: number }) {
 }
 
 // ── Avatar ──
-export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
+export function Avatar({ name, size = 36 }: Readonly<{ name: string; size?: number }>) {
   const initials = name.split(' ').slice(0,2).map((w:string) => w[0]||'').join('').toUpperCase();
   const colors = ['#852EC7','#6CC998','#AE93AA','#C0392B','#d4a017'];
   const color  = colors[(name.codePointAt(0) ?? 0) % colors.length];
@@ -118,7 +118,7 @@ export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
 
 // ── Button ──
 export function Btn({ children, onClick, variant = 'default', disabled, style, title }:
-  { children: React.ReactNode; onClick?: () => void; variant?: 'default'|'primary'|'danger'|'ghost'; disabled?: boolean; style?: React.CSSProperties; title?: string }) {
+  Readonly<{ children: React.ReactNode; onClick?: () => void; variant?: 'default'|'primary'|'danger'|'ghost'; disabled?: boolean; style?: React.CSSProperties; title?: string }>) {
   const variants = {
     default: { background:'rgba(133,46,199,.1)', border:'1px solid rgba(133,46,199,.25)', color:'#c088f0' },
     primary: { background:'#852EC7', border:'1px solid #852EC7', color:'#fff' },
@@ -134,7 +134,7 @@ export function Btn({ children, onClick, variant = 'default', disabled, style, t
 }
 
 // ── Modal ──
-export function Modal({ open, onClose, title, children }: { open:boolean; onClose:()=>void; title:string; children:React.ReactNode }) {
+export function Modal({ open, onClose, title, children }: Readonly<{ open:boolean; onClose:()=>void; title:string; children:React.ReactNode }>) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -164,7 +164,7 @@ export function Modal({ open, onClose, title, children }: { open:boolean; onClos
 }
 
 // ── Input ──
-export function Input({ label, id, ...props }: { label?: string } & React.InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ label, id, ...props }: Readonly<{ label?: string } & React.InputHTMLAttributes<HTMLInputElement>>) {
   const generatedId = useId();
   const inputId = id || generatedId;
   return (
@@ -176,7 +176,7 @@ export function Input({ label, id, ...props }: { label?: string } & React.InputH
 }
 
 // ── Select ──
-export function Select({ label, children, id, ...props }: { label?: string; children: React.ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>) {
+export function Select({ label, children, id, ...props }: Readonly<{ label?: string; children: React.ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>>) {
   const generatedId = useId();
   const selectId = id || generatedId;
   return (
