@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
-import { Panel, PanelHeader, Avatar, Btn } from '@/components/admin/ui';
+import { Panel, PanelHeader, Avatar } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
 import { Settings2, ShieldCheck, Check } from 'lucide-react';
 

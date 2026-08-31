@@ -205,16 +205,14 @@ router.get('/qr/personal', authenticate, async (req: Request, res: Response) => 
     if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
 
     let qr = await prisma.qrCode.findFirst({ where: { walletId: wallet.id, permanente: true } });
-    if (!qr) {
-      qr = await prisma.qrCode.create({
-        data: {
-          walletId: wallet.id,
-          token: genQrToken(),
-          permanente: true,
-          expiresAt: new Date('2099-12-31'),
-        },
-      });
-    }
+    qr ??= await prisma.qrCode.create({
+      data: {
+        walletId: wallet.id,
+        token: genQrToken(),
+        permanente: true,
+        expiresAt: new Date('2099-12-31'),
+      },
+    });
 
     res.json({ ok: true, qr: { token: qr.token } });
   } catch (err: any) {

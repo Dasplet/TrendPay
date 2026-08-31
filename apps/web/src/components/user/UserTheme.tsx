@@ -31,7 +31,7 @@ import {
   X,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useAuthStore, type User } from '@/store/authStore';
+import type { User } from '@/store/authStore';
 import { banksApi } from '@/lib/api';
 
 export function fmtCOP(value?: number | string | null) {

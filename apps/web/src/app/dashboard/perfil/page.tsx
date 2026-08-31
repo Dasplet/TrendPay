@@ -25,7 +25,7 @@ export default function PerfilPage() {
 
     const reader = new FileReader();
     reader.onload = () => {
-      updateProfilePhoto(String(reader.result));
+      updateProfilePhoto(reader.result as string);
       toast.success('Foto de perfil actualizada');
     };
     reader.onerror = () => toast.error('No se pudo cargar la imagen');

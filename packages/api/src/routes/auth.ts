@@ -454,6 +454,7 @@ router.put('/change-pin', authenticate, async (req: Request, res: Response) => {
 
     res.json({ ok: true, mensaje: 'PIN actualizado correctamente' });
   } catch (err: any) {
+    logger.error('Error actualizando PIN', { err: err.message, userId: req.user?.id });
     res.status(500).json({ ok: false, mensaje: 'Error actualizando PIN' });
   }
 });
