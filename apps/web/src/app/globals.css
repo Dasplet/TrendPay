@@ -203,6 +203,12 @@ input::placeholder { color: rgba(174,147,170,.5); }
   gap: 9px;
   cursor: pointer;
 }
+/* En modo claro el mismo tinte al 6%/32% se pierde contra la página casi
+   blanca — más notorio para que siga leyéndose como botón. */
+:root[data-theme="light"] .tp-logout-button {
+  border-color: rgba(var(--tp-danger-rgb), .45);
+  background: rgba(var(--tp-danger-rgb), .1);
+}
 .tp-main-area { margin-left: 280px; width: calc(100% - 280px); min-height: 100vh; }
 .tp-user-page { min-height: 100vh; padding: 0 46px 64px; background: var(--tp-bg); }
 .tp-topbar, .tp-page-header {
@@ -285,13 +291,16 @@ input::placeholder { color: rgba(174,147,170,.5); }
 .adm-table-row:hover {
   background: rgba(133,46,199,.05);
 }
+/* Fondo opaco a propósito: es la tarjeta "hero" de saldo, debe verse
+   igual de morada y rica en ambos temas en vez de aclararse en modo
+   claro — eso rompía el contraste del texto blanco/lavanda de adentro. */
 .tp-balance-card {
   position: relative;
   overflow: hidden;
   min-height: 212px;
   padding: 36px 42px;
   border-radius: 24px;
-  background: linear-gradient(135deg, rgba(133,46,199,.30), rgba(50,17,104,.64));
+  background: linear-gradient(135deg, #4e138a, #321168);
   border: 1px solid rgba(133,46,199,.36);
   box-shadow: 0 28px 80px rgba(0,0,0,.18);
 }
@@ -411,6 +420,7 @@ input::placeholder { color: rgba(174,147,170,.5); }
 .tp-modal-stage { position: fixed; inset: 0 0 0 280px; display: flex; align-items: center; justify-content: center; padding: 32px; z-index: 50; }
 .tp-modal-blur { position: absolute; inset: 0; background: rgba(3, 0, 16, .62); backdrop-filter: blur(8px); }
 .tp-phone-modal { position: relative; z-index: 1; width: min(650px, 100%); max-height: calc(100vh - 64px); overflow-y: auto; padding: 34px 28px 26px; border-radius: 30px; background: linear-gradient(180deg, #3a176d 0%, var(--tp-bg) 100%); box-shadow: 0 36px 90px rgba(0,0,0,.42); color: var(--tp-text); }
+:root[data-theme="light"] .tp-phone-modal { background: linear-gradient(180deg, #f1e9fb 0%, var(--tp-bg2) 100%); }
 .tp-phone-sm { width: min(520px, 100%); }
 .tp-phone-lg { width: min(640px, 100%); }
 .tp-phone-notch { width: 56px; height: 5px; border-radius: 999px; background: rgba(133,46,199,.3); margin: -8px auto 24px; }
@@ -422,7 +432,9 @@ input::placeholder { color: rgba(174,147,170,.5); }
 .tp-form-field input { background: #fff; color: #1f1f1f; border: 0; border-radius: 15px; min-height: 62px; padding: 0 20px; font-size: 18px; }
 .tp-info-dest { display: flex; align-items: center; gap: 16px; padding: 17px 18px; background: rgba(133,46,199,.18); border-radius: 16px; }
 .tp-info-icon { width: 50px; height: 50px; flex: 0 0 auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(133,46,199,.50); color: #fff; }
+:root[data-theme="light"] .tp-info-icon { color: #3a0f5c; }
 .tp-info-dest strong { display: block; color: #6CC998; }
+:root[data-theme="light"] .tp-info-dest strong { color: #166534; }
 .tp-info-dest p, .tp-info-dest small { display: block; margin: 4px 0 0; color: var(--tp-muted); }
 .tp-op-card { min-height: 92px; width: 100%; text-align: left; display: flex; align-items: center; gap: 16px; padding: 18px 20px; border-radius: 16px; background: rgba(var(--tp-card-rgb), .44); border: 1px solid rgba(133,46,199,.16); color: var(--tp-text); text-decoration: none; cursor: pointer; }
 .tp-op-card.is-selected { border: 2px solid #9b35e7; background: rgba(133,46,199,.20); }
@@ -459,6 +471,7 @@ input::placeholder { color: rgba(174,147,170,.5); }
 .tp-amount-pills { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
 .tp-amount-pills button { border: 1px solid rgba(133,46,199,.18); color: var(--tp-muted); background: rgba(var(--tp-card-rgb), .70); border-radius: 999px; min-height: 40px; padding: 0 20px; font-weight: 900; cursor: pointer; }
 .tp-amount-pills button.active { color: #fff; border-color: #9b35e7; background: rgba(133,46,199,.36); }
+:root[data-theme="light"] .tp-amount-pills button.active { color: var(--tp-text); }
 .tp-warning { border-left: 3px solid #9b35e7; border-radius: 12px; background: rgba(var(--tp-card-rgb), .66); color: var(--tp-muted); padding: 14px 17px; line-height: 1.4; }
 /* See the .tp-pill-* comment above re: the darkened background stand-in. */
 .tp-balance-alert { display: flex; align-items: center; gap: 16px; padding: 18px; border-radius: 16px; border: 1px solid rgba(255,111,145,.26); background: rgba(80,14,27,.11); color: #ff6f91; }

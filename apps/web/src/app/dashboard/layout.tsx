@@ -3,24 +3,10 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LogOut, Moon, Sun } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { BrandLogo, UserAvatar, fmtCOP, userMenu } from '@/components/user/UserTheme';
-import { useTheme } from '@/components/ThemeToggle';
-
-function ThemeSwitchButton() {
-  const { theme, toggle } = useTheme();
-  return (
-    <button
-      onClick={toggle}
-      className="tp-logout-button"
-      style={{ border: '1px solid rgba(133,46,199,.28)', background: 'rgba(133,46,199,.1)', color: 'var(--tp-text)' }}
-    >
-      {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-      {theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
-    </button>
-  );
-}
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function DashboardLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const router = useRouter();
@@ -89,9 +75,9 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
           ))}
         </nav>
 
-        <div className="tp-sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <ThemeSwitchButton />
-          <button onClick={handleLogout} className="tp-logout-button">
+        <div className="tp-sidebar-footer" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ThemeToggle className="tp-theme-toggle" iconSize={19} />
+          <button onClick={handleLogout} className="tp-logout-button" style={{ flex: 1 }}>
             <LogOut size={17} />
             Cerrar sesión
           </button>
