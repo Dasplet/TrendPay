@@ -7,6 +7,7 @@ import { Bell, BellRing, CreditCard, Download, Eye, EyeOff, QrCode, Send, Trash2
 import { useAuthStore } from '@/store/authStore';
 import { notificationsApi, walletApi } from '@/lib/api';
 import { EmptyState, StatusPill, UserAvatar, compactCOP, firstName, fmtCOP } from '@/components/user/UserTheme';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const CHART_MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
 
@@ -89,6 +90,7 @@ export default function DashboardPage() {
           <h1>{firstName(user)}</h1>
         </div>
         <div className="tp-topbar-actions">
+          <ThemeToggle className="tp-icon-button" iconSize={19} />
           <div className="tp-notification-wrap">
             <button
               aria-label="Notificaciones"

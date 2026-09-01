@@ -236,6 +236,12 @@ input::placeholder { color: rgba(174,147,170,.5); }
   justify-content: center;
   cursor: pointer;
 }
+/* El mismo tinte al 35% con ícono blanco se aclara demasiado en modo
+   claro sobre la página casi blanca — texto oscuro ahí en su lugar. */
+:root[data-theme="light"] .tp-topbar-actions button,
+:root[data-theme="light"] .tp-icon-button {
+  color: var(--tp-text);
+}
 .tp-theme-toggle {
   width: 48px;
   height: 48px;

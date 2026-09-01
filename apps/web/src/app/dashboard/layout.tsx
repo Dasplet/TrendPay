@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { LogOut } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { BrandLogo, UserAvatar, fmtCOP, userMenu } from '@/components/user/UserTheme';
-import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function DashboardLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const router = useRouter();
@@ -75,9 +74,8 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
           ))}
         </nav>
 
-        <div className="tp-sidebar-footer" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <ThemeToggle className="tp-theme-toggle" iconSize={19} />
-          <button onClick={handleLogout} className="tp-logout-button" style={{ flex: 1 }}>
+        <div className="tp-sidebar-footer">
+          <button onClick={handleLogout} className="tp-logout-button">
             <LogOut size={17} />
             Cerrar sesión
           </button>
