@@ -25,12 +25,17 @@ router.post('/consignar/tarjeta', authenticate, walletLimiter, async (req: Reque
 
   const { token, monto } = parse.data;
   const reference = genCodigo('DEP');
+  // El usuario paga la comisión encima del monto que va a su billetera —
+  // igual que "Enviar" — así que Kushki cobra monto+comisión en la tarjeta,
+  // pero la billetera solo se acredita con el monto elegido.
+  const comisionValor = Math.ceil(monto * 0.03);
+  const totalACobrar = monto + comisionValor;
 
   try {
     const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.id } });
     if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
 
-    const charge = await chargeCardToken(token, monto);
+    const charge = await chargeCardToken(token, totalACobrar);
 
     const saldo = await prisma.$transaction(async (tx) => {
       const updated = await tx.wallet.update({ where: { id: wallet.id }, data: { saldo: { increment: monto } } });
@@ -44,8 +49,8 @@ router.post('/consignar/tarjeta', authenticate, walletLimiter, async (req: Reque
           categoria: 'consigna',
           descripcion: 'Consignación con tarjeta vía Kushki',
           montoBruto: monto,
-          comisionPct: 0,
-          comisionValor: 0,
+          comisionPct: 3,
+          comisionValor,
           montoNeto: monto,
           saldoAntes: saldoDespues - monto,
           saldoDespues,
@@ -111,12 +116,17 @@ router.post('/consignar/pse/iniciar', authenticate, walletLimiter, async (req: R
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Datos de pago inválidos' });
 
   const { token, monto, nombreCompleto, email, telefono } = parse.data;
+  // Mismo modelo que la tarjeta: se debita monto+comisión del banco vía PSE,
+  // pero solo `monto` queda registrado como lo que hay que acreditar cuando
+  // se confirme el pago (ver /pse/confirmar).
+  const comisionValor = Math.ceil(monto * 0.03);
+  const totalACobrar = monto + comisionValor;
 
   try {
     const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.id } });
     if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
 
-    const init = await initTransfer(token, monto, { fullName: nombreCompleto, email, phoneNumber: telefono });
+    const init = await initTransfer(token, totalACobrar, { fullName: nombreCompleto, email, phoneNumber: telefono });
 
     await prisma.kushkiPayment.create({
       data: { userId: req.user!.id, reference: token, metodo: 'pse', monto, estado: 'pendiente' },
@@ -169,6 +179,7 @@ router.post('/consignar/pse/confirmar', authenticate, walletLimiter, async (req:
     if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
 
     const monto = Number(pago.monto);
+    const comisionValor = Math.ceil(monto * 0.03);
     const saldo = await prisma.$transaction(async (tx) => {
       const updated = await tx.wallet.update({ where: { id: wallet.id }, data: { saldo: { increment: monto } } });
       const saldoDespues = Number.parseFloat(updated.saldo.toString());
@@ -181,8 +192,8 @@ router.post('/consignar/pse/confirmar', authenticate, walletLimiter, async (req:
           categoria: 'consigna',
           descripcion: 'Consignación PSE vía Kushki',
           montoBruto: monto,
-          comisionPct: 0,
-          comisionValor: 0,
+          comisionPct: 3,
+          comisionValor,
           montoNeto: monto,
           saldoAntes: saldoDespues - monto,
           saldoDespues,

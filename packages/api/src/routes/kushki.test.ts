@@ -35,6 +35,10 @@ describe('Kushki routes', () => {
       expect(res.status).toBe(200);
       expect(res.body.saldo).toBe(30000);
 
+      // La billetera recibe el monto completo; la comisión (3%, redondeada
+      // hacia arriba) se cobra encima, en la tarjeta.
+      expect(chargeCardToken).toHaveBeenCalledWith('tok_de_prueba_1234567890', 30900);
+
       const wallet = await prisma.wallet.findUnique({ where: { userId: user.id } });
       expect(Number(wallet!.saldo)).toBe(30000);
 
@@ -45,6 +49,8 @@ describe('Kushki routes', () => {
 
       const tx = await prisma.transaction.findFirst({ where: { userId: user.id, categoria: 'consigna' } });
       expect(tx).not.toBeNull();
+      expect(Number(tx!.comisionValor)).toBe(900);
+      expect(Number(tx!.montoNeto)).toBe(30000);
     });
 
     it('no acredita saldo y registra el rechazo cuando Kushki lo declina', async () => {
@@ -110,6 +116,13 @@ describe('Kushki routes', () => {
       expect(res.status).toBe(200);
       expect(res.body.redirectUrl).toContain('kushkipagos.com');
 
+      // El PSE también cobra monto+comisión al banco (30000 + 900).
+      expect(initTransfer).toHaveBeenCalledWith(
+        datosPse.token,
+        30900,
+        expect.objectContaining({ fullName: datosPse.nombreCompleto, email: datosPse.email })
+      );
+
       const wallet = await prisma.wallet.findUnique({ where: { userId: user.id } });
       expect(Number(wallet!.saldo)).toBe(0);
 
@@ -152,6 +165,10 @@ describe('Kushki routes', () => {
 
       const pago = await prisma.kushkiPayment.findUnique({ where: { reference: 'tok_pendiente' } });
       expect(pago!.estado).toBe('completado');
+
+      const tx = await prisma.transaction.findFirst({ where: { userId: user.id, categoria: 'consigna' } });
+      expect(Number(tx!.comisionValor)).toBe(900);
+      expect(Number(tx!.montoNeto)).toBe(30000);
     });
 
     it('no acredita saldo mientras el banco sigue validando', async () => {

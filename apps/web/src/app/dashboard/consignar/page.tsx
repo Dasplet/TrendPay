@@ -7,7 +7,7 @@ import { Kushki } from '@kushki/js';
 import { ArrowLeft, ArrowRight, Building2, CreditCard } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { kushkiApi } from '@/lib/api';
-import { AmountPicker, InfoDestination, OperationCard, ThemeButton, UserModal } from '@/components/user/UserTheme';
+import { AmountPicker, fmtCOP, InfoDestination, OperationCard, ThemeButton, UserModal } from '@/components/user/UserTheme';
 
 const KUSHKI_PUBLIC_MERCHANT_ID = process.env.NEXT_PUBLIC_KUSHKI_PUBLIC_MERCHANT_ID || '';
 const KUSHKI_IN_TEST_ENVIRONMENT = process.env.NEXT_PUBLIC_KUSHKI_IN_TEST_ENVIRONMENT !== 'false';
@@ -94,9 +94,18 @@ export default function ConsignarPage() {
     setPse((p) => ({ ...p, [field]: value }));
   }
 
+  // El usuario paga la comisión encima del monto elegido — igual que
+  // "Enviar" — así que Kushki cobra monto+comisión, pero la billetera solo
+  // se acredita con el monto elegido.
+  const comisionValor = Math.ceil(amount * 0.03);
+  const totalACobrar = amount + comisionValor;
+
   const consignarMutation = useMutation({
     mutationFn: async () => {
-      const token = await tokenizarTarjeta(card, amount);
+      // Kushki exige que el monto cobrado coincida con el monto con el que
+      // se tokenizó la tarjeta — hay que tokenizar por el total (monto +
+      // comisión), no por el monto neto que recibe la billetera.
+      const token = await tokenizarTarjeta(card, totalACobrar);
       return kushkiApi.consignarTarjeta(token, amount);
     },
     onSuccess: async () => {
@@ -109,7 +118,10 @@ export default function ConsignarPage() {
 
   const pseMutation = useMutation({
     mutationFn: async () => {
-      const token = await tokenizarPSE(pse, amount);
+      // Mismo motivo que la tarjeta: el token de transferencia se registra
+      // en Kushki por el total (monto + comisión), que es lo que después
+      // se debita realmente del banco.
+      const token = await tokenizarPSE(pse, totalACobrar);
       const { data } = await kushkiApi.iniciarPSE({
         token,
         monto: amount,
@@ -130,6 +142,12 @@ export default function ConsignarPage() {
   const formCompletoTarjeta = amount > 0 && card.name && card.number.length >= 15 && card.expiryMonth && card.expiryYear && card.cvc.length >= 3;
   const formCompletoPse = amount > 0 && pse.bankId && pse.documentNumber.length >= 5 && pse.email && pse.nombreCompleto.length >= 3;
 
+  const resumenComision = amount > 0 && (
+    <p className="tp-modal-label" style={{ textAlign: 'center' }}>
+      Comisión (3%): {fmtCOP(comisionValor)} · Total a cobrar: <strong>{fmtCOP(totalACobrar)}</strong>
+    </p>
+  );
+
   return (
     <UserModal title="Consignar a mi billetera" subtitle="Paga con tarjeta o PSE">
       <div className="tp-modal-content">
@@ -138,6 +156,7 @@ export default function ConsignarPage() {
         {paso === 'monto' && (
           <>
             <AmountPicker value={amount} setValue={setAmount} />
+            {resumenComision}
             <ThemeButton disabled={amount <= 0} onClick={() => setPaso('metodo')}>
               <ArrowRight size={18} /> Continuar
             </ThemeButton>
@@ -204,6 +223,7 @@ export default function ConsignarPage() {
                 <input value={card.cvc} onChange={(e) => setCardField('cvc', e.target.value.replaceAll(/\D/g, ''))} placeholder="123" inputMode="numeric" maxLength={4} />
               </label>
             </div>
+            {resumenComision}
             <div style={{ display: 'flex', gap: 12 }}>
               <ThemeButton tone="ghost" onClick={() => setPaso('metodo')}>
                 <ArrowLeft size={18} /> Atrás
@@ -250,6 +270,7 @@ export default function ConsignarPage() {
               <span>Correo electrónico</span>
               <input value={pse.email} onChange={(e) => setPseField('email', e.target.value)} placeholder="tucorreo@email.com" type="email" />
             </label>
+            {resumenComision}
             <div style={{ display: 'flex', gap: 12 }}>
               <ThemeButton tone="ghost" onClick={() => setPaso('metodo')}>
                 <ArrowLeft size={18} /> Atrás
