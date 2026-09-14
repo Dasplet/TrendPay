@@ -107,6 +107,9 @@ export const withdrawalsApi = {
 
 export const kushkiApi = {
   consignarTarjeta: (token: string, monto: number) => api.post('/kushki/consignar/tarjeta', { token, monto }),
+  iniciarPSE: (data: { token: string; monto: number; documentType: string; documentNumber: string; email: string; nombreCompleto: string; telefono?: string }) =>
+    api.post('/kushki/consignar/pse/iniciar', data),
+  confirmarPSE: (token: string) => api.post('/kushki/consignar/pse/confirmar', { token }),
 };
 
 export const notificationsApi = {

@@ -128,6 +128,7 @@ export function OperationCard({
   href,
   accent = 'purple',
   selected,
+  onClick,
 }: Readonly<{
   icon: ReactNode;
   title: string;
@@ -135,6 +136,7 @@ export function OperationCard({
   href?: string;
   accent?: 'purple' | 'green' | 'pink' | 'red' | 'blue';
   selected?: boolean;
+  onClick?: () => void;
 }>) {
   const body = (
     <>
@@ -153,7 +155,11 @@ export function OperationCard({
       </Link>
     );
   }
-  return <button className={`tp-op-card ${selected ? 'is-selected' : ''}`}>{body}</button>;
+  return (
+    <button type="button" className={`tp-op-card ${selected ? 'is-selected' : ''}`} onClick={onClick}>
+      {body}
+    </button>
+  );
 }
 
 export function UserModal({ title, subtitle, children, size = 'md' }: Readonly<{ title: string; subtitle?: string; children: ReactNode; size?: 'sm' | 'md' | 'lg' }>) {
