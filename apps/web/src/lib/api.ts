@@ -105,9 +105,8 @@ export const withdrawalsApi = {
   history: () => api.get('/withdrawals/me'),
 };
 
-export const rapydApi = {
-  consignar: (monto: number) => api.post('/rapyd/consignar', { monto }),
-  verificar: (reference: string) => api.get(`/rapyd/verificar/${reference}`),
+export const kushkiApi = {
+  consignarTarjeta: (token: string, monto: number) => api.post('/kushki/consignar/tarjeta', { token, monto }),
 };
 
 export const notificationsApi = {

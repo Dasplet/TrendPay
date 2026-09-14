@@ -25,7 +25,7 @@ import withdrawalsRouter from './routes/withdrawals';
 import referralsRouter from './routes/referrals';
 import adminRouter     from './routes/admin';
 import userAuditRouter from './routes/userAudit';
-import rapydRouter     from './routes/rapyd';
+import kushkiRouter    from './routes/kushki';
 import bankAccountsRouter from './routes/bankAccounts';
 
 export const prisma = new PrismaClient({
@@ -76,11 +76,6 @@ app.use(cors({
 // ── Compression ──
 app.use(compression());
 
-// ── Rapyd webhook: debe montarse ANTES del body parser global ──
-// Rapyd firma el body crudo; si express.json() lo parsea primero, la
-// verificación de firma en /api/rapyd/webhook nunca coincide.
-app.use('/api/rapyd', rapydRouter);
-
 // ── Body parsing ──
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
@@ -110,7 +105,7 @@ app.use('/api/bank-accounts', bankAccountsRouter);
 app.use('/api/referrals',   referralsRouter);
 app.use('/api/admin',       adminRouter);
 app.use('/api/user-audit',  userAuditRouter);
-// /api/rapyd se monta más arriba, antes del body parser (ver nota del webhook)
+app.use('/api/kushki',      kushkiRouter);
 
 // ── Serve frontend static files ──
 const publicPath = path.join(__dirname, '../../web/dist');

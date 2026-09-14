@@ -189,7 +189,7 @@ export default function AdminDashboard() {
         <Panel>
           <PanelHeader title="Estado del sistema" icon={<Activity size={16} />} />
           <div style={{ padding:'8px 0' }}>
-            {[['API Backend'],['Base de datos'],['ACH Colombia'],['Rapyd'],['PSE Débito']].map(([n])=>(
+            {[['API Backend'],['Base de datos'],['ACH Colombia'],['Kushki'],['PSE Débito']].map(([n])=>(
               <div key={n} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'13px 20px', borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)' }}>
                 <span style={{ fontSize:13, color:'rgba(var(--adm-fg-rgb),.75)' }}>{n}</span>
                 <span style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, fontWeight:600, color:'#6CC998' }}>

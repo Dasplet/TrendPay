@@ -45,6 +45,7 @@ model User {
   referralReceived Referral?      @relation("ReferidoRel")
   withdrawals     Withdrawal[]
   rapydPayments   RapydPayment[]
+  kushkiPayments  KushkiPayment[]
   transactions    Transaction[]
 
   @@map("users")
@@ -252,6 +253,25 @@ model RapydPayment {
   user User @relation(fields: [userId], references: [id])
 
   @@map("rapyd_payments")
+}
+
+// Consignaciones vía Kushki — reemplaza a Rapyd. metodo distingue el flujo
+// (PSE se confirma por ticketNumber tras el redirect al banco; tarjeta se
+// cobra de inmediato con el token que entrega Kushki.js en el navegador).
+model KushkiPayment {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  reference     String   @unique
+  metodo        String
+  ticketNumber  String?  @unique @map("ticket_number")
+  monto         Decimal  @db.Decimal(18, 2)
+  estado        String   @default("pendiente")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("kushki_payments")
 }
 
 // ══════════════════════════════════════

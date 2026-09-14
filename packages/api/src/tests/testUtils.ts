@@ -8,6 +8,7 @@ export async function limpiarBaseDeDatos() {
   await prisma.qrCode.deleteMany();
   await prisma.withdrawal.deleteMany();
   await prisma.rapydPayment.deleteMany();
+  await prisma.kushkiPayment.deleteMany();
   await prisma.bankAccount.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.userAuditLog.deleteMany();
