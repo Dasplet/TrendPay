@@ -5,7 +5,7 @@
     "buildCommand": "npm run -w @trendpay/database generate && npm run -w @trendpay/api build"
   },
   "deploy": {
-    "startCommand": "cd packages/api && npm run start",
+    "startCommand": "npm run -w @trendpay/database migrate:prod && cd packages/api && npm run start",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
