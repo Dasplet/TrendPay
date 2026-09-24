@@ -462,8 +462,10 @@ input::placeholder { color: rgba(174,147,170,.5); }
 .tp-op-copy strong { display: block; font-size: 18px; }
 .tp-op-copy small { color: var(--tp-muted); display: block; margin-top: 4px; }
 .tp-op-chevron { color: var(--tp-muted); }
-.tp-button { min-height: 72px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 11px; font-size: 20px; font-weight: 950; text-decoration: none; cursor: pointer; transition: .18s ease; }
+.tp-button { min-height: 72px; padding: 0 26px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 11px; font-size: 20px; font-weight: 950; text-decoration: none; cursor: pointer; transition: .18s ease; }
 .tp-button:disabled { cursor: not-allowed; }
+.tp-button-row { display: flex; gap: 12px; }
+.tp-button-row > * { flex: 1; }
 .tp-button-primary { color: #fff; background: linear-gradient(135deg, #9b35e7, #4e138a); }
 .tp-button-primary:disabled { color: rgba(255,255,255,.6); background: rgba(133,46,199,.3); }
 .tp-button-secondary { color: var(--tp-text); background: rgba(var(--tp-fg-rgb),.12); }

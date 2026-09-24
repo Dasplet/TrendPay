@@ -182,7 +182,7 @@ export default function ConsignarPage() {
               selected={metodo === 'pse'}
               onClick={() => setMetodo('pse')}
             />
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div className="tp-button-row">
               <ThemeButton tone="ghost" onClick={() => setPaso('monto')}>
                 <ArrowLeft size={18} /> Atrás
               </ThemeButton>
@@ -224,7 +224,7 @@ export default function ConsignarPage() {
               </label>
             </div>
             {resumenComision}
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div className="tp-button-row">
               <ThemeButton tone="ghost" onClick={() => setPaso('metodo')}>
                 <ArrowLeft size={18} /> Atrás
               </ThemeButton>
@@ -271,7 +271,7 @@ export default function ConsignarPage() {
               <input value={pse.email} onChange={(e) => setPseField('email', e.target.value)} placeholder="tucorreo@email.com" type="email" />
             </label>
             {resumenComision}
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div className="tp-button-row">
               <ThemeButton tone="ghost" onClick={() => setPaso('metodo')}>
                 <ArrowLeft size={18} /> Atrás
               </ThemeButton>
