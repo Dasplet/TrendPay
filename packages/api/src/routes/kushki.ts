@@ -4,7 +4,8 @@ import { prisma } from '../index';
 import { authenticate } from '../middleware/auth';
 import { walletLimiter } from '../middleware/rateLimiter';
 import { genCodigo } from '../utils/security';
-import { chargeCardToken, initTransfer, getTransferStatus, KushkiError } from '../utils/kushki';
+import { chargeCardToken, initTransfer, KushkiError } from '../utils/kushki';
+import { resolverPagoPse } from '../utils/kushkiPayments';
 import { logger } from '../utils/logger';
 
 const router = Router();
@@ -164,63 +165,40 @@ router.post('/consignar/pse/confirmar', authenticate, walletLimiter, async (req:
       return res.json({ ok: true, estado: pago.estado });
     }
 
-    const status = await getTransferStatus(token);
-
-    if (status.estado === 'pendiente') {
-      return res.json({ ok: true, estado: 'pendiente' });
-    }
-
-    if (status.estado === 'rechazada') {
-      await prisma.kushkiPayment.update({ where: { id: pago.id }, data: { estado: 'rechazado' } });
-      return res.json({ ok: true, estado: 'rechazado' });
-    }
-
-    const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.id } });
-    if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
-
-    const monto = Number(pago.monto);
-    const comisionValor = Math.ceil(monto * 0.03);
-    const saldo = await prisma.$transaction(async (tx) => {
-      const updated = await tx.wallet.update({ where: { id: wallet.id }, data: { saldo: { increment: monto } } });
-      const saldoDespues = Number.parseFloat(updated.saldo.toString());
-
-      await tx.transaction.create({
-        data: {
-          walletId: wallet.id,
-          userId: req.user!.id,
-          codigo: genCodigo('DEP'),
-          categoria: 'consigna',
-          descripcion: 'Consignación PSE vía Kushki',
-          montoBruto: monto,
-          comisionPct: 3,
-          comisionValor,
-          montoNeto: monto,
-          saldoAntes: saldoDespues - monto,
-          saldoDespues,
-          status: 'exitosa',
-        },
-      });
-
-      await tx.kushkiPayment.update({ where: { id: pago.id }, data: { estado: 'completado', ticketNumber: status.ticketNumber } });
-
-      await tx.notification.create({
-        data: {
-          userId: req.user!.id,
-          tipo: 'ok',
-          titulo: 'Consignación exitosa',
-          mensaje: `Se acreditaron ${monto.toLocaleString('es-CO')} COP a tu billetera`,
-        },
-      });
-
-      return saldoDespues;
-    });
-
-    logger.info('Consignación con PSE acreditada', { token, ticketNumber: status.ticketNumber, userId: req.user!.id });
-    res.json({ ok: true, estado: 'completado', saldo });
+    const resultado = await resolverPagoPse(pago);
+    res.json({ ok: true, ...resultado });
   } catch (err: any) {
     if (err instanceof KushkiError) return res.status(502).json({ ok: false, mensaje: err.message });
     logger.error('Error confirmando PSE', { err: err.message, userId: req.user?.id });
     res.status(500).json({ ok: false, mensaje: 'Error confirmando el pago' });
+  }
+});
+
+// ══ GET /api/kushki/consignaciones ══
+// Historial de consignaciones del usuario. Para un PSE pendiente se devuelve
+// el token (solo a su dueño) para que pueda pedir "Verificar ahora" sin
+// depender de haber vuelto del banco.
+router.get('/consignaciones', authenticate, async (req: Request, res: Response) => {
+  try {
+    const pagos = await prisma.kushkiPayment.findMany({
+      where: { userId: req.user!.id },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+    res.json({
+      ok: true,
+      consignaciones: pagos.map((p) => ({
+        id: p.id,
+        metodo: p.metodo,
+        estado: p.estado,
+        monto: Number(p.monto),
+        createdAt: p.createdAt,
+        token: p.metodo === 'pse' && p.estado === 'pendiente' ? p.reference : undefined,
+      })),
+    });
+  } catch (err: any) {
+    logger.error('Error consultando consignaciones', { err: err.message, userId: req.user?.id });
+    res.status(500).json({ ok: false, mensaje: 'Error consultando tus consignaciones' });
   }
 });
 

@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../index';
 import { authenticate, requireAdmin } from '../middleware/auth';
+import { conciliarPagosPendientes } from '../utils/kushkiPayments';
 
 const router = Router();
 
@@ -270,6 +271,47 @@ router.get('/audit', authenticate, requireAdmin, async (_req: Request, res: Resp
     const logs = await prisma.auditLog.findMany({ take:100, orderBy:{ createdAt:'desc' }, include:{ user:{ select:{ nombre:true, cedula:true } } } });
     res.json({ ok: true, logs });
   } catch (e: any) { res.status(500).json({ ok:false, mensaje:e.message }); }
+});
+
+// ══ GET /api/admin/kushki/pagos ══
+// Consignaciones por Kushki (tarjeta y PSE) con totales por estado.
+router.get('/kushki/pagos', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const estado = typeof req.query.estado === 'string' && req.query.estado ? req.query.estado : undefined;
+    const [pagos, totales] = await Promise.all([
+      prisma.kushkiPayment.findMany({
+        where: estado ? { estado } : {},
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+        include: { user: { select: { nombre: true, cedula: true } } },
+      }),
+      prisma.kushkiPayment.groupBy({ by: ['estado'], _count: { _all: true }, _sum: { monto: true } }),
+    ]);
+
+    res.json({
+      ok: true,
+      totales: totales.map((t) => ({ estado: t.estado, cantidad: t._count._all, monto: Number(t._sum.monto ?? 0) })),
+      pagos: pagos.map((p) => ({
+        id: p.id,
+        metodo: p.metodo,
+        estado: p.estado,
+        monto: Number(p.monto),
+        ticketNumber: p.ticketNumber,
+        createdAt: p.createdAt,
+        usuario: p.user.nombre,
+        cedula: p.user.cedula,
+      })),
+    });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// ══ POST /api/admin/kushki/conciliar ══
+// Fuerza ahora la misma conciliación que corre cada 5 minutos.
+router.post('/kushki/conciliar', authenticate, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const resumen = await conciliarPagosPendientes({ minEdadMin: 0 });
+    res.json({ ok: true, resumen });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 
 export default router;

@@ -7,6 +7,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
 import { walletApi } from '@/lib/api';
 import { InfoDestination, RealQr, ThemeButton, UserModal } from '@/components/user/UserTheme';
+import { NfcTagWriter } from '@/components/user/NfcTagWriter';
 
 interface GeneratedQr {
   token: string;
@@ -70,6 +71,7 @@ export default function CobrarQrPage() {
               <input readOnly value={personalUrl} onFocus={(e) => e.target.select()} />
             </label>
             <ThemeButton onClick={() => copyLink(personalUrl)}><Copy size={18} /> Copiar enlace</ThemeButton>
+            <NfcTagWriter url={personalUrl} label="Grabar mi QR en una etiqueta NFC" />
           </>
         )}
 
@@ -100,6 +102,7 @@ export default function CobrarQrPage() {
               <input readOnly value={qrUrl} onFocus={(e) => e.target.select()} />
             </label>
             <ThemeButton onClick={() => copyLink(qrUrl)}><Copy size={18} /> Copiar enlace</ThemeButton>
+            <NfcTagWriter url={qrUrl} label="Grabar este cobro en una etiqueta NFC" />
             <ThemeButton tone="secondary" onClick={() => setQr(null)}><RefreshCw size={18} /> Generar otro QR</ThemeButton>
           </>
         )}

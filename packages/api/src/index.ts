@@ -15,6 +15,7 @@ import { PrismaClient } from '@prisma/client';
 import { logger } from './utils/logger';
 import { apiLimiter } from './middleware/rateLimiter';
 import { errorHandler } from './middleware/errorHandler';
+import { iniciarConciliacionKushki } from './utils/kushkiPayments';
 
 // Routes
 import authRouter      from './routes/auth';
@@ -151,6 +152,7 @@ async function start() {
     app.listen(PORT, '0.0.0.0', () => {
       logger.info(`🚀 TrendPay API corriendo en http://localhost:${PORT}`);
       logger.info(`🏥 Health check: http://localhost:${PORT}/health`);
+      iniciarConciliacionKushki();
     });
   } catch (err: any) {
     logger.error('❌ No se pudo iniciar el servidor', { err: err.message, stack: err.stack });

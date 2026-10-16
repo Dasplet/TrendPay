@@ -21,6 +21,7 @@ import {
   Lock,
   LogOut,
   Mail,
+  Nfc,
   QrCode,
   Search,
   Send,
@@ -366,6 +367,7 @@ export const userMenu = [
   { section: 'Operaciones', items: [
     { href: '/dashboard/consignar', label: 'Consignar', icon: <QrCode size={19} /> },
     { href: '/dashboard/cobrar-qr', label: 'Cobrar QR', icon: <QrCode size={19} /> },
+    { href: '/dashboard/pagar-nfc', label: 'Pagar con NFC', icon: <Nfc size={19} /> },
     { href: '/dashboard/enviar', label: 'Enviar', icon: <Send size={19} /> },
     { href: '/dashboard/retirar-banco', label: 'Retirar a banco', icon: <Building2 size={19} /> },
   ]},

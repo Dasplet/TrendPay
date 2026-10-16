@@ -110,6 +110,7 @@ export const kushkiApi = {
   iniciarPSE: (data: { token: string; monto: number; documentType: string; documentNumber: string; email: string; nombreCompleto: string; telefono?: string }) =>
     api.post('/kushki/consignar/pse/iniciar', data),
   confirmarPSE: (token: string) => api.post('/kushki/consignar/pse/confirmar', { token }),
+  consignaciones: () => api.get('/kushki/consignaciones'),
 };
 
 export const notificationsApi = {
@@ -134,4 +135,6 @@ export const adminApi = {
   banks:        () => api.get('/admin/banks'),
   createBank:   (data: any) => api.post('/admin/banks', data),
   updateBank:   (id: string, data: any) => api.put(`/admin/banks/${id}`, data),
+  kushkiPagos:     (params?: any) => api.get('/admin/kushki/pagos', { params }),
+  kushkiConciliar: () => api.post('/admin/kushki/conciliar'),
 };

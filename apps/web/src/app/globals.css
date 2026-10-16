@@ -464,6 +464,9 @@ input::placeholder { color: rgba(174,147,170,.5); }
 .tp-op-chevron { color: var(--tp-muted); }
 .tp-button { min-height: 72px; padding: 0 26px; border: 0; border-radius: 16px; display: flex; align-items: center; justify-content: center; gap: 11px; font-size: 20px; font-weight: 950; text-decoration: none; cursor: pointer; transition: .18s ease; }
 .tp-button:disabled { cursor: not-allowed; }
+.tp-link-button { background: transparent; border: 0; padding: 4px 0; display: inline-flex; align-items: center; gap: 6px; color: #c088f0; font-size: 13px; font-weight: 800; cursor: pointer; }
+.tp-link-button:disabled { opacity: .5; cursor: not-allowed; }
+:root[data-theme="light"] .tp-link-button { color: #5a1a8a; }
 .tp-button-row { display: flex; gap: 12px; }
 .tp-button-row > * { flex: 1; }
 .tp-button-primary { color: #fff; background: linear-gradient(135deg, #9b35e7, #4e138a); }

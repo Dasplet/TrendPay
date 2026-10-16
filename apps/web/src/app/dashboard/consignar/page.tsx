@@ -160,6 +160,7 @@ export default function ConsignarPage() {
             <ThemeButton disabled={amount <= 0} onClick={() => setPaso('metodo')}>
               <ArrowRight size={18} /> Continuar
             </ThemeButton>
+            <ThemeButton tone="ghost" href="/dashboard/consignaciones">Ver mis consignaciones</ThemeButton>
           </>
         )}
 
