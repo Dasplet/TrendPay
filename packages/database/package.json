@@ -6,6 +6,7 @@
     "migrate": "prisma migrate dev",
     "migrate:prod": "prisma migrate deploy",
     "seed": "ts-node prisma/seed.ts",
+    "crear-empresa": "ts-node prisma/crear-empresa.ts",
     "studio": "prisma studio"
   },
   "dependencies": {
