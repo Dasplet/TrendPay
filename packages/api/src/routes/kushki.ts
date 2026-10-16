@@ -7,6 +7,7 @@ import { genCodigo } from '../utils/security';
 import { chargeCardToken, initTransfer, KushkiError } from '../utils/kushki';
 import { resolverPagoPse } from '../utils/kushkiPayments';
 import { logger } from '../utils/logger';
+import { conCuenta, miembrosDe, saldoVisible } from '../utils/cuentas';
 
 const router = Router();
 
@@ -20,7 +21,7 @@ const consignarSchema = z.object({
   monto: z.number().int().positive().min(1000),
 });
 
-router.post('/consignar/tarjeta', authenticate, walletLimiter, async (req: Request, res: Response) => {
+router.post('/consignar/tarjeta', authenticate, walletLimiter, conCuenta('recargar'), async (req: Request, res: Response) => {
   const parse = consignarSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Datos de pago inválidos' });
 
@@ -33,7 +34,7 @@ router.post('/consignar/tarjeta', authenticate, walletLimiter, async (req: Reque
   const totalACobrar = monto + comisionValor;
 
   try {
-    const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.id } });
+    const wallet = await prisma.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
     if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
 
     const charge = await chargeCardToken(token, totalACobrar);
@@ -83,7 +84,7 @@ router.post('/consignar/tarjeta', authenticate, walletLimiter, async (req: Reque
     });
 
     logger.info('Consignación con tarjeta acreditada', { reference, ticketNumber: charge.ticketNumber, userId: req.user!.id });
-    res.json({ ok: true, saldo });
+    res.json({ ok: true, saldo: saldoVisible(req.cuenta, saldo) });
   } catch (err: any) {
     if (err instanceof KushkiError) {
       await prisma.kushkiPayment.create({
@@ -112,7 +113,7 @@ const pseIniciarSchema = z.object({
   telefono: z.string().optional(),
 });
 
-router.post('/consignar/pse/iniciar', authenticate, walletLimiter, async (req: Request, res: Response) => {
+router.post('/consignar/pse/iniciar', authenticate, walletLimiter, conCuenta('recargar'), async (req: Request, res: Response) => {
   const parse = pseIniciarSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Datos de pago inválidos' });
 
@@ -124,7 +125,7 @@ router.post('/consignar/pse/iniciar', authenticate, walletLimiter, async (req: R
   const totalACobrar = monto + comisionValor;
 
   try {
-    const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.id } });
+    const wallet = await prisma.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
     if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
 
     const init = await initTransfer(token, totalACobrar, { fullName: nombreCompleto, email, phoneNumber: telefono });
@@ -151,7 +152,7 @@ router.post('/consignar/pse/iniciar', authenticate, walletLimiter, async (req: R
 // devuelve el estado guardado sin volver a tocar la billetera.
 const pseConfirmarSchema = z.object({ token: z.string().min(10) });
 
-router.post('/consignar/pse/confirmar', authenticate, walletLimiter, async (req: Request, res: Response) => {
+router.post('/consignar/pse/confirmar', authenticate, walletLimiter, conCuenta('recargar'), async (req: Request, res: Response) => {
   const parse = pseConfirmarSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Token inválido' });
 
@@ -166,7 +167,7 @@ router.post('/consignar/pse/confirmar', authenticate, walletLimiter, async (req:
     }
 
     const resultado = await resolverPagoPse(pago);
-    res.json({ ok: true, ...resultado });
+    res.json({ ok: true, ...resultado, saldo: saldoVisible(req.cuenta, resultado.saldo) });
   } catch (err: any) {
     if (err instanceof KushkiError) return res.status(502).json({ ok: false, mensaje: err.message });
     logger.error('Error confirmando PSE', { err: err.message, userId: req.user?.id });
@@ -175,13 +176,15 @@ router.post('/consignar/pse/confirmar', authenticate, walletLimiter, async (req:
 });
 
 // ══ GET /api/kushki/consignaciones ══
-// Historial de consignaciones del usuario. Para un PSE pendiente se devuelve
-// el token (solo a su dueño) para que pueda pedir "Verificar ahora" sin
-// depender de haber vuelto del banco.
-router.get('/consignaciones', authenticate, async (req: Request, res: Response) => {
+// Historial de consignaciones de la billetera (incluye las de las subcuentas
+// que la comparten). Para un PSE pendiente se devuelve el token solo a quien
+// lo inició, para que pueda pedir "Verificar ahora" sin depender de haber
+// vuelto del banco.
+router.get('/consignaciones', authenticate, conCuenta(), async (req: Request, res: Response) => {
   try {
+    const miembros = await miembrosDe(req.cuenta!.titularId);
     const pagos = await prisma.kushkiPayment.findMany({
-      where: { userId: req.user!.id },
+      where: { userId: { in: miembros } },
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
@@ -193,7 +196,7 @@ router.get('/consignaciones', authenticate, async (req: Request, res: Response) 
         estado: p.estado,
         monto: Number(p.monto),
         createdAt: p.createdAt,
-        token: p.metodo === 'pse' && p.estado === 'pendiente' ? p.reference : undefined,
+        token: p.metodo === 'pse' && p.estado === 'pendiente' && p.userId === req.user!.id ? p.reference : undefined,
       })),
     });
   } catch (err: any) {

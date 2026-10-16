@@ -40,7 +40,9 @@ export async function resolverPagoPse(pago: KushkiPayment): Promise<ResultadoPag
       return { estado: (actual?.estado as EstadoPago) ?? 'pendiente' };
     }
 
-    const wallet = await tx.wallet.findUnique({ where: { userId: pago.userId } });
+    // Si quien consignó es una subcuenta, el dinero va a la billetera de su padre.
+    const pagador = await tx.user.findUnique({ where: { id: pago.userId }, select: { cuentaPadreId: true } });
+    const wallet = await tx.wallet.findUnique({ where: { userId: pagador?.cuentaPadreId ?? pago.userId } });
     if (!wallet) throw new Error('Billetera no encontrada');
 
     const updated = await tx.wallet.update({ where: { id: wallet.id }, data: { saldo: { increment: monto } } });

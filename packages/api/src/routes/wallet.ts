@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth';
 import { walletLimiter } from '../middleware/rateLimiter';
 import { genCodigo, genQrToken } from '../utils/security';
 import { logger } from '../utils/logger';
+import { conCuenta, saldoVisible } from '../utils/cuentas';
 
 const router = Router();
 
@@ -25,9 +26,9 @@ function mapTransaction(t: any) {
 }
 
 // ══ GET /api/wallet/balance ══
-router.get('/balance', authenticate, async (req: Request, res: Response) => {
+router.get('/balance', authenticate, conCuenta('verSaldo'), async (req: Request, res: Response) => {
   try {
-    const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.id } });
+    const wallet = await prisma.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
     if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
     res.json({ ok: true, saldo: Number.parseFloat(wallet.saldo.toString()), walletId: wallet.id });
   } catch (err: any) {
@@ -37,13 +38,17 @@ router.get('/balance', authenticate, async (req: Request, res: Response) => {
 });
 
 // ══ GET /api/wallet/history ══
-router.get('/history', authenticate, async (req: Request, res: Response) => {
+// Movimientos de la billetera (compartida, en el caso de subcuentas empresariales).
+router.get('/history', authenticate, conCuenta(), async (req: Request, res: Response) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 20, 100);
     const offset = Number(req.query.offset) || 0;
 
+    const wallet = await prisma.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
+    if (!wallet) return res.json({ ok: true, transacciones: [] });
+
     const transactions = await prisma.transaction.findMany({
-      where: { userId: req.user!.id },
+      where: { walletId: wallet.id },
       orderBy: { createdAt: 'desc' },
       take: limit,
       skip: offset,
@@ -63,7 +68,7 @@ const enviarSchema = z.object({
   nota: z.string().max(200).optional(),
 });
 
-router.post('/enviar', authenticate, walletLimiter, async (req: Request, res: Response) => {
+router.post('/enviar', authenticate, walletLimiter, conCuenta('enviar'), async (req: Request, res: Response) => {
   const parse = enviarSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ ok: false, mensaje: 'Destino y monto (mínimo $1.000) son requeridos' });
@@ -75,7 +80,8 @@ router.post('/enviar', authenticate, walletLimiter, async (req: Request, res: Re
       where: { OR: [{ celular: destino }, { correo: { equals: destino, mode: 'insensitive' } }, { cedula: destino }] },
     });
     if (!receptor) throw new ApiError(404, 'No encontramos un usuario con ese celular, correo o cédula');
-    if (receptor.id === req.user!.id) throw new ApiError(400, 'No puedes enviarte dinero a ti mismo');
+    const receptorTitularId = receptor.cuentaPadreId ?? receptor.id;
+    if (receptorTitularId === req.cuenta!.titularId) throw new ApiError(400, 'No puedes enviarte dinero a ti mismo');
     if (receptor.bloqueado) throw new ApiError(400, 'El destinatario tiene la cuenta bloqueada');
 
     const comisionValor = Math.ceil(monto * 0.03);
@@ -86,7 +92,7 @@ router.post('/enviar', authenticate, walletLimiter, async (req: Request, res: Re
     const descripcionRecibo = `Recibido de ${req.user!.nombre}${notaSuffix}`;
 
     const nuevoSaldo = await prisma.$transaction(async (tx) => {
-      const senderWallet = await tx.wallet.findUnique({ where: { userId: req.user!.id } });
+      const senderWallet = await tx.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
       if (!senderWallet) throw new ApiError(404, 'Billetera no encontrada');
 
       const debit = await tx.wallet.updateMany({
@@ -99,7 +105,7 @@ router.post('/enviar', authenticate, walletLimiter, async (req: Request, res: Re
       const senderSaldoDespues = Number.parseFloat(senderAfter!.saldo.toString());
       const senderSaldoAntes = senderSaldoDespues + total;
 
-      const receptorWalletBefore = await tx.wallet.findUnique({ where: { userId: receptor.id } });
+      const receptorWalletBefore = await tx.wallet.findUnique({ where: { userId: receptorTitularId } });
       if (!receptorWalletBefore) throw new ApiError(404, 'El destinatario no tiene billetera activa');
 
       const receptorWalletAfter = await tx.wallet.update({
@@ -156,7 +162,7 @@ router.post('/enviar', authenticate, walletLimiter, async (req: Request, res: Re
     });
 
     logger.info('Envío P2P exitoso', { userId: req.user!.id, receptorId: receptor.id, monto });
-    res.json({ ok: true, mensaje: 'Envío realizado', saldo: nuevoSaldo });
+    res.json({ ok: true, mensaje: 'Envío realizado', saldo: saldoVisible(req.cuenta, nuevoSaldo) });
   } catch (err: any) {
     if (err instanceof ApiError) return res.status(err.status).json({ ok: false, mensaje: err.message });
     logger.error('Error en envío P2P', { err: err.message, userId: req.user?.id });
@@ -170,12 +176,13 @@ const qrGenerarSchema = z.object({
   concepto: z.string().max(200).optional(),
 });
 
-router.post('/qr/generar', authenticate, walletLimiter, async (req: Request, res: Response) => {
+// Cobrar por QR es una forma de ingresar dinero, así que exige el permiso de recarga.
+router.post('/qr/generar', authenticate, walletLimiter, conCuenta('recargar'), async (req: Request, res: Response) => {
   const parse = qrGenerarSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Datos de QR inválidos' });
 
   try {
-    const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.id } });
+    const wallet = await prisma.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
     if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
 
     const qr = await prisma.qrCode.create({
@@ -199,9 +206,9 @@ router.post('/qr/generar', authenticate, walletLimiter, async (req: Request, res
 // ══ GET /api/wallet/qr/personal ══
 // QR fijo y único por usuario: no expira, no se marca "usado" y siempre es de
 // monto libre (quien paga decide cuánto). Se crea la primera vez que se pide.
-router.get('/qr/personal', authenticate, async (req: Request, res: Response) => {
+router.get('/qr/personal', authenticate, conCuenta('recargar'), async (req: Request, res: Response) => {
   try {
-    const wallet = await prisma.wallet.findUnique({ where: { userId: req.user!.id } });
+    const wallet = await prisma.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
     if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
 
     let qr = await prisma.qrCode.findFirst({ where: { walletId: wallet.id, permanente: true } });
@@ -222,7 +229,7 @@ router.get('/qr/personal', authenticate, async (req: Request, res: Response) => 
 });
 
 // ══ GET /api/wallet/qr/:token ══
-router.get('/qr/:token', authenticate, async (req: Request, res: Response) => {
+router.get('/qr/:token', authenticate, conCuenta(), async (req: Request, res: Response) => {
   try {
     const qr = await prisma.qrCode.findUnique({
       where: { token: req.params.token },
@@ -231,7 +238,7 @@ router.get('/qr/:token', authenticate, async (req: Request, res: Response) => {
     if (!qr) return res.status(404).json({ ok: false, mensaje: 'QR no encontrado' });
 
     const monto = qr.monto ? Number.parseFloat(qr.monto.toString()) : null;
-    res.json({ ok: true, qr: { monto, concepto: qr.concepto, expiresAt: qr.permanente ? null : qr.expiresAt, usado: qr.permanente ? false : qr.usado, expirado: qr.permanente ? false : qr.expiresAt < new Date(), permanente: qr.permanente, esPropio: qr.wallet.userId === req.user!.id, propietario: { nombre: qr.wallet.user.nombre } } });
+    res.json({ ok: true, qr: { monto, concepto: qr.concepto, expiresAt: qr.permanente ? null : qr.expiresAt, usado: qr.permanente ? false : qr.usado, expirado: qr.permanente ? false : qr.expiresAt < new Date(), permanente: qr.permanente, esPropio: qr.wallet.userId === req.cuenta!.titularId, propietario: { nombre: qr.wallet.user.nombre } } });
   } catch (err: any) {
     logger.error('Error consultando QR', { err: err.message, token: req.params.token });
     res.status(500).json({ ok: false, mensaje: 'Error consultando QR' });
@@ -243,7 +250,7 @@ const qrPagarSchema = z.object({
   monto: z.number().int().positive().optional(),
 });
 
-router.post('/qr/:token/pagar', authenticate, walletLimiter, async (req: Request, res: Response) => {
+router.post('/qr/:token/pagar', authenticate, walletLimiter, conCuenta('enviar'), async (req: Request, res: Response) => {
   const parse = qrPagarSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Monto inválido' });
 
@@ -258,12 +265,12 @@ router.post('/qr/:token/pagar', authenticate, walletLimiter, async (req: Request
         if (qr.usado) throw new ApiError(400, 'Este QR ya fue pagado');
         if (qr.expiresAt < new Date()) throw new ApiError(400, 'Este QR ya expiró');
       }
-      if (qr.wallet.userId === req.user!.id) throw new ApiError(400, 'No puedes pagar tu propio QR');
+      if (qr.wallet.userId === req.cuenta!.titularId) throw new ApiError(400, 'No puedes pagar tu propio QR');
 
       const monto = qr.monto ? Number.parseFloat(qr.monto.toString()) : parse.data.monto;
       if (!monto || monto <= 0) throw new ApiError(400, 'Este QR requiere que indiques un monto');
 
-      const payerWallet = await tx.wallet.findUnique({ where: { userId: req.user!.id } });
+      const payerWallet = await tx.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
       if (!payerWallet) throw new ApiError(404, 'Billetera no encontrada');
 
       const debit = await tx.wallet.updateMany({
@@ -337,7 +344,7 @@ router.post('/qr/:token/pagar', authenticate, walletLimiter, async (req: Request
     });
 
     logger.info('Pago QR exitoso', { userId: req.user!.id, token: req.params.token });
-    res.json({ ok: true, mensaje: 'Pago realizado', saldo: nuevoSaldo });
+    res.json({ ok: true, mensaje: 'Pago realizado', saldo: saldoVisible(req.cuenta, nuevoSaldo) });
   } catch (err: any) {
     if (err instanceof ApiError) return res.status(err.status).json({ ok: false, mensaje: err.message });
     logger.error('Error pagando QR', { err: err.message, userId: req.user?.id, token: req.params.token });

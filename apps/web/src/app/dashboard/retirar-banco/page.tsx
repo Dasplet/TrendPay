@@ -51,7 +51,7 @@ export default function RetirarBancoPage() {
     if (!nombreTitular) return toast.error('Ingresa el nombre del titular');
     if (!cedulaTitular) return toast.error('Ingresa la cédula del titular');
     if (!amount) return toast.error('Selecciona un monto');
-    if (amount > Number(user?.saldo || 0)) return toast.error('Saldo insuficiente');
+    if (typeof user?.saldo === 'number' && amount > user.saldo) return toast.error('Saldo insuficiente');
     withdrawMutation.mutate();
   }
 

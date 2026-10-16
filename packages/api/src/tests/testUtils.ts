@@ -45,3 +45,23 @@ export function tokenPara(user: { id: string; cedula: string; nombre: string; ro
     { expiresIn: '15m' }
   );
 }
+
+// Subcuenta empresarial: sin billetera propia, opera sobre la del padre.
+export async function crearSubcuentaDePrueba(
+  padreId: string,
+  permisos: { permisoVerSaldo?: boolean; permisoRecargar?: boolean; permisoEnviar?: boolean; permisoRetirar?: boolean } = {}
+) {
+  contador += 1;
+  const sufijo = `${Date.now()}${contador}`.slice(-10);
+  const pinHash = await bcrypt.hash('1234', 4);
+  return prisma.user.create({
+    data: {
+      cedula: `S${sufijo}`,
+      nombre: `Subcuenta Prueba ${sufijo}`,
+      correo: `sub${sufijo}@trendpay.test`,
+      pinHash,
+      cuentaPadreId: padreId,
+      ...permisos,
+    },
+  });
+}

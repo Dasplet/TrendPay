@@ -88,7 +88,7 @@ export default function CobrarQrPage() {
               <span>Concepto</span>
               <input value={concept} onChange={(e) => setConcept(e.target.value)} placeholder="Ej. Pago del almuerzo" />
             </label>
-            <InfoDestination saldo={user?.saldo} description="Saldo actual de tu billetera" />
+            <InfoDestination saldo={user?.saldo ?? undefined} description="Saldo actual de tu billetera" />
             <ThemeButton tone="secondary" disabled={generarMutation.isPending} onClick={() => generarMutation.mutate()}>
               <Smartphone size={18} /> {generarMutation.isPending ? 'Generando...' : 'Generar QR para cobrar'}
             </ThemeButton>

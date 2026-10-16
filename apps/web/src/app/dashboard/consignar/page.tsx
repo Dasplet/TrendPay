@@ -151,7 +151,7 @@ export default function ConsignarPage() {
   return (
     <UserModal title="Consignar a mi billetera" subtitle="Paga con tarjeta o PSE">
       <div className="tp-modal-content">
-        <InfoDestination saldo={user?.saldo} />
+        <InfoDestination saldo={user?.saldo ?? undefined} />
 
         {paso === 'monto' && (
           <>

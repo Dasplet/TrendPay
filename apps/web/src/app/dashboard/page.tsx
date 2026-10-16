@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/authStore';
 import { notificationsApi, walletApi } from '@/lib/api';
 import { EmptyState, StatusPill, UserAvatar, compactCOP, firstName, fmtCOP } from '@/components/user/UserTheme';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { puede, type Permiso } from '@/lib/permisos';
 
 const CHART_MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
 
@@ -74,13 +75,15 @@ export default function DashboardPage() {
   const chart = useMemo(() => [120000, 180000, 95000, 310000, 210000, 285400], []);
   const path = monthlyPath(chart);
 
-  const actions = [
-    { label: 'Consignar', icon: <QrCode size={30} />, href: '/dashboard/consignar', tone: 'purple' },
-    { label: 'Cobrar QR', icon: <QrCode size={30} />, href: '/dashboard/cobrar-qr', tone: 'green' },
-    { label: 'Enviar', icon: <Send size={30} />, href: '/dashboard/enviar', tone: 'pink' },
-    { label: 'Recargar', icon: <CreditCard size={30} />, href: '/dashboard/consignar', tone: 'green' },
-    { label: 'Retirar', icon: <Building2 size={30} />, href: '/dashboard/retirar-banco', tone: 'red' },
+  const allActions: { label: string; icon: React.ReactNode; href: string; tone: string; permiso: Permiso }[] = [
+    { label: 'Consignar', icon: <QrCode size={30} />, href: '/dashboard/consignar', tone: 'purple', permiso: 'recargar' },
+    { label: 'Cobrar QR', icon: <QrCode size={30} />, href: '/dashboard/cobrar-qr', tone: 'green', permiso: 'recargar' },
+    { label: 'Enviar', icon: <Send size={30} />, href: '/dashboard/enviar', tone: 'pink', permiso: 'enviar' },
+    { label: 'Recargar', icon: <CreditCard size={30} />, href: '/dashboard/consignar', tone: 'green', permiso: 'recargar' },
+    { label: 'Retirar', icon: <Building2 size={30} />, href: '/dashboard/retirar-banco', tone: 'red', permiso: 'retirar' },
   ];
+  const actions = allActions.filter((a) => puede(user, a.permiso));
+  const verSaldo = puede(user, 'verSaldo');
 
   return (
     <div className="tp-user-page">
@@ -152,12 +155,15 @@ export default function DashboardPage() {
 
       <section className="tp-balance-card">
         <div>
-          <span>Saldo disponible</span>
-          <button onClick={() => setShowBalance((v) => !v)} className="tp-eye-button">
-            {showBalance ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
+          <span>{user?.cuentaPadre ? `Saldo de ${user.cuentaPadre.nombre}` : 'Saldo disponible'}</span>
+          {verSaldo && (
+            <button onClick={() => setShowBalance((v) => !v)} className="tp-eye-button">
+              {showBalance ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          )}
         </div>
-        <strong>{showBalance ? fmtCOP(user?.saldo) : '••••••'}</strong>
+        <strong>{verSaldo && showBalance ? fmtCOP(user?.saldo) : '••••••'}</strong>
+        {!verSaldo && <small>Tu subcuenta no tiene permiso para ver el saldo</small>}
         <div className="tp-balance-footer">
           <StatusPill tone="success">Verificada</StatusPill>
           <span><TrendingUp size={16} /> +18% mes</span>

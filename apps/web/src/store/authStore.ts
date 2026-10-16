@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authApi } from '@/lib/api';
+import type { Permisos } from '@/lib/permisos';
 
 export interface User {
   id: string;
@@ -12,8 +13,10 @@ export interface User {
   rol: string;
   subRol?: string;
   codigoReferido?: string;
-  saldo: number;
+  saldo: number | null; // null cuando la subcuenta no tiene permiso para ver el saldo
   walletId?: string;
+  permisos?: Permisos;
+  cuentaPadre?: { id: string; nombre: string } | null;
   kycVerificado: boolean;
   avatarDataUrl?: string | null;
 }

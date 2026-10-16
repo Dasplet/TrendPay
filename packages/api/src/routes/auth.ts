@@ -7,6 +7,7 @@ import { prisma } from '../index';
 import { authenticate, AuthUser } from '../middleware/auth';
 import { authLimiter } from '../middleware/rateLimiter';
 import { logger } from '../utils/logger';
+import { INCLUDE_BILLETERA, datosBilletera } from '../utils/cuentas';
 import { sendOtpEmail } from '../utils/email';
 import { maskEmail } from '../utils/security';
 
@@ -62,8 +63,7 @@ async function completeLogin(req: Request, res: Response, user: any) {
 
   logger.info('Login exitoso', { userId: user.id, cedula: user.cedula });
 
-  const saldo = Number.parseFloat(user.wallet?.saldo.toString() || '0');
-  res.json({ ok: true, accessToken, refreshToken /* también en body para móvil */, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, codigoReferido: user.codigoReferido, saldo, walletId: user.wallet?.id } });
+  res.json({ ok: true, accessToken, refreshToken /* también en body para móvil */, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, codigoReferido: user.codigoReferido, ...datosBilletera(user) } });
 }
 
 // ── 2FA de login (paso extra por correo para cuentas marcadas como sensibles) ──
@@ -124,7 +124,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
   try {
     const user = await prisma.user.findUnique({
       where: { cedula },
-      include: { wallet: true },
+      include: INCLUDE_BILLETERA,
     });
 
     if (!user) {
@@ -183,7 +183,7 @@ router.post('/login/verify-2fa', authLimiter, async (req: Request, res: Response
 
     login2faStore.delete(cedula);
 
-    const user = await prisma.user.findUnique({ where: { id: stored.userId }, include: { wallet: true } });
+    const user = await prisma.user.findUnique({ where: { id: stored.userId }, include: INCLUDE_BILLETERA });
     if (!user) return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado' });
 
     await completeLogin(req, res, user);
@@ -464,11 +464,10 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.id },
-      include: { wallet: true },
+      include: INCLUDE_BILLETERA,
     });
     if (!user) return res.status(404).json({ ok: false });
-    const saldo = Number.parseFloat(user.wallet?.saldo.toString() || '0');
-    res.json({ ok: true, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, codigoReferido: user.codigoReferido, saldo, walletId: user.wallet?.id } });
+    res.json({ ok: true, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, codigoReferido: user.codigoReferido, ...datosBilletera(user) } });
   } catch {
     res.status(500).json({ ok: false });
   }

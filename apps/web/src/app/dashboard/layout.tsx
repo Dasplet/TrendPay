@@ -4,8 +4,14 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { LogOut } from 'lucide-react';
-import { useAuthStore } from '@/store/authStore';
+import { useAuthStore, type User } from '@/store/authStore';
 import { BrandLogo, UserAvatar, fmtCOP, userMenu } from '@/components/user/UserTheme';
+import { permisoDeRuta, puede } from '@/lib/permisos';
+
+function subtituloCuenta(user: User) {
+  if (puede(user, 'verSaldo')) return `${fmtCOP(user.saldo)} disponible`;
+  return user.cuentaPadre ? `Subcuenta de ${user.cuentaPadre.nombre}` : 'Saldo oculto';
+}
 
 export default function DashboardLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const router = useRouter();
@@ -35,7 +41,15 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
     if (user.rol === 'admin') router.push('/admin');
   }, [router, user, hydrated]);
 
-  if (!hydrated || !user) return null;
+  // Una subcuenta que entra por URL a una operación que no tiene permitida
+  // vuelve al inicio (el backend igual la rechazaría con 403).
+  const permisoRequerido = permisoDeRuta(pathname);
+  const rutaBloqueada = !!user && !!permisoRequerido && !puede(user, permisoRequerido);
+  useEffect(() => {
+    if (hydrated && rutaBloqueada) router.replace('/dashboard');
+  }, [hydrated, rutaBloqueada, router]);
+
+  if (!hydrated || !user || rutaBloqueada) return null;
 
   async function handleLogout() {
     await logout();
@@ -53,7 +67,7 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
           <UserAvatar user={user} />
           <div>
             <strong>{user.nombre}</strong>
-            <span>{fmtCOP(user.saldo)} disponible</span>
+            <span>{subtituloCuenta(user)}</span>
           </div>
         </div>
 
@@ -61,7 +75,7 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
           {userMenu.map((group) => (
             <div key={group.section} className="tp-nav-group">
               <p>{group.section}</p>
-              {group.items.map((item) => {
+              {group.items.filter((item) => !item.permiso || puede(user, item.permiso)).map((item) => {
                 const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
                 return (
                   <Link key={item.href} href={item.href} className={`tp-nav-link ${active ? 'active' : ''}`}>

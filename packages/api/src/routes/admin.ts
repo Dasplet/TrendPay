@@ -32,7 +32,7 @@ router.get('/users', authenticate, requireAdmin, async (req: Request, res: Respo
     const users = await prisma.user.findMany({
       take: limit,
       orderBy: { createdAt: 'desc' },
-      include: { wallet: true },
+      include: { wallet: true, cuentaPadre: { select: { nombre: true, wallet: true } } },
       where: q ? { OR: [
         { nombre: { contains: q, mode: 'insensitive' } },
         { cedula: { contains: q } },
@@ -41,7 +41,8 @@ router.get('/users', authenticate, requireAdmin, async (req: Request, res: Respo
     });
     res.json({
       ok: true,
-      usuarios: users.map(u => { const saldo = Number.parseFloat(u.wallet?.saldo.toString() || '0'); return { id: u.id, cedula: u.cedula, nombre: u.nombre, correo: u.correo, celular: u.celular, ciudad: u.ciudad, rol: u.rol, subRol: u.subRol, kycNivel: u.kycNivel, kycVerificado: u.kycVerificado, bloqueado: u.bloqueado, codigoReferido: u.codigoReferido, saldo, ultimoLogin: u.ultimoLogin, createdAt: u.createdAt }; }),
+      // Las subcuentas empresariales no tienen billetera propia: se muestra la de su padre.
+      usuarios: users.map(u => { const saldo = Number.parseFloat((u.wallet ?? u.cuentaPadre?.wallet)?.saldo.toString() || '0'); return { id: u.id, cedula: u.cedula, nombre: u.nombre, correo: u.correo, celular: u.celular, ciudad: u.ciudad, rol: u.rol, subRol: u.subRol, kycNivel: u.kycNivel, kycVerificado: u.kycVerificado, bloqueado: u.bloqueado, codigoReferido: u.codigoReferido, saldo, cuentaPadre: u.cuentaPadre?.nombre ?? null, ultimoLogin: u.ultimoLogin, createdAt: u.createdAt }; }),
     });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });

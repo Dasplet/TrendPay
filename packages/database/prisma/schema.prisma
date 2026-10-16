@@ -29,12 +29,23 @@ model User {
   codigoReferido  String?   @unique @map("codigo_referido")
   referidoPorId   String?   @map("referido_por_id")
   ultimoLogin     DateTime? @map("ultimo_login")
+
+  // Subcuentas empresariales: una cuenta hija no tiene billetera propia, opera
+  // sobre la billetera de su cuenta padre. Los permisos limitan qué puede hacer
+  // con ese dinero compartido (en cuentas normales y padres siempre son true).
+  cuentaPadreId   String?   @map("cuenta_padre_id")
+  permisoVerSaldo Boolean   @default(true) @map("permiso_ver_saldo")
+  permisoRecargar Boolean   @default(true) @map("permiso_recargar")
+  permisoEnviar   Boolean   @default(true) @map("permiso_enviar")
+  permisoRetirar  Boolean   @default(true) @map("permiso_retirar")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   // Relaciones
   referidoPor     User?           @relation("Referidos", fields: [referidoPorId], references: [id])
   referidos       User[]          @relation("Referidos")
+  cuentaPadre     User?           @relation("Subcuentas", fields: [cuentaPadreId], references: [id])
+  subcuentas      User[]          @relation("Subcuentas")
   wallet          Wallet?
   sessions        Session[]
   notifications   Notification[]
@@ -48,6 +59,7 @@ model User {
   kushkiPayments  KushkiPayment[]
   transactions    Transaction[]
 
+  @@index([cuentaPadreId])
   @@map("users")
 }
 

@@ -5,6 +5,7 @@ import { authenticate, requireAdmin } from '../middleware/auth';
 import { walletLimiter } from '../middleware/rateLimiter';
 import { encrypt, decrypt, maskAccount, genCodigo } from '../utils/security';
 import { logger } from '../utils/logger';
+import { conCuenta, miembrosDe, saldoVisible } from '../utils/cuentas';
 
 const router = Router();
 
@@ -38,7 +39,7 @@ const crearSchema = z.object({
   monto: z.number().int().positive(),
 });
 
-router.post('/', authenticate, walletLimiter, async (req: Request, res: Response) => {
+router.post('/', authenticate, walletLimiter, conCuenta('retirar'), async (req: Request, res: Response) => {
   const parse = crearSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Datos de retiro incompletos o inválidos' });
   const { bancoNombre, tipoCuenta, numeroCuenta, cedulaTitular, nombreTitular, monto } = parse.data;
@@ -55,8 +56,11 @@ router.post('/', authenticate, walletLimiter, async (req: Request, res: Response
 
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
+    // El límite diario es por billetera: cuenta los retiros de todas las
+    // subcuentas que la comparten.
+    const miembros = await miembrosDe(req.cuenta!.titularId);
     const retiradoHoy = await prisma.withdrawal.aggregate({
-      where: { userId: req.user!.id, createdAt: { gte: hoy }, status: { in: ['pendiente', 'procesado'] } },
+      where: { userId: { in: miembros }, createdAt: { gte: hoy }, status: { in: ['pendiente', 'procesado'] } },
       _sum: { monto: true },
     });
     const totalHoy = Number.parseFloat(retiradoHoy._sum.monto?.toString() || '0') + monto;
@@ -65,7 +69,7 @@ router.post('/', authenticate, walletLimiter, async (req: Request, res: Response
     }
 
     const nuevoSaldo = await prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.findUnique({ where: { userId: req.user!.id } });
+      const wallet = await tx.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
       if (!wallet) throw new ApiError(404, 'Billetera no encontrada');
 
       const debit = await tx.wallet.updateMany({
@@ -114,7 +118,7 @@ router.post('/', authenticate, walletLimiter, async (req: Request, res: Response
     });
 
     logger.info('Retiro solicitado', { userId: req.user!.id, monto });
-    res.status(201).json({ ok: true, mensaje: 'Solicitud de retiro creada · será procesada por un administrador', saldo: nuevoSaldo });
+    res.status(201).json({ ok: true, mensaje: 'Solicitud de retiro creada · será procesada por un administrador', saldo: saldoVisible(req.cuenta, nuevoSaldo) });
   } catch (err: any) {
     if (err instanceof ApiError) return res.status(err.status).json({ ok: false, mensaje: err.message });
     logger.error('Error creando retiro', { err: err.message, userId: req.user?.id });
@@ -123,10 +127,11 @@ router.post('/', authenticate, walletLimiter, async (req: Request, res: Response
 });
 
 // ══ GET /api/withdrawals/me ══
-router.get('/me', authenticate, async (req: Request, res: Response) => {
+router.get('/me', authenticate, conCuenta(), async (req: Request, res: Response) => {
   try {
+    const miembros = await miembrosDe(req.cuenta!.titularId);
     const withdrawals = await prisma.withdrawal.findMany({
-      where: { userId: req.user!.id },
+      where: { userId: { in: miembros } },
       orderBy: { createdAt: 'desc' },
       take: 100,
     });
@@ -208,7 +213,8 @@ router.put('/:id/reject', authenticate, requireAdmin, async (req: Request, res: 
     if (withdrawal.status !== 'pendiente') return res.status(400).json({ ok: false, mensaje: 'Este retiro ya fue procesado' });
 
     await prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.findUnique({ where: { userId: withdrawal.userId } });
+      const solicitante = await tx.user.findUnique({ where: { id: withdrawal.userId }, select: { cuentaPadreId: true } });
+      const wallet = await tx.wallet.findUnique({ where: { userId: solicitante?.cuentaPadreId ?? withdrawal.userId } });
       if (!wallet) throw new Error('Billetera no encontrada');
 
       const monto = Number.parseFloat(withdrawal.monto.toString());

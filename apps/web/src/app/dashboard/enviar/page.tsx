@@ -38,7 +38,7 @@ export default function EnviarPage() {
   function sendMoney() {
     if (!destino) return toast.error('Ingresa celular, correo o cédula del destinatario');
     if (!amount) return toast.error('Selecciona un monto');
-    if (total > Number(user?.saldo || 0)) return toast.error('Saldo insuficiente');
+    if (typeof user?.saldo === 'number' && total > user.saldo) return toast.error('Saldo insuficiente');
     sendMutation.mutate();
   }
 

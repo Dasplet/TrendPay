@@ -102,9 +102,45 @@ async function main() {
   });
   console.log('✅ Demo user seeded:', user.correo);
 
+  // Empresa con subcuentas: el padre es dueño de la billetera; los hijos no
+  // tienen billetera propia y operan sobre la del padre según sus permisos.
+  const empresaPin = await bcrypt.hash('1234', 12);
+  const padre = await prisma.user.upsert({
+    where: { cedula: '900100200' },
+    update: {},
+    create: {
+      cedula: '900100200',
+      nombre: 'Empresa Padre',
+      correo: 'empresa.padre@trendpay.co',
+      ciudad: 'Medellín',
+      pinHash: empresaPin,
+      kycVerificado: true,
+      codigoReferido: 'REF-100200',
+      wallet: { create: { saldo: 1000000 } },
+    },
+  });
+
+  const hijos = [
+    // Hijo 1: solo recarga, no ve el saldo
+    { cedula: '900100201', nombre: 'Empresa Hijo 1', correo: 'empresa.hijo1@trendpay.co', codigoReferido: 'REF-100201',
+      permisoVerSaldo: false, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false },
+    // Hijo 2: ve el saldo y solo retira
+    { cedula: '900100202', nombre: 'Empresa Hijo 2', correo: 'empresa.hijo2@trendpay.co', codigoReferido: 'REF-100202',
+      permisoVerSaldo: true, permisoRecargar: false, permisoEnviar: false, permisoRetirar: true },
+  ];
+  for (const hijo of hijos) {
+    await prisma.user.upsert({
+      where: { cedula: hijo.cedula },
+      update: {},
+      create: { ...hijo, ciudad: 'Medellín', pinHash: empresaPin, kycVerificado: true, cuentaPadreId: padre.id },
+    });
+  }
+  console.log('✅ Empresa con subcuentas seeded:', padre.nombre);
+
   console.log('\n🎉 Seed completed!\n');
   console.log('Admin:    cedula 1000000001 · PIN 0000');
   console.log('Usuario:  cedula 1023456789 · PIN 1234');
+  console.log('Empresa:  cedulas 900100200 (padre) · 900100201 (hijo 1) · 900100202 (hijo 2) · PIN 1234');
 }
 
 main()
