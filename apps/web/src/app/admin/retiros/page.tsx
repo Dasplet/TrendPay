@@ -11,6 +11,7 @@ export default function RetirosPage() {
   const qc = useQueryClient();
   const [showReject, setShowReject] = useState<any>(null);
   const [motivo, setMotivo]         = useState('');
+  const [consultando, setConsultando] = useState<string | null>(null);
 
   const { data: pendData, isLoading: pendLoading } = useQuery({
     queryKey: ['admin-retiros-pend'],
@@ -41,9 +42,22 @@ export default function RetirosPage() {
   const ach: boolean = !!pendData?.ach;
   const procesados: any[] = (allData?.retiros || []).filter((w: any) => w.status !== 'pendiente');
 
+  async function consultarKushki(id: string) {
+    setConsultando(id);
+    try {
+      const { data } = await adminApi.kushkiWD(id);
+      const detalle = data.responseText ? ` · ${data.responseText}` : '';
+      toast(`Kushki · ticket ${data.ticket}: ${data.estadoKushki || 'SIN ESTADO'}${detalle}`, { duration: 8000 });
+    } catch (e: any) {
+      toast.error(e.response?.data?.mensaje || 'No se pudo consultar Kushki');
+    } finally {
+      setConsultando(null);
+    }
+  }
+
   function exportarCsv() {
-    downloadCsv('retiros', ['Banco', 'Titular', 'Cuenta', 'Usuario', 'Monto', 'Estado', 'Fecha'],
-      procesados.map((w: any) => [w.banco_nombre || '', w.nombre_titular || '', w.numero_cuenta_masked || '', w.usuario_nombre || '', w.monto || 0, w.status || '', fmtDate(w.created_at)]));
+    downloadCsv('retiros', ['Banco', 'Titular', 'Cuenta', 'Usuario', 'Monto', 'Estado', 'Ticket Kushki', 'Motivo', 'Fecha'],
+      procesados.map((w: any) => [w.banco_nombre || '', w.nombre_titular || '', w.numero_cuenta_masked || '', w.usuario_nombre || '', w.monto || 0, w.status || '', w.payout_ticket || '', w.notas_admin || '', fmtDate(w.created_at)]));
   }
 
   let pendRows: React.ReactNode;
@@ -115,9 +129,9 @@ export default function RetirosPage() {
         <PanelHeader title="Historial de retiros · procesados" icon={<CheckCircle2 size={16} />}
           actions={<Btn variant="ghost" onClick={exportarCsv}><Download size={13} /> CSV</Btn>}
         />
-        <Table headers={['Banco','Titular','Cuenta','Usuario','Monto','Estado','Fecha']}>
+        <Table headers={['Banco','Titular','Cuenta','Usuario','Monto','Estado','Ticket Kushki','Motivo','Fecha']}>
           {procesados.length === 0 ? (
-            <Tr><Td style={{ textAlign:'center', padding:24, color:'rgba(var(--adm-fg-rgb),.3)', fontSize:12 }} colSpan={7 as any}>Sin historial aún</Td></Tr>
+            <Tr><Td style={{ textAlign:'center', padding:24, color:'rgba(var(--adm-fg-rgb),.3)', fontSize:12 }} colSpan={9 as any}>Sin historial aún</Td></Tr>
           ) : procesados.map((w:any) => (
             <Tr key={w.id}>
               <Td style={{ fontSize:12 }}>{w.banco_nombre||'—'}</Td>
@@ -126,6 +140,15 @@ export default function RetirosPage() {
               <Td style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.5)' }}>{w.usuario_nombre||'—'}</Td>
               <Td style={{ color:'#C0392B', fontWeight:700 }}>{fmt(w.monto)}</Td>
               <Td><StatusBadge status={w.status} /></Td>
+              <Td style={{ fontSize:11 }}>
+                {w.payout_ticket ? (
+                  <div style={{ display:'flex', flexDirection:'column', gap:4, alignItems:'flex-start' }}>
+                    <span style={{ fontFamily:'monospace', color:'rgba(var(--adm-fg-rgb),.6)' }}>{w.payout_ticket}</span>
+                    <Btn variant="ghost" onClick={() => consultarKushki(w.id)} disabled={consultando === w.id}>{consultando === w.id ? 'Consultando…' : 'Consultar en Kushki'}</Btn>
+                  </div>
+                ) : <span style={{ color:'rgba(var(--adm-fg-rgb),.3)' }}>—</span>}
+              </Td>
+              <Td style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.5)', maxWidth:200 }}>{w.notas_admin || '—'}</Td>
               <Td style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.35)', whiteSpace:'nowrap' }}>{fmtDate(w.created_at)}</Td>
             </Tr>
           ))}

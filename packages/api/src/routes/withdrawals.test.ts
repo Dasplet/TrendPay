@@ -1,7 +1,7 @@
 import request from 'supertest';
 import app, { prisma } from '../index';
 import { limpiarBaseDeDatos, crearUsuarioDePrueba, tokenPara } from '../tests/testUtils';
-import { dispersionHabilitada, iniciarDispersion, getPayoutStatus, KushkiError } from '../utils/kushki';
+import { dispersionHabilitada, iniciarDispersion, getPayoutStatus, getPayoutDetalle, KushkiError } from '../utils/kushki';
 import { conciliarRetirosEnProceso } from '../utils/retiros';
 
 jest.mock('../utils/kushki', () => ({
@@ -9,6 +9,7 @@ jest.mock('../utils/kushki', () => ({
   dispersionHabilitada: jest.fn(() => false),
   iniciarDispersion: jest.fn(),
   getPayoutStatus: jest.fn(),
+  getPayoutDetalle: jest.fn(),
 }));
 
 const mockHabilitada = dispersionHabilitada as jest.Mock;
@@ -252,6 +253,26 @@ describe('Withdrawals API', () => {
       expect(mockIniciar).not.toHaveBeenCalled();
       expect((await prisma.withdrawal.findUnique({ where: { id: withdrawal.id } }))?.status).toBe('procesado');
       expect(await saldoDe(user.id)).toBe(70000);
+    });
+
+    it('el admin consulta el estado en vivo de Kushki por retiro y un usuario normal no puede', async () => {
+      const { user, admin, withdrawal } = await retiroPendiente();
+      await aprobar(withdrawal.id, admin);
+      (getPayoutDetalle as jest.Mock).mockResolvedValue({ estadoKushki: 'DECLINED', estado: 'rechazada', responseCode: '', responseText: '' });
+
+      const res = await request(app).get(`/api/withdrawals/${withdrawal.id}/kushki`).set('Authorization', `Bearer ${tokenPara(admin)}`);
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ ticket: 'T-1', estadoKushki: 'DECLINED' });
+      expect(getPayoutDetalle).toHaveBeenCalledWith('T-1');
+
+      const comoUsuario = await request(app).get(`/api/withdrawals/${withdrawal.id}/kushki`).set('Authorization', `Bearer ${tokenPara(user)}`);
+      expect(comoUsuario.status).toBe(403);
+    });
+
+    it('un retiro manual (sin ticket) no tiene consulta en Kushki', async () => {
+      const { admin, withdrawal } = await retiroPendiente();
+      const res = await request(app).get(`/api/withdrawals/${withdrawal.id}/kushki`).set('Authorization', `Bearer ${tokenPara(admin)}`);
+      expect(res.status).toBe(404);
     });
 
     it('la cola de pendientes informa si el envío ACH está activo', async () => {

@@ -206,16 +206,35 @@ export async function iniciarDispersion(datos: DatosDispersion): Promise<KushkiP
 // Valores observados en sandbox: APPROVAL y DECLINED. Cualquier otro valor se
 // trata como pendiente: nunca se da por pagado ni se devuelve el saldo sin una
 // respuesta clara de Kushki.
-export async function getPayoutStatus(ticketNumber: string): Promise<KushkiTransferState> {
+export interface KushkiPayoutDetalle {
+  estadoKushki: string;
+  estado: KushkiTransferState;
+  responseCode: string;
+  responseText: string;
+  creado?: string;
+}
+
+export async function getPayoutDetalle(ticketNumber: string): Promise<KushkiPayoutDetalle> {
   try {
     const { data } = await axios.get(`${BASE_URL}/payouts/transfer/v1/transaction/${ticketNumber}`, {
       headers: { 'Private-Merchant-Id': PRIVATE_MERCHANT_ID },
     });
     const raw = String(data.transactionStatus || data.status || '').toUpperCase();
-    if (raw.includes('APPROVAL') || raw === 'APPROVED') return 'aprobada';
-    if (['DECLINED', 'REJECTED', 'FAILED'].some((s) => raw.includes(s))) return 'rechazada';
-    return 'pendiente';
+    let estado: KushkiTransferState = 'pendiente';
+    if (raw.includes('APPROVAL') || raw === 'APPROVED') estado = 'aprobada';
+    else if (['DECLINED', 'REJECTED', 'FAILED'].some((s) => raw.includes(s))) estado = 'rechazada';
+    return {
+      estadoKushki: raw,
+      estado,
+      responseCode: data.responseCode || '',
+      responseText: data.responseText || '',
+      creado: data.created ? new Date(data.created).toISOString() : undefined,
+    };
   } catch (err: any) {
     throw new KushkiError(err.response?.data?.message || err.message || 'Error comunicando con Kushki', err.response?.status || 502);
   }
+}
+
+export async function getPayoutStatus(ticketNumber: string): Promise<KushkiTransferState> {
+  return (await getPayoutDetalle(ticketNumber)).estado;
 }

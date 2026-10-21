@@ -6,7 +6,7 @@ import { walletLimiter } from '../middleware/rateLimiter';
 import { encrypt, decrypt, maskAccount, genCodigo } from '../utils/security';
 import { logger } from '../utils/logger';
 import { conCuenta, miembrosDe, saldoVisible } from '../utils/cuentas';
-import { dispersionHabilitada, iniciarDispersion, KushkiError } from '../utils/kushki';
+import { dispersionHabilitada, iniciarDispersion, getPayoutDetalle, KushkiError } from '../utils/kushki';
 import { completarRetiro, revertirRetiro, resolverRetiroEnProceso, EstadoRetiro } from '../utils/retiros';
 
 const router = Router();
@@ -28,7 +28,7 @@ function mapWithdrawal(w: any, opts: { mask?: boolean } = {}) {
   const cuenta = decrypt(w.numeroCuenta);
   const monto = Number.parseFloat(w.monto.toString());
   const montoNeto = Number.parseFloat(w.montoNeto.toString());
-  return { id: w.id, banco_nombre: w.bancoNombre, tipo_cuenta: w.tipoCuenta, nombre_titular: w.nombreTitular, cedula_titular: decrypt(w.cedulaTitular), numero_cuenta: opts.mask ? undefined : cuenta, numero_cuenta_masked: opts.mask ? maskAccount(cuenta) : undefined, monto, monto_neto: montoNeto, status: w.status, motivo: w.motivo, usuario_nombre: w.user?.nombre, usuario_cedula: w.user?.cedula, created_at: w.createdAt, aprobado_at: w.aprobadoAt };
+  return { id: w.id, banco_nombre: w.bancoNombre, tipo_cuenta: w.tipoCuenta, nombre_titular: w.nombreTitular, cedula_titular: decrypt(w.cedulaTitular), numero_cuenta: opts.mask ? undefined : cuenta, numero_cuenta_masked: opts.mask ? maskAccount(cuenta) : undefined, monto, monto_neto: montoNeto, status: w.status, motivo: w.motivo, notas_admin: w.notasAdmin, payout_ticket: w.payoutTicket, usuario_nombre: w.user?.nombre, usuario_cedula: w.user?.cedula, created_at: w.createdAt, aprobado_at: w.aprobadoAt };
 }
 
 // ══ POST /api/withdrawals ══
@@ -172,6 +172,22 @@ router.get('/', authenticate, requireAdmin, async (req: Request, res: Response) 
   } catch (err: any) {
     logger.error('Error consultando retiros', { err: err.message });
     res.status(500).json({ ok: false, mensaje: 'Error consultando retiros' });
+  }
+});
+
+// ══ GET /api/withdrawals/:id/kushki ══ (admin — estado en vivo de la dispersión)
+router.get('/:id/kushki', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const withdrawal = await prisma.withdrawal.findUnique({ where: { id: req.params.id } });
+    if (!withdrawal) return res.status(404).json({ ok: false, mensaje: 'Retiro no encontrado' });
+    if (!withdrawal.payoutTicket) return res.status(404).json({ ok: false, mensaje: 'Este retiro no se envió por Kushki' });
+
+    const detalle = await getPayoutDetalle(withdrawal.payoutTicket);
+    res.json({ ok: true, ticket: withdrawal.payoutTicket, referencia: withdrawal.payoutReference, ...detalle });
+  } catch (err: any) {
+    const status = err instanceof KushkiError ? err.status : 500;
+    logger.error('Error consultando dispersión en Kushki', { err: err.message, id: req.params.id });
+    res.status(status).json({ ok: false, mensaje: err.message || 'Error consultando Kushki' });
   }
 });
 
