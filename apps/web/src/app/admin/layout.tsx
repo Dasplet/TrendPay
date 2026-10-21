@@ -117,9 +117,10 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
                 return (
                   <Link key={item.href} href={item.href}
                     style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', borderRadius:10, marginBottom:2, textDecoration:'none', fontSize:13, fontWeight:active?600:400, transition:'all .15s',
-                      background: active ? 'rgba(133,46,199,.22)' : 'transparent',
-                      color:      active ? 'var(--adm-text)' : 'var(--adm-muted)',
-                      borderLeft: active ? '3px solid #852EC7' : '3px solid transparent',
+                      background: active ? 'linear-gradient(135deg,#852EC7,#5b1fa8)' : 'transparent',
+                      color:      active ? '#fff' : 'var(--adm-muted)',
+                      boxShadow:  active ? '0 4px 14px rgba(133,46,199,.35)' : 'none',
+                      borderLeft: '3px solid transparent',
                     }}>
                     <Icon size={15} strokeWidth={active?2.5:1.8}/>
                     <span style={{ flex:1 }}>{item.label}</span>
