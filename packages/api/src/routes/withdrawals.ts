@@ -120,7 +120,7 @@ router.post('/', authenticate, walletLimiter, conCuenta('retirar'), async (req: 
     });
 
     logger.info('Retiro solicitado', { userId: req.user!.id, monto });
-    res.status(201).json({ ok: true, mensaje: 'Solicitud de retiro creada · será procesada por un administrador', saldo: saldoVisible(req.cuenta, nuevoSaldo) });
+    res.status(201).json({ ok: true, mensaje: 'Solicitud de retiro creada · se envía por transferencia ACH', saldo: saldoVisible(req.cuenta, nuevoSaldo) });
   } catch (err: any) {
     if (err instanceof ApiError) return res.status(err.status).json({ ok: false, mensaje: err.message });
     logger.error('Error creando retiro', { err: err.message, userId: req.user?.id });
@@ -152,7 +152,7 @@ router.get('/pending', authenticate, requireAdmin, async (_req: Request, res: Re
       orderBy: { createdAt: 'asc' },
       include: { user: { select: { nombre: true, cedula: true } } },
     });
-    res.json({ ok: true, retiros: withdrawals.map((w) => mapWithdrawal(w)) });
+    res.json({ ok: true, ach: dispersionHabilitada(), retiros: withdrawals.map((w) => mapWithdrawal(w)) });
   } catch (err: any) {
     logger.error('Error consultando retiros pendientes', { err: err.message });
     res.status(500).json({ ok: false, mensaje: 'Error consultando retiros pendientes' });
@@ -191,7 +191,8 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req: Request, res:
       return res.status(400).json({ ok: false, mensaje: 'Este retiro ya fue procesado' });
     }
 
-    if (withdrawal.status === 'en_proceso' || !dispersionHabilitada()) {
+    // manual: el admin ya transfirió por su cuenta (banco no soportado, Kushki caído, etc.)
+    if (withdrawal.status === 'en_proceso' || req.body?.manual === true || !dispersionHabilitada()) {
       const ok = await prisma.$transaction((tx) => completarRetiro(tx, withdrawal, { desde: ['pendiente', 'en_proceso'], actorId: req.user!.id, ip: req.ip }));
       if (!ok) return res.status(400).json({ ok: false, mensaje: 'Este retiro ya fue procesado' });
       return res.json({ ok: true, mensaje: 'Retiro aprobado' });

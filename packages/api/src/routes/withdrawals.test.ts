@@ -244,6 +244,22 @@ describe('Withdrawals API', () => {
       expect(await saldoDe(user.id)).toBe(100000);
     });
 
+    it('con manual:true el admin cierra el retiro sin llamar a Kushki', async () => {
+      const { user, admin, withdrawal } = await retiroPendiente();
+      const res = await request(app).put(`/api/withdrawals/${withdrawal.id}/approve`).set('Authorization', `Bearer ${tokenPara(admin)}`).send({ manual: true });
+
+      expect(res.status).toBe(200);
+      expect(mockIniciar).not.toHaveBeenCalled();
+      expect((await prisma.withdrawal.findUnique({ where: { id: withdrawal.id } }))?.status).toBe('procesado');
+      expect(await saldoDe(user.id)).toBe(70000);
+    });
+
+    it('la cola de pendientes informa si el envío ACH está activo', async () => {
+      const { admin } = await retiroPendiente();
+      const res = await request(app).get('/api/withdrawals/pending').set('Authorization', `Bearer ${tokenPara(admin)}`);
+      expect(res.body.ach).toBe(true);
+    });
+
     it('un retiro ya enviado a Kushki no se puede aprobar ni rechazar otra vez', async () => {
       const { admin, withdrawal } = await retiroPendiente();
       await aprobar(withdrawal.id, admin);

@@ -61,7 +61,7 @@ export default function RetirarBancoPage() {
   else ctaLabel = 'Selecciona un banco';
 
   return (
-    <UserModal title="Retirar a banco" subtitle="El dinero sale de tu billetera · procesamiento manual en 1 día hábil" size="lg">
+    <UserModal title="Retirar a banco" subtitle="Se envía por transferencia ACH · puede tardar hasta 72 h hábiles según tu banco" size="lg">
       <div className="tp-modal-content">
         <div className="tp-balance-alert"><Building2 size={25} /><div><strong>Saldo disponible: {fmtCOP(user?.saldo)}</strong><small>Sin comisión</small></div></div>
 

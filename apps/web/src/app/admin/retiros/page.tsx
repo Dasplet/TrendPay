@@ -26,7 +26,7 @@ export default function RetirosPage() {
   });
 
   const approveMut = useMutation({
-    mutationFn: (id: string) => adminApi.approveWD(id),
+    mutationFn: ({ id, manual }: { id: string; manual?: boolean }) => adminApi.approveWD(id, manual),
     onSuccess: (res) => { qc.invalidateQueries({ queryKey:['admin-retiros-pend'] }); qc.invalidateQueries({ queryKey:['admin-retiros-all'] }); toast.success(res.data?.mensaje || 'Retiro aprobado'); },
     onError: (e:any) => toast.error(e.response?.data?.mensaje || 'Error'),
   });
@@ -38,6 +38,7 @@ export default function RetirosPage() {
   });
 
   const pendientes: any[] = pendData?.retiros || [];
+  const ach: boolean = !!pendData?.ach;
   const procesados: any[] = (allData?.retiros || []).filter((w: any) => w.status !== 'pendiente');
 
   function exportarCsv() {
@@ -87,7 +88,8 @@ export default function RetirosPage() {
         <Td style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.35)', whiteSpace:'nowrap' }}>{fmtDate(w.created_at)}</Td>
         <Td>
           <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-            <Btn variant="primary" onClick={() => approveMut.mutate(w.id)} disabled={approveMut.isPending}><Check size={14} /> Transferido</Btn>
+            <Btn variant="primary" onClick={() => approveMut.mutate({ id: w.id })} disabled={approveMut.isPending}><Check size={14} /> {ach ? 'Enviar por ACH' : 'Transferido'}</Btn>
+            {ach && <Btn variant="ghost" onClick={() => approveMut.mutate({ id: w.id, manual: true })} disabled={approveMut.isPending}>Ya lo transferí a mano</Btn>}
             <Btn variant="danger"  onClick={() => { setShowReject(w); setMotivo(''); }}><X size={14} /> Rechazar</Btn>
           </div>
         </Td>
@@ -101,7 +103,7 @@ export default function RetirosPage() {
       {/* Pending queue */}
       <Panel style={{ border:'1px solid rgba(212,160,23,.25)' }}>
         <PanelHeader title={`Cola de aprobación · ${pendientes.length} pendiente${pendientes.length!==1?'s':''}`} icon={<Clock size={16} />}
-          actions={<span style={{ fontSize:11, color:'rgba(212,160,23,.7)' }}>Para procesar: transfiere manualmente y marca como aprobado</span>}
+          actions={<span style={{ fontSize:11, color:'rgba(212,160,23,.7)' }}>{ach ? 'Se envía por ACH vía Kushki · el banco confirma en minutos u horas hábiles' : 'Para procesar: transfiere manualmente y marca como aprobado'}</span>}
         />
         <Table headers={['Referencia','Usuario','Banco destino','Datos de transferencia','Monto','Solicitado','Acciones']}>
           {pendRows}
