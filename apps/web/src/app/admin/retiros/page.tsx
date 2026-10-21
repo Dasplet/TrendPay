@@ -27,7 +27,7 @@ export default function RetirosPage() {
 
   const approveMut = useMutation({
     mutationFn: (id: string) => adminApi.approveWD(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey:['admin-retiros-pend'] }); qc.invalidateQueries({ queryKey:['admin-retiros-all'] }); toast.success('Retiro aprobado'); },
+    onSuccess: (res) => { qc.invalidateQueries({ queryKey:['admin-retiros-pend'] }); qc.invalidateQueries({ queryKey:['admin-retiros-all'] }); toast.success(res.data?.mensaje || 'Retiro aprobado'); },
     onError: (e:any) => toast.error(e.response?.data?.mensaje || 'Error'),
   });
 

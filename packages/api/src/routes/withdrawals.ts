@@ -6,6 +6,8 @@ import { walletLimiter } from '../middleware/rateLimiter';
 import { encrypt, decrypt, maskAccount, genCodigo } from '../utils/security';
 import { logger } from '../utils/logger';
 import { conCuenta, miembrosDe, saldoVisible } from '../utils/cuentas';
+import { dispersionHabilitada, iniciarDispersion, KushkiError } from '../utils/kushki';
+import { completarRetiro, revertirRetiro, resolverRetiroEnProceso, EstadoRetiro } from '../utils/retiros';
 
 const router = Router();
 
@@ -60,7 +62,7 @@ router.post('/', authenticate, walletLimiter, conCuenta('retirar'), async (req: 
     // subcuentas que la comparten.
     const miembros = await miembrosDe(req.cuenta!.titularId);
     const retiradoHoy = await prisma.withdrawal.aggregate({
-      where: { userId: { in: miembros }, createdAt: { gte: hoy }, status: { in: ['pendiente', 'procesado'] } },
+      where: { userId: { in: miembros }, createdAt: { gte: hoy }, status: { in: ['pendiente', 'en_proceso', 'procesado'] } },
       _sum: { monto: true },
     });
     const totalHoy = Number.parseFloat(retiradoHoy._sum.monto?.toString() || '0') + monto;
@@ -174,26 +176,78 @@ router.get('/', authenticate, requireAdmin, async (req: Request, res: Response) 
 });
 
 // ══ PUT /api/withdrawals/:id/approve ══
+// Con KUSHKI_PAYOUTS_ENABLED el retiro se envía por Kushki (dispersión ACH) y
+// queda "en_proceso" hasta que el banco responde; sin él, el admin transfiere a
+// mano y esto solo lo marca como procesado. Un retiro "en_proceso" sin ticket
+// (envío que no se pudo confirmar) también se cierra a mano.
 router.put('/:id/approve', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
     const withdrawal = await prisma.withdrawal.findUnique({ where: { id: req.params.id } });
     if (!withdrawal) return res.status(404).json({ ok: false, mensaje: 'Retiro no encontrado' });
-    if (withdrawal.status !== 'pendiente') return res.status(400).json({ ok: false, mensaje: 'Este retiro ya fue procesado' });
+    if (withdrawal.status === 'en_proceso' && withdrawal.payoutTicket) {
+      return res.status(400).json({ ok: false, mensaje: 'Este retiro ya fue enviado por Kushki y está esperando al banco' });
+    }
+    if (withdrawal.status !== 'pendiente' && withdrawal.status !== 'en_proceso') {
+      return res.status(400).json({ ok: false, mensaje: 'Este retiro ya fue procesado' });
+    }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.withdrawal.update({
-        where: { id: withdrawal.id },
-        data: { status: 'procesado', aprobadoPor: req.user!.id, aprobadoAt: new Date() },
-      });
-      await tx.transaction.updateMany({
-        where: { metadata: { path: ['withdrawalId'], equals: withdrawal.id } },
-        data: { status: 'exitosa' },
-      });
-      const montoAprobado = Number.parseFloat(withdrawal.monto.toString());
-      await tx.auditLog.create({ data: { userId: req.user!.id, accion: 'RETIRO_APROBADO', tabla: 'withdrawals', registroId: withdrawal.id, ip: req.ip || null, datos: { monto: montoAprobado, banco: withdrawal.bancoNombre, antes: { status: 'pendiente' }, despues: { status: 'procesado' } } } });
+    if (withdrawal.status === 'en_proceso' || !dispersionHabilitada()) {
+      const ok = await prisma.$transaction((tx) => completarRetiro(tx, withdrawal, { desde: ['pendiente', 'en_proceso'], actorId: req.user!.id, ip: req.ip }));
+      if (!ok) return res.status(400).json({ ok: false, mensaje: 'Este retiro ya fue procesado' });
+      return res.json({ ok: true, mensaje: 'Retiro aprobado' });
+    }
+
+    // Se reclama antes de llamar a Kushki para que dos clics seguidos no envíen el dinero dos veces.
+    const reclamo = await prisma.withdrawal.updateMany({
+      where: { id: withdrawal.id, status: 'pendiente' },
+      data: { status: 'en_proceso', aprobadoPor: req.user!.id, aprobadoAt: new Date() },
     });
+    if (reclamo.count === 0) return res.status(400).json({ ok: false, mensaje: 'Este retiro ya fue procesado' });
 
-    res.json({ ok: true, mensaje: 'Retiro aprobado' });
+    let envio;
+    try {
+      envio = await iniciarDispersion({
+        bancoNombre: withdrawal.bancoNombre,
+        tipoCuenta: withdrawal.tipoCuenta,
+        numeroCuenta: decrypt(withdrawal.numeroCuenta),
+        cedulaTitular: decrypt(withdrawal.cedulaTitular),
+        monto: Number.parseFloat(withdrawal.montoNeto.toString()),
+      });
+    } catch (err: any) {
+      const definitivo = err instanceof KushkiError && err.status < 500;
+      logger.error('Error iniciando dispersión de retiro', { err: err.message, id: withdrawal.id, definitivo });
+      if (definitivo) {
+        // Kushki rechazó la petición: no salió dinero, el retiro vuelve a la cola.
+        await prisma.withdrawal.updateMany({
+          where: { id: withdrawal.id, status: 'en_proceso', payoutTicket: null },
+          data: { status: 'pendiente', aprobadoPor: null, aprobadoAt: null, notasAdmin: `Kushki: ${err.message}` },
+        });
+        return res.status(422).json({ ok: false, mensaje: `Kushki no aceptó el envío: ${err.message}. El retiro sigue pendiente; puedes transferirlo a mano.` });
+      }
+      // Sin respuesta: no se sabe si Kushki lo recibió. Se deja en proceso, sin reintentar solo.
+      await prisma.withdrawal.update({ where: { id: withdrawal.id }, data: { notasAdmin: `Envío sin confirmar (${err.message}). Verifica en el panel de Kushki.` } });
+      return res.status(502).json({ ok: false, mensaje: 'No se pudo confirmar el envío con Kushki. Revísalo en el panel de Kushki antes de reintentar.' });
+    }
+
+    const enviado = await prisma.withdrawal.update({
+      where: { id: withdrawal.id },
+      data: { payoutTicket: envio.ticketNumber, payoutReference: envio.transactionReference },
+    });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'RETIRO_DISPERSION_INICIADA', tabla: 'withdrawals', registroId: withdrawal.id, ip: req.ip || null, datos: { monto: Number.parseFloat(withdrawal.monto.toString()), banco: withdrawal.bancoNombre, ticket: envio.ticketNumber } } });
+
+    let estado: EstadoRetiro = 'en_proceso';
+    try {
+      estado = await resolverRetiroEnProceso(enviado);
+    } catch (err: any) {
+      logger.warn('No se pudo consultar el estado de la dispersión; la conciliación lo reintentará', { err: err.message, id: withdrawal.id });
+    }
+
+    const mensajes: Record<EstadoRetiro, string> = {
+      procesado: 'Retiro enviado y confirmado por el banco',
+      rechazado: 'El banco rechazó el envío · saldo devuelto al usuario',
+      en_proceso: 'Envío iniciado en Kushki · el banco lo confirmará en breve (hasta 72 h hábiles)',
+    };
+    res.json({ ok: true, estado, mensaje: mensajes[estado] });
   } catch (err: any) {
     logger.error('Error aprobando retiro', { err: err.message, id: req.params.id });
     res.status(500).json({ ok: false, mensaje: 'Error aprobando el retiro' });
@@ -205,58 +259,20 @@ const rejectSchema = z.object({ motivo: z.string().max(300).optional() });
 
 router.put('/:id/reject', authenticate, requireAdmin, async (req: Request, res: Response) => {
   const parse = rejectSchema.safeParse(req.body);
-  const motivo = parse.success ? parse.data.motivo : undefined;
+  const motivo = (parse.success ? parse.data.motivo : undefined) || 'Rechazado por administrador';
 
   try {
     const withdrawal = await prisma.withdrawal.findUnique({ where: { id: req.params.id } });
     if (!withdrawal) return res.status(404).json({ ok: false, mensaje: 'Retiro no encontrado' });
-    if (withdrawal.status !== 'pendiente') return res.status(400).json({ ok: false, mensaje: 'Este retiro ya fue procesado' });
+    if (withdrawal.status === 'en_proceso' && withdrawal.payoutTicket) {
+      return res.status(400).json({ ok: false, mensaje: 'Este retiro ya fue enviado por Kushki; el banco definirá si se devuelve el saldo' });
+    }
+    if (withdrawal.status !== 'pendiente' && withdrawal.status !== 'en_proceso') {
+      return res.status(400).json({ ok: false, mensaje: 'Este retiro ya fue procesado' });
+    }
 
-    await prisma.$transaction(async (tx) => {
-      const solicitante = await tx.user.findUnique({ where: { id: withdrawal.userId }, select: { cuentaPadreId: true } });
-      const wallet = await tx.wallet.findUnique({ where: { userId: solicitante?.cuentaPadreId ?? withdrawal.userId } });
-      if (!wallet) throw new Error('Billetera no encontrada');
-
-      const monto = Number.parseFloat(withdrawal.monto.toString());
-      const walletAfter = await tx.wallet.update({ where: { id: wallet.id }, data: { saldo: { increment: monto } } });
-      const saldoDespues = Number.parseFloat(walletAfter.saldo.toString());
-
-      await tx.withdrawal.update({
-        where: { id: withdrawal.id },
-        data: { status: 'rechazado', notasAdmin: motivo || 'Rechazado por administrador', aprobadoPor: req.user!.id, aprobadoAt: new Date() },
-      });
-
-      await tx.transaction.create({
-        data: {
-          walletId: wallet.id,
-          userId: withdrawal.userId,
-          codigo: genCodigo('REV'),
-          categoria: 'retiro',
-          descripcion: `Reverso de retiro rechazado · ${withdrawal.bancoNombre}`,
-          montoBruto: monto,
-          comisionPct: 0,
-          comisionValor: 0,
-          montoNeto: monto,
-          saldoAntes: saldoDespues - monto,
-          saldoDespues,
-          status: 'exitosa',
-        },
-      });
-
-      await tx.notification.create({
-        data: {
-          userId: withdrawal.userId,
-          tipo: 'warning',
-          titulo: 'Retiro rechazado',
-          mensaje: `Tu retiro de ${monto.toLocaleString('es-CO')} COP fue rechazado y el saldo fue devuelto a tu billetera`,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: { userId: req.user!.id, accion: 'RETIRO_RECHAZADO', tabla: 'withdrawals', registroId: withdrawal.id, ip: req.ip || null,
-          datos: { motivo, monto, banco: withdrawal.bancoNombre, antes: { status: 'pendiente' }, despues: { status: 'rechazado' } } },
-      });
-    });
+    const ok = await prisma.$transaction((tx) => revertirRetiro(tx, withdrawal, { desde: ['pendiente', 'en_proceso'], motivo, actorId: req.user!.id, ip: req.ip }));
+    if (!ok) return res.status(400).json({ ok: false, mensaje: 'Este retiro ya fue procesado' });
 
     res.json({ ok: true, mensaje: 'Retiro rechazado · saldo revertido' });
   } catch (err: any) {

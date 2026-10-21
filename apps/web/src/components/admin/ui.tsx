@@ -81,6 +81,7 @@ export function StatusBadge({ status }: Readonly<{ status: string }>) {
     exitosa:   { label:'Exitosa',   color:'#6CC998', bg:'rgba(108,201,152,.15)' },
     pendiente: { label:'Pendiente', color:'#d4a017', bg:'rgba(212,160,23,.15)'  },
     procesado: { label:'Procesado', color:'#852EC7', bg:'rgba(133,46,199,.15)'  },
+    en_proceso: { label:'En proceso', color:'#4a90d9', bg:'rgba(74,144,217,.15)' },
     rechazada: { label:'Rechazada', color:'#C0392B', bg:'rgba(192,57,43,.15)'   },
     completado: { label:'Completado', color:'#6CC998', bg:'rgba(108,201,152,.15)' },
     rechazado:  { label:'Rechazado',  color:'#C0392B', bg:'rgba(192,57,43,.15)'   },

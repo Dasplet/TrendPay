@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const BASE_URL            = process.env.KUSHKI_BASE_URL || 'https://api-uat.kushkipagos.com';
 const PRIVATE_MERCHANT_ID = process.env.KUSHKI_PRIVATE_MERCHANT_ID || '';
+const PUBLIC_MERCHANT_ID  = process.env.KUSHKI_PUBLIC_MERCHANT_ID || '';
 
 export class KushkiError extends Error {
   status: number;
@@ -103,5 +104,118 @@ export async function getTransferStatus(token: string): Promise<KushkiTransferSt
   } catch (err: any) {
     const kushkiMessage = err.response?.data?.message;
     throw new KushkiError(kushkiMessage || err.message || 'Error comunicando con Kushki', err.response?.status || 502);
+  }
+}
+
+// ── Dispersión (retiros a cuenta bancaria vía ACH) ──
+// Endpoints confirmados contra el sandbox UAT. A diferencia de los pagos
+// entrantes, el token de dispersión lleva los datos de la cuenta destino y se
+// crea con la llave pública; el init y la consulta usan la privada.
+
+export function dispersionHabilitada(): boolean {
+  return process.env.KUSHKI_PAYOUTS_ENABLED === 'true' && !!PRIVATE_MERCHANT_ID && !!PUBLIC_MERCHANT_ID;
+}
+
+interface BancoKushki {
+  code: string;
+  name: string;
+}
+
+// Los nombres de nuestros bancos (seed) no coinciden con los de Kushki, así que
+// cada uno se busca por un fragmento distintivo del nombre normalizado.
+const FRAGMENTOS_BANCO: Array<[string, string]> = [
+  ['bancolombia', 'bancolombia'],
+  ['nequi', 'nequi'],
+  ['bbva', 'bbva'],
+  ['bogota', 'bogota'],
+  ['davi', 'davivienda'],
+  ['falabella', 'falabella'],
+  ['occidente', 'occidente'],
+  ['popular', 'popular'],
+  ['av villas', 'av villas'],
+  ['itau', 'itau'],
+];
+
+const normalizar = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+let cacheBancos: { lista: BancoKushki[]; hasta: number } | null = null;
+
+async function listarBancosDispersion(): Promise<BancoKushki[]> {
+  if (cacheBancos && cacheBancos.hasta > Date.now()) return cacheBancos.lista;
+  const { data } = await axios.get<BancoKushki[]>(`${BASE_URL}/payouts/transfer/v1/bankList`, {
+    headers: { 'Public-Merchant-Id': PUBLIC_MERCHANT_ID },
+  });
+  cacheBancos = { lista: data, hasta: Date.now() + 6 * 3_600_000 };
+  return data;
+}
+
+export async function codigoBancoKushki(bancoNombre: string): Promise<string | null> {
+  const nombre = normalizar(bancoNombre);
+  const fragmento = FRAGMENTOS_BANCO.find(([clave]) => nombre.includes(clave))?.[1];
+  if (!fragmento) return null;
+  const lista = await listarBancosDispersion();
+  return lista.find((b) => normalizar(b.name).includes(fragmento))?.code ?? null;
+}
+
+export interface DatosDispersion {
+  bancoNombre: string;
+  tipoCuenta: string;
+  numeroCuenta: string;
+  cedulaTitular: string;
+  monto: number;
+}
+
+export interface KushkiPayoutResult {
+  ticketNumber: string;
+  transactionReference: string;
+}
+
+// Crea el token con la cuenta destino y lo confirma. Si lanza, no se envió
+// dinero: el error ocurrió antes de que Kushki aceptara la dispersión.
+export async function iniciarDispersion(datos: DatosDispersion): Promise<KushkiPayoutResult> {
+  try {
+    const bankId = await codigoBancoKushki(datos.bancoNombre);
+    if (!bankId) throw new KushkiError(`Kushki no soporta dispersiones al banco "${datos.bancoNombre}"`, 422);
+
+    const { data: tk } = await axios.post(
+      `${BASE_URL}/payouts/transfer/v1/tokens`,
+      {
+        documentType: 'CC',
+        documentNumber: datos.cedulaTitular,
+        accountType: normalizar(datos.tipoCuenta).startsWith('corriente') ? 'CC' : 'CA',
+        accountNumber: datos.numeroCuenta,
+        bankId,
+        totalAmount: datos.monto,
+        currency: 'COP',
+      },
+      { headers: { 'Public-Merchant-Id': PUBLIC_MERCHANT_ID, 'Content-Type': 'application/json' } }
+    );
+
+    const { data } = await axios.post(
+      `${BASE_URL}/payouts/transfer/v1/init`,
+      { token: tk.token, amount: { subtotalIva: 0, subtotalIva0: datos.monto, iva: 0 } },
+      { headers: { 'Private-Merchant-Id': PRIVATE_MERCHANT_ID, 'Content-Type': 'application/json' } }
+    );
+    return { ticketNumber: data.ticketNumber, transactionReference: data.transactionReference };
+  } catch (err: any) {
+    if (err instanceof KushkiError) throw err;
+    throw new KushkiError(err.response?.data?.message || err.message || 'Error comunicando con Kushki', err.response?.status || 502);
+  }
+}
+
+// Valores observados en sandbox: APPROVAL y DECLINED. Cualquier otro valor se
+// trata como pendiente: nunca se da por pagado ni se devuelve el saldo sin una
+// respuesta clara de Kushki.
+export async function getPayoutStatus(ticketNumber: string): Promise<KushkiTransferState> {
+  try {
+    const { data } = await axios.get(`${BASE_URL}/payouts/transfer/v1/transaction/${ticketNumber}`, {
+      headers: { 'Private-Merchant-Id': PRIVATE_MERCHANT_ID },
+    });
+    const raw = String(data.transactionStatus || data.status || '').toUpperCase();
+    if (raw.includes('APPROVAL') || raw === 'APPROVED') return 'aprobada';
+    if (['DECLINED', 'REJECTED', 'FAILED'].some((s) => raw.includes(s))) return 'rechazada';
+    return 'pendiente';
+  } catch (err: any) {
+    throw new KushkiError(err.response?.data?.message || err.message || 'Error comunicando con Kushki', err.response?.status || 502);
   }
 }

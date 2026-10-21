@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { genCodigo } from './security';
 import { getTransferStatus } from './kushki';
 import { logger } from './logger';
+import { conciliarRetirosEnProceso } from './retiros';
 
 export type EstadoPago = 'completado' | 'pendiente' | 'rechazado';
 
@@ -141,7 +142,8 @@ export function iniciarConciliacionKushki(): void {
 
   const timer = setInterval(() => {
     conciliarPagosPendientes().catch((err: any) => logger.error('Falló la conciliación de PSE', { err: err.message }));
+    conciliarRetirosEnProceso().catch((err: any) => logger.error('Falló la conciliación de retiros', { err: err.message }));
   }, INTERVALO_CONCILIACION_MS);
   timer.unref();
-  logger.info('🔁 Conciliación de pagos PSE activa (cada 5 minutos)');
+  logger.info('🔁 Conciliación de pagos PSE y retiros activa (cada 5 minutos)');
 }
