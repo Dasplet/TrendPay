@@ -127,6 +127,7 @@ model Withdrawal {
   notasAdmin      String?   @map("notas_admin")
   payoutTicket    String?   @map("payout_ticket") // ticketNumber de la dispersión en Kushki
   payoutReference String?   @map("payout_reference") // transactionReference de la dispersión
+  payoutRespuestas Json?    @map("payout_respuestas") // todas las respuestas de Kushki (exigido por la certificación)
   aprobadoPor     String?   @map("aprobado_por")
   aprobadoAt      DateTime? @map("aprobado_at")
   createdAt       DateTime  @default(now()) @map("created_at")

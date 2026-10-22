@@ -6,8 +6,8 @@ import { walletLimiter } from '../middleware/rateLimiter';
 import { encrypt, decrypt, maskAccount, genCodigo } from '../utils/security';
 import { logger } from '../utils/logger';
 import { conCuenta, miembrosDe, saldoVisible } from '../utils/cuentas';
-import { dispersionHabilitada, iniciarDispersion, getPayoutDetalle, KushkiError } from '../utils/kushki';
-import { completarRetiro, revertirRetiro, resolverRetiroEnProceso, EstadoRetiro } from '../utils/retiros';
+import { dispersionHabilitada, iniciarDispersion, getPayoutDetalle, mensajeKushki, KushkiError } from '../utils/kushki';
+import { anexarRespuesta, completarRetiro, revertirRetiro, resolverRetiroEnProceso, EstadoRetiro } from '../utils/retiros';
 
 const router = Router();
 
@@ -232,17 +232,19 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req: Request, res:
       });
     } catch (err: any) {
       const definitivo = err instanceof KushkiError && err.status < 500;
-      logger.error('Error iniciando dispersión de retiro', { err: err.message, id: withdrawal.id, definitivo });
+      logger.error('Error iniciando dispersión de retiro', { err: err.message, id: withdrawal.id, definitivo, respuesta: err.respuesta });
+      const explicacion = err instanceof KushkiError ? mensajeKushki(err) : err.message;
+      if (err instanceof KushkiError && err.respuesta) await anexarRespuesta(withdrawal.id, 'error', err.respuesta);
       if (definitivo) {
         // Kushki rechazó la petición: no salió dinero, el retiro vuelve a la cola.
         await prisma.withdrawal.updateMany({
           where: { id: withdrawal.id, status: 'en_proceso', payoutTicket: null },
-          data: { status: 'pendiente', aprobadoPor: null, aprobadoAt: null, notasAdmin: `Kushki: ${err.message}` },
+          data: { status: 'pendiente', aprobadoPor: null, aprobadoAt: null, notasAdmin: `Kushki: ${explicacion}` },
         });
-        return res.status(422).json({ ok: false, mensaje: `Kushki no aceptó el envío: ${err.message}. El retiro sigue pendiente; puedes transferirlo a mano.` });
+        return res.status(422).json({ ok: false, mensaje: `${explicacion}. El retiro sigue pendiente; puedes transferirlo a mano.` });
       }
       // Sin respuesta: no se sabe si Kushki lo recibió. Se deja en proceso, sin reintentar solo.
-      await prisma.withdrawal.update({ where: { id: withdrawal.id }, data: { notasAdmin: `Envío sin confirmar (${err.message}). Verifica en el panel de Kushki.` } });
+      await prisma.withdrawal.update({ where: { id: withdrawal.id }, data: { notasAdmin: `Envío sin confirmar (${explicacion}). Verifica en el panel de Kushki.` } });
       return res.status(502).json({ ok: false, mensaje: 'No se pudo confirmar el envío con Kushki. Revísalo en el panel de Kushki antes de reintentar.' });
     }
 
@@ -250,6 +252,7 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req: Request, res:
       where: { id: withdrawal.id },
       data: { payoutTicket: envio.ticketNumber, payoutReference: envio.transactionReference },
     });
+    await anexarRespuesta(withdrawal.id, 'init', envio.respuestas);
     await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'RETIRO_DISPERSION_INICIADA', tabla: 'withdrawals', registroId: withdrawal.id, ip: req.ip || null, datos: { monto: Number.parseFloat(withdrawal.monto.toString()), banco: withdrawal.bancoNombre, ticket: envio.ticketNumber } } });
 
     let estado: EstadoRetiro = 'en_proceso';

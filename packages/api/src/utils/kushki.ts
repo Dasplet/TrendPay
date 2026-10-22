@@ -6,10 +6,24 @@ const PUBLIC_MERCHANT_ID  = process.env.KUSHKI_PUBLIC_MERCHANT_ID || '';
 
 export class KushkiError extends Error {
   status: number;
-  constructor(mensaje: string, status = 502) {
+  codigo?: string;
+  respuesta?: unknown;
+  constructor(mensaje: string, status = 502, extra: { codigo?: string; respuesta?: unknown } = {}) {
     super(mensaje);
     this.status = status;
+    this.codigo = extra.codigo;
+    this.respuesta = extra.respuesta;
   }
+}
+
+// Mensaje en español para mostrar según la respuesta de Kushki. El texto
+// original queda guardado en las respuestas del retiro para soporte.
+export function mensajeKushki(err: KushkiError): string {
+  if (err.codigo === 'PT001') return 'Kushki rechazó los datos de la cuenta destino (banco, tipo, número o documento)';
+  if (err.status === 401 || err.status === 403) return 'Las credenciales de Kushki no son válidas o no tienen dispersión habilitada';
+  if (err.status === 422) return err.message;
+  if (err.status >= 500) return 'Kushki no respondió; no se pudo confirmar el envío';
+  return 'Kushki no pudo procesar el envío';
 }
 
 export interface KushkiChargeResult {
@@ -168,16 +182,34 @@ export interface DatosDispersion {
 export interface KushkiPayoutResult {
   ticketNumber: string;
   transactionReference: string;
+  respuestas: Record<string, unknown>;
+}
+
+function errorDeKushki(err: any, etapa: string): KushkiError {
+  const data = err.response?.data;
+  return new KushkiError(data?.message || err.message || 'Error comunicando con Kushki', err.response?.status || 502, {
+    codigo: data?.code,
+    respuesta: { etapa, httpStatus: err.response?.status ?? null, data: data ?? err.message },
+  });
 }
 
 // Crea el token con la cuenta destino y lo confirma. Si lanza, no se envió
 // dinero: el error ocurrió antes de que Kushki aceptara la dispersión.
 export async function iniciarDispersion(datos: DatosDispersion): Promise<KushkiPayoutResult> {
+  let bankId: string | null;
   try {
-    const bankId = await codigoBancoKushki(datos.bancoNombre);
-    if (!bankId) throw new KushkiError(`Kushki no soporta dispersiones al banco "${datos.bancoNombre}"`, 422);
+    bankId = await codigoBancoKushki(datos.bancoNombre);
+  } catch (err: any) {
+    throw errorDeKushki(err, 'bankList');
+  }
+  if (!bankId) {
+    throw new KushkiError(`Kushki no soporta dispersiones al banco "${datos.bancoNombre}"`, 422, { respuesta: { etapa: 'bankList', banco: datos.bancoNombre } });
+  }
 
-    const { data: tk } = await axios.post(
+  // El número de cuenta y la cédula no se guardan en las respuestas: ya viven cifrados en el retiro.
+  let tk: any;
+  try {
+    ({ data: tk } = await axios.post(
       `${BASE_URL}/payouts/transfer/v1/tokens`,
       {
         documentType: 'CC',
@@ -189,17 +221,24 @@ export async function iniciarDispersion(datos: DatosDispersion): Promise<KushkiP
         currency: 'COP',
       },
       { headers: { 'Public-Merchant-Id': PUBLIC_MERCHANT_ID, 'Content-Type': 'application/json' } }
-    );
+    ));
+  } catch (err: any) {
+    throw errorDeKushki(err, 'tokens');
+  }
 
+  try {
     const { data } = await axios.post(
       `${BASE_URL}/payouts/transfer/v1/init`,
       { token: tk.token, amount: { subtotalIva: 0, subtotalIva0: datos.monto, iva: 0 } },
       { headers: { 'Private-Merchant-Id': PRIVATE_MERCHANT_ID, 'Content-Type': 'application/json' } }
     );
-    return { ticketNumber: data.ticketNumber, transactionReference: data.transactionReference };
+    return {
+      ticketNumber: data.ticketNumber,
+      transactionReference: data.transactionReference,
+      respuestas: { tokens: { recibido: !!tk.token, bankId }, init: data },
+    };
   } catch (err: any) {
-    if (err instanceof KushkiError) throw err;
-    throw new KushkiError(err.response?.data?.message || err.message || 'Error comunicando con Kushki', err.response?.status || 502);
+    throw errorDeKushki(err, 'init');
   }
 }
 
@@ -212,6 +251,7 @@ export interface KushkiPayoutDetalle {
   responseCode: string;
   responseText: string;
   creado?: string;
+  respuesta?: unknown;
 }
 
 export async function getPayoutDetalle(ticketNumber: string): Promise<KushkiPayoutDetalle> {
@@ -229,12 +269,9 @@ export async function getPayoutDetalle(ticketNumber: string): Promise<KushkiPayo
       responseCode: data.responseCode || '',
       responseText: data.responseText || '',
       creado: data.created ? new Date(data.created).toISOString() : undefined,
+      respuesta: data,
     };
   } catch (err: any) {
-    throw new KushkiError(err.response?.data?.message || err.message || 'Error comunicando con Kushki', err.response?.status || 502);
+    throw errorDeKushki(err, 'transaction');
   }
-}
-
-export async function getPayoutStatus(ticketNumber: string): Promise<KushkiTransferState> {
-  return (await getPayoutDetalle(ticketNumber)).estado;
 }

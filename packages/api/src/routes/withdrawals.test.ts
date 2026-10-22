@@ -1,20 +1,23 @@
 import request from 'supertest';
 import app, { prisma } from '../index';
 import { limpiarBaseDeDatos, crearUsuarioDePrueba, tokenPara } from '../tests/testUtils';
-import { dispersionHabilitada, iniciarDispersion, getPayoutStatus, getPayoutDetalle, KushkiError } from '../utils/kushki';
+import { dispersionHabilitada, iniciarDispersion, getPayoutDetalle, KushkiError } from '../utils/kushki';
 import { conciliarRetirosEnProceso } from '../utils/retiros';
 
 jest.mock('../utils/kushki', () => ({
   ...jest.requireActual('../utils/kushki'),
   dispersionHabilitada: jest.fn(() => false),
   iniciarDispersion: jest.fn(),
-  getPayoutStatus: jest.fn(),
   getPayoutDetalle: jest.fn(),
 }));
 
 const mockHabilitada = dispersionHabilitada as jest.Mock;
 const mockIniciar = iniciarDispersion as jest.Mock;
-const mockEstado = getPayoutStatus as jest.Mock;
+const mockDetalle = getPayoutDetalle as jest.Mock;
+const detalle = (estado: 'aprobada' | 'rechazada' | 'pendiente') => {
+  const estadoKushki = { aprobada: 'APPROVAL', rechazada: 'DECLINED', pendiente: 'PENDING' }[estado];
+  return { estado, estadoKushki, responseCode: '', responseText: '', respuesta: { transactionStatus: estadoKushki } };
+};
 
 const datosRetiro = {
   bancoNombre: 'Bancolombia',
@@ -178,8 +181,8 @@ describe('Withdrawals API', () => {
 
     beforeEach(() => {
       mockHabilitada.mockReturnValue(true);
-      mockIniciar.mockReset().mockResolvedValue({ ticketNumber: 'T-1', transactionReference: 'R-1' });
-      mockEstado.mockReset().mockResolvedValue('pendiente');
+      mockIniciar.mockReset().mockResolvedValue({ ticketNumber: 'T-1', transactionReference: 'R-1', respuestas: { init: { status: 'INITIALIZED', ticketNumber: 'T-1' } } });
+      mockDetalle.mockReset().mockResolvedValue(detalle('pendiente'));
     });
     afterAll(() => mockHabilitada.mockReturnValue(false));
 
@@ -196,8 +199,19 @@ describe('Withdrawals API', () => {
       expect(w?.payoutTicket).toBe('T-1');
     });
 
+    it('guarda todas las respuestas de Kushki (envío y estado) en el retiro', async () => {
+      mockDetalle.mockResolvedValue(detalle('aprobada'));
+      const { admin, withdrawal } = await retiroPendiente();
+      await aprobar(withdrawal.id, admin);
+
+      const w = await prisma.withdrawal.findUnique({ where: { id: withdrawal.id } });
+      const etapas = (w!.payoutRespuestas as any[]).map((r) => r.etapa);
+      expect(etapas).toEqual(['init', 'estado']);
+      expect((w!.payoutRespuestas as any[])[1].respuesta).toEqual({ transactionStatus: 'APPROVAL' });
+    });
+
     it('si el banco ya aprobó, queda procesado y no se mueve el saldo', async () => {
-      mockEstado.mockResolvedValue('aprobada');
+      mockDetalle.mockResolvedValue(detalle('aprobada'));
       const { user, admin, withdrawal } = await retiroPendiente();
       const res = await aprobar(withdrawal.id, admin);
 
@@ -207,7 +221,7 @@ describe('Withdrawals API', () => {
     });
 
     it('si el banco rechaza, devuelve el saldo completo', async () => {
-      mockEstado.mockResolvedValue('rechazada');
+      mockDetalle.mockResolvedValue(detalle('rechazada'));
       const { user, admin, withdrawal } = await retiroPendiente();
       const res = await aprobar(withdrawal.id, admin);
 
@@ -217,7 +231,7 @@ describe('Withdrawals API', () => {
     });
 
     it('si Kushki rechaza la petición, el retiro vuelve a pendiente y no se toca el saldo', async () => {
-      mockIniciar.mockRejectedValue(new KushkiError('Banco no soportado', 422));
+      mockIniciar.mockRejectedValue(new KushkiError('Banco no soportado', 422, { respuesta: { etapa: 'bankList' } }));
       const { user, admin, withdrawal } = await retiroPendiente();
       const res = await aprobar(withdrawal.id, admin);
 
@@ -258,7 +272,7 @@ describe('Withdrawals API', () => {
     it('el admin consulta el estado en vivo de Kushki por retiro y un usuario normal no puede', async () => {
       const { user, admin, withdrawal } = await retiroPendiente();
       await aprobar(withdrawal.id, admin);
-      (getPayoutDetalle as jest.Mock).mockResolvedValue({ estadoKushki: 'DECLINED', estado: 'rechazada', responseCode: '', responseText: '' });
+      mockDetalle.mockResolvedValue(detalle('rechazada'));
 
       const res = await request(app).get(`/api/withdrawals/${withdrawal.id}/kushki`).set('Authorization', `Bearer ${tokenPara(admin)}`);
       expect(res.status).toBe(200);
@@ -297,7 +311,7 @@ describe('Withdrawals API', () => {
 
       expect(await conciliarRetirosEnProceso()).toMatchObject({ revisados: 1, enProceso: 1 });
 
-      mockEstado.mockResolvedValue('rechazada');
+      mockDetalle.mockResolvedValue(detalle('rechazada'));
       expect(await conciliarRetirosEnProceso()).toMatchObject({ revisados: 1, rechazados: 1 });
       expect((await prisma.withdrawal.findUnique({ where: { id: withdrawal.id } }))?.status).toBe('rechazado');
       expect(await saldoDe(user.id)).toBe(100000);

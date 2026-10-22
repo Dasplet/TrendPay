@@ -1,10 +1,21 @@
 import type { Prisma, Withdrawal } from '@prisma/client';
 import { prisma } from '../index';
 import { genCodigo } from './security';
-import { getPayoutStatus } from './kushki';
+import { getPayoutDetalle, KushkiError } from './kushki';
 import { logger } from './logger';
 
 export type EstadoRetiro = 'procesado' | 'rechazado' | 'en_proceso';
+
+// Kushki exige conservar todas sus respuestas por si hay que abrir soporte.
+// Se agregan en orden a una lista JSON del retiro: nunca se sobrescriben.
+export async function anexarRespuesta(withdrawalId: string, etapa: string, respuesta: unknown): Promise<void> {
+  const actual = await prisma.withdrawal.findUnique({ where: { id: withdrawalId }, select: { payoutRespuestas: true } });
+  const lista = Array.isArray(actual?.payoutRespuestas) ? actual.payoutRespuestas : [];
+  await prisma.withdrawal.update({
+    where: { id: withdrawalId },
+    data: { payoutRespuestas: [...lista, { etapa, fecha: new Date().toISOString(), respuesta }] as Prisma.InputJsonValue },
+  });
+}
 
 // Devuelve el dinero de un retiro a la billetera titular y lo marca rechazado.
 // `desde` es el estado que debe tener el retiro: el cambio es un UPDATE
@@ -103,7 +114,16 @@ export async function completarRetiro(
 export async function resolverRetiroEnProceso(withdrawal: Withdrawal): Promise<EstadoRetiro> {
   if (!withdrawal.payoutTicket || withdrawal.status !== 'en_proceso') return 'en_proceso';
 
-  const estado = await getPayoutStatus(withdrawal.payoutTicket);
+  let detalle;
+  try {
+    detalle = await getPayoutDetalle(withdrawal.payoutTicket);
+  } catch (err: any) {
+    if (err instanceof KushkiError && err.respuesta) await anexarRespuesta(withdrawal.id, 'estado_error', err.respuesta);
+    throw err;
+  }
+  await anexarRespuesta(withdrawal.id, 'estado', detalle.respuesta ?? { estadoKushki: detalle.estadoKushki });
+
+  const estado = detalle.estado;
   if (estado === 'pendiente') return 'en_proceso';
 
   const actorId = withdrawal.aprobadoPor ?? withdrawal.userId;
