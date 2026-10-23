@@ -78,7 +78,9 @@ app.use(cors({
 app.use(compression());
 
 // ── Body parsing ──
-app.use(express.json({ limit: '10kb' }));
+// El cuerpo original se conserva para verificar la firma de los webhooks de Kushki,
+// que se calcula sobre los bytes exactos que enviaron.
+app.use(express.json({ limit: '10kb', verify: (req, _res, buf) => { (req as express.Request & { rawBody?: Buffer }).rawBody = buf; } }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 app.use(cookieParser());
 

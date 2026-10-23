@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import request from 'supertest';
 import app, { prisma } from '../index';
 import { limpiarBaseDeDatos, crearUsuarioDePrueba, tokenPara } from '../tests/testUtils';
@@ -317,6 +318,107 @@ describe('Withdrawals API', () => {
       expect(await saldoDe(user.id)).toBe(100000);
 
       expect(await conciliarRetirosEnProceso()).toMatchObject({ revisados: 0 });
+    });
+
+    describe('Webhook de Kushki', () => {
+      const SECRETO = 'secreto-de-prueba';
+      const hmac = (datos: string) => createHmac('sha256', SECRETO).update(datos).digest('hex');
+      const avisoDe = (ticket: string, extra: object = {}) =>
+        JSON.stringify({ ticketNumber: ticket, transactionStatus: 'DECLINED', accountNumber: '04512345678', documentNumber: '1023456789', ...extra });
+
+      function enviarAviso(cuerpo: string, opts: { id?: string; firmar?: boolean; simple?: boolean } = {}) {
+        const id = opts.id ?? '1792600000';
+        const req = request(app).post('/api/kushki/webhooks/payout').set('Content-Type', 'application/json').set('X-Kushki-Id', id);
+        if (opts.firmar !== false) {
+          if (opts.simple) req.set('X-Kushki-SimpleSignature', hmac(id));
+          else req.set('X-Kushki-Signature', hmac(`${cuerpo}.${id}`));
+        }
+        return req.send(cuerpo);
+      }
+
+      beforeEach(() => { process.env.KUSHKI_WEBHOOK_SECRET = SECRETO; });
+      afterAll(() => { delete process.env.KUSHKI_WEBHOOK_SECRET; });
+
+      async function retiroEnProceso() {
+        const datos = await retiroPendiente();
+        await aprobar(datos.withdrawal.id, datos.admin);
+        return datos;
+      }
+
+      it('rechaza un aviso sin firma o con firma falsa y no toca el retiro', async () => {
+        const { withdrawal } = await retiroEnProceso();
+        mockDetalle.mockResolvedValue(detalle('rechazada'));
+
+        expect((await enviarAviso(avisoDe('T-1'), { firmar: false })).status).toBe(401);
+        const falsa = await request(app).post('/api/kushki/webhooks/payout').set('Content-Type', 'application/json')
+          .set('X-Kushki-Id', '1792600000').set('X-Kushki-Signature', hmac('otro cuerpo')).send(avisoDe('T-1'));
+        expect(falsa.status).toBe(401);
+        expect((await prisma.withdrawal.findUnique({ where: { id: withdrawal.id } }))?.status).toBe('en_proceso');
+      });
+
+      it('responde 503 si no hay secreto configurado para que Kushki reintente', async () => {
+        delete process.env.KUSHKI_WEBHOOK_SECRET;
+        expect((await enviarAviso(avisoDe('T-1'))).status).toBe(503);
+      });
+
+      it('con firma válida confirma con Kushki, cierra el retiro y devuelve el saldo si fue rechazado', async () => {
+        const { user, withdrawal } = await retiroEnProceso();
+        mockDetalle.mockResolvedValue(detalle('rechazada'));
+
+        const res = await enviarAviso(avisoDe('T-1'));
+        expect(res.status).toBe(200);
+        expect((await prisma.withdrawal.findUnique({ where: { id: withdrawal.id } }))?.status).toBe('rechazado');
+        expect(await saldoDe(user.id)).toBe(100000);
+      });
+
+      it('acepta la firma simple y marca procesado cuando el banco aprobó', async () => {
+        const { user, withdrawal } = await retiroEnProceso();
+        mockDetalle.mockResolvedValue(detalle('aprobada'));
+
+        const res = await enviarAviso(avisoDe('T-1', { transactionStatus: 'APPROVAL' }), { simple: true });
+        expect(res.status).toBe(200);
+        expect((await prisma.withdrawal.findUnique({ where: { id: withdrawal.id } }))?.status).toBe('procesado');
+        expect(await saldoDe(user.id)).toBe(70000);
+      });
+
+      it('un aviso duplicado es inofensivo: el saldo se devuelve una sola vez', async () => {
+        const { user } = await retiroEnProceso();
+        mockDetalle.mockResolvedValue(detalle('rechazada'));
+
+        expect((await enviarAviso(avisoDe('T-1'))).status).toBe(200);
+        expect((await enviarAviso(avisoDe('T-1'))).status).toBe(200);
+        expect(await saldoDe(user.id)).toBe(100000);
+      });
+
+      it('no decide por lo que dice el aviso: si Kushki aún no confirma, sigue en proceso', async () => {
+        const { withdrawal } = await retiroEnProceso();
+        mockDetalle.mockResolvedValue(detalle('pendiente'));
+
+        expect((await enviarAviso(avisoDe('T-1', { transactionStatus: 'APPROVAL' }))).status).toBe(200);
+        expect((await prisma.withdrawal.findUnique({ where: { id: withdrawal.id } }))?.status).toBe('en_proceso');
+      });
+
+      it('guarda el aviso sin número de cuenta ni documento', async () => {
+        const { withdrawal } = await retiroEnProceso();
+        mockDetalle.mockResolvedValue(detalle('pendiente'));
+        await enviarAviso(avisoDe('T-1'));
+
+        const guardado = (await prisma.withdrawal.findUnique({ where: { id: withdrawal.id } }))!.payoutRespuestas as any[];
+        const aviso = guardado.find((r) => r.etapa === 'webhook');
+        expect(aviso.respuesta.ticketNumber).toBe('T-1');
+        expect(JSON.stringify(aviso)).not.toContain('04512345678');
+        expect(JSON.stringify(aviso)).not.toContain('1023456789');
+      });
+
+      it('responde 404 para un ticket desconocido, así Kushki reintenta más tarde', async () => {
+        expect((await enviarAviso(avisoDe('NO-EXISTE'))).status).toBe(404);
+      });
+
+      it('responde 500 si no puede consultar a Kushki, así Kushki reintenta', async () => {
+        await retiroEnProceso();
+        mockDetalle.mockRejectedValue(new KushkiError('caído', 502));
+        expect((await enviarAviso(avisoDe('T-1'))).status).toBe(500);
+      });
     });
   });
 });

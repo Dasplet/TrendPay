@@ -11,7 +11,7 @@ La guía de Kushki enumera 8 pautas; esta es la evaluación de cada una.
 | 2 | Mensajes en pantalla según las respuestas de Kushki | Cumple (parcial en la app del usuario, ver nota) | `mensajeKushki` y rutas de `withdrawals.ts` |
 | 3 | Guardar y registrar todas las respuestas de Kushki | Cumple | columna `payout_respuestas` del retiro |
 | 4 | No enviar email en el token si no se requiere comprobante | Cumple | el token no lleva email |
-| 5 | Responder 200 a los webhooks | No aplica hoy | no usamos webhook (ver nota) |
+| 5 | Responder 200 a los webhooks | Cumple (falta activarlo en Kushki) | `POST /api/kushki/webhooks/payout` |
 | 6 | Botón de pago deshabilitado tras el primer clic | Cumple | panel admin, app del usuario y servidor |
 | 7 | Logo de Kushki visible para el cliente | **Pendiente** | falta el archivo del logo |
 | 8 | Enviar todos los campos requeridos de la referencia API | Cumple en UAT | `iniciarDispersion` |
@@ -24,7 +24,9 @@ La guía de Kushki enumera 8 pautas; esta es la evaluación de cada una.
    *Nota:* el historial del usuario aún muestra "Pendiente" mientras el banco confirma; no distingue "en proceso".
 3. **Respuestas guardadas.** Cada retiro conserva, en orden, la respuesta del `init`, cada consulta de estado y cada error (etapa, fecha, contenido). Nunca se sobrescriben. El token de un solo uso, el número de cuenta y la cédula no se guardan ahí.
 4. **Email.** La petición de token no incluye `email`.
-5. **Webhook.** El estado se consulta cada 5 minutos con la conciliación. Si Kushki activa el webhook para el comercio habrá que crear un endpoint que responda `200`; hoy no existe, y no es necesario para operar.
+5. **Webhook.** Endpoint `POST /api/kushki/webhooks/payout`. Verifica la firma de Kushki (`X-Kushki-Signature` o `X-Kushki-SimpleSignature`, HMAC SHA256 con el "webhook signature ID" de la consola) y rechaza con 401 lo que no esté firmado. Con una firma válida solo toma el `ticketNumber` del aviso y confirma el resultado consultando la API de Kushki antes de cerrar el retiro. Responde `200` si lo procesó, y error (404/500/503) si algo está pendiente para que Kushki reintente (hasta 7 veces en 3 horas). Es idempotente: un aviso duplicado no devuelve el saldo dos veces. Los datos bancarios del aviso (`accountNumber`, `documentNumber`) no se guardan. La conciliación cada 5 minutos sigue activa como respaldo.
+   Para activarlo: configurar `KUSHKI_WEBHOOK_SECRET` en Railway con el signature ID, y registrar en la consola de Kushki (Desarrolladores > Webhooks) o por solicitud a Kushki la URL `https://<dominio-de-la-api>/api/kushki/webhooks/payout` para las notificaciones de Transfer Out. Kushki envía desde IPs fijas: UAT `54.208.105.247`, producción `34.230.185.20`.
+   *No confirmado en la documentación:* si la firma viene en hex o base64 (se aceptan ambos), el tiempo máximo de respuesta y el orden de entrega de los avisos.
 6. **Doble clic.** Los botones se deshabilitan mientras la petición está en curso, y el servidor reclama el retiro con una actualización condicional antes de llamar a Kushki, de modo que dos clics no envían el dinero dos veces.
 7. **Logo.** Descargar el logo desde el enlace de la guía de Kushki, guardarlo en `apps/web/public/kushki-logo.png` y mostrarlo en la pantalla de retiro.
 8. **Campos.** Token: `documentType`, `documentNumber`, `accountType` (`CA` ahorros / `CC` corriente), `accountNumber`, `bankId`, `totalAmount`, `currency`. Init: `token` y `amount`. Para ACH no se envía `name`. Validado en UAT; falta contrastar con la referencia API de Kushki durante la revisión.
@@ -96,7 +98,7 @@ La causa más probable es que el procesador Bre-B no está configurado en nuestr
 | 4 | Mostrar `keyResolution` y pedir confirmación antes del envío | **Pendiente** (no hay paso de confirmación) |
 | 5 | Procesador Bre-B configurado en la consola | **Pendiente: lo hace Kushki** |
 | 6 | Omitir el correo en el token si no se envía recibo | Cumple |
-| 7 | Webhooks responden 200 | Pendiente, igual que en ACH |
+| 7 | Webhooks responden 200 | Cumple (mismo endpoint que ACH; falta activarlo en Kushki) |
 | 8 | Botón deshabilitado tras el primer clic | Cumple en la lógica existente; hay que replicarlo en el formulario Bre-B |
 | 9 | Logo de Kushki visible | Pendiente (falta el archivo) |
 | 10 | Todos los campos obligatorios de la API Reference | Pendiente de implementar |

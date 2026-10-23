@@ -6,10 +6,64 @@ import { walletLimiter } from '../middleware/rateLimiter';
 import { genCodigo } from '../utils/security';
 import { chargeCardToken, initTransfer, KushkiError } from '../utils/kushki';
 import { resolverPagoPse } from '../utils/kushkiPayments';
+import { anexarRespuesta, resolverRetiroEnProceso } from '../utils/retiros';
+import { firmaKushkiValida, sanitizarWebhook } from '../utils/kushkiWebhook';
 import { logger } from '../utils/logger';
 import { conCuenta, miembrosDe, saldoVisible } from '../utils/cuentas';
 
 const router = Router();
+
+// ══ POST /api/kushki/webhooks/payout ══
+// Aviso de Kushki cuando una dispersión (ACH o Bre-B) queda aprobada o
+// rechazada. No lleva sesión: se autentica con la firma HMAC de Kushki. Kushki
+// reintenta hasta 7 veces en 3 horas si no recibe 200/201, así que los
+// resultados "temporales" (aún no guardamos el ticket, error al consultar) se
+// devuelven con error para que reintente, y los duplicados son inofensivos
+// porque resolverRetiroEnProceso solo actúa sobre retiros "en_proceso".
+// El estado final se confirma consultando la API de Kushki: el aviso solo
+// dice de qué retiro se trata, no decide el resultado.
+router.post('/webhooks/payout', async (req: Request, res: Response) => {
+  const secreto = process.env.KUSHKI_WEBHOOK_SECRET;
+  if (!secreto) {
+    logger.error('Webhook de Kushki recibido sin KUSHKI_WEBHOOK_SECRET configurado');
+    return res.status(503).json({ ok: false });
+  }
+
+  const cuerpoCrudo = (req as Request & { rawBody?: Buffer }).rawBody;
+  const firmaOk = !!cuerpoCrudo && firmaKushkiValida(
+    cuerpoCrudo,
+    {
+      id: req.get('x-kushki-id'),
+      firma: req.get('x-kushki-signature'),
+      firmaSimple: req.get('x-kushki-simplesignature'),
+    },
+    secreto
+  );
+  if (!firmaOk) {
+    logger.warn('Webhook de Kushki con firma inválida', { ip: req.ip });
+    return res.status(401).json({ ok: false });
+  }
+
+  const ticket = req.body?.ticketNumber;
+  if (typeof ticket !== 'string' || !ticket) {
+    logger.warn('Webhook de Kushki firmado pero sin ticketNumber');
+    return res.status(200).json({ ok: true });
+  }
+
+  try {
+    const retiro = await prisma.withdrawal.findFirst({ where: { payoutTicket: ticket } });
+    if (!retiro) {
+      logger.warn('Webhook de Kushki para un ticket desconocido; Kushki reintentará', { ticket });
+      return res.status(404).json({ ok: false });
+    }
+    await anexarRespuesta(retiro.id, 'webhook', sanitizarWebhook(req.body));
+    await resolverRetiroEnProceso(retiro);
+    res.status(200).json({ ok: true });
+  } catch (err: any) {
+    logger.error('Error procesando webhook de Kushki', { err: err.message, ticket });
+    res.status(500).json({ ok: false });
+  }
+});
 
 // ══ POST /api/kushki/consignar/tarjeta ══
 // El frontend tokeniza la tarjeta en el navegador con Kushki.js

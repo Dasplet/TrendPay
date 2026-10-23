@@ -17,5 +17,6 @@ export const authLimiter = rateLimit({
 export const walletLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
+  skip: () => process.env.NODE_ENV === 'test',
   message: { ok: false, mensaje: 'Demasiadas operaciones. Espera un momento.' },
 });
