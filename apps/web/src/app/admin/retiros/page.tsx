@@ -12,6 +12,24 @@ export default function RetirosPage() {
   const [showReject, setShowReject] = useState<any>(null);
   const [motivo, setMotivo]         = useState('');
   const [consultando, setConsultando] = useState<string | null>(null);
+  const [respuestas, setRespuestas]   = useState<{ retiro: any; items: any[] } | null>(null);
+
+  const ETAPAS: Record<string, string> = {
+    init: 'Envío a Kushki',
+    estado: 'Consulta de estado',
+    webhook: 'Aviso de Kushki (webhook)',
+    error: 'Error al enviar',
+    estado_error: 'Error al consultar el estado',
+  };
+
+  async function verRespuestas(retiro: any) {
+    try {
+      const { data } = await adminApi.respuestasWD(retiro.id);
+      setRespuestas({ retiro, items: data.respuestas || [] });
+    } catch (e: any) {
+      toast.error(e.response?.data?.mensaje || 'No se pudieron cargar las respuestas');
+    }
+  }
 
   const { data: pendData, isLoading: pendLoading } = useQuery({
     queryKey: ['admin-retiros-pend'],
@@ -145,6 +163,7 @@ export default function RetirosPage() {
                   <div style={{ display:'flex', flexDirection:'column', gap:4, alignItems:'flex-start' }}>
                     <span style={{ fontFamily:'monospace', color:'rgba(var(--adm-fg-rgb),.6)' }}>{w.payout_ticket}</span>
                     <Btn variant="ghost" onClick={() => consultarKushki(w.id)} disabled={consultando === w.id}>{consultando === w.id ? 'Consultando…' : 'Consultar en Kushki'}</Btn>
+                    <Btn variant="ghost" onClick={() => verRespuestas(w)}>Ver respuestas</Btn>
                   </div>
                 ) : <span style={{ color:'rgba(var(--adm-fg-rgb),.3)' }}>—</span>}
               </Td>
@@ -154,6 +173,35 @@ export default function RetirosPage() {
           ))}
         </Table>
       </Panel>
+
+      {/* Respuestas de Kushki */}
+      <Modal open={!!respuestas} onClose={() => setRespuestas(null)} title="Respuestas de Kushki">
+        {respuestas && (
+          <div>
+            <div style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.6)', marginBottom:12 }}>
+              Ticket <span style={{ fontFamily:'monospace', color:'var(--adm-text)' }}>{respuestas.retiro.payout_ticket}</span> · {respuestas.retiro.banco_nombre} · {fmt(respuestas.retiro.monto)}
+            </div>
+            {respuestas.items.length === 0 ? (
+              <div style={{ textAlign:'center', padding:24, color:'rgba(var(--adm-fg-rgb),.4)', fontSize:12 }}>Aún no hay respuestas guardadas</div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:10, maxHeight:420, overflowY:'auto' }}>
+                {respuestas.items.map((r: any, i: number) => (
+                  <div key={`${r.etapa}-${r.fecha}-${i}`} style={{ border:'1px solid rgba(var(--adm-fg-rgb),.12)', borderRadius:10, padding:10 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6, fontSize:12 }}>
+                      <strong style={{ color: r.etapa?.includes('error') ? '#C0392B' : 'var(--adm-text)' }}>{ETAPAS[r.etapa] || r.etapa}</strong>
+                      <span style={{ color:'rgba(var(--adm-fg-rgb),.4)' }}>{fmtDate(r.fecha)}</span>
+                    </div>
+                    <pre style={{ margin:0, fontSize:10, whiteSpace:'pre-wrap', wordBreak:'break-all', color:'rgba(var(--adm-fg-rgb),.7)' }}>{JSON.stringify(r.respuesta, null, 2)}</pre>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ marginTop:14 }}>
+              <Btn variant="ghost" style={{ width:'100%', justifyContent:'center' }} onClick={() => setRespuestas(null)}>Cerrar</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Reject modal */}
       <Modal open={!!showReject} onClose={() => setShowReject(null)} title="Rechazar retiro">

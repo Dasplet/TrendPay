@@ -284,6 +284,20 @@ describe('Withdrawals API', () => {
       expect(comoUsuario.status).toBe(403);
     });
 
+    it('el admin ve el historial de respuestas guardadas y un usuario normal no', async () => {
+      mockDetalle.mockResolvedValue(detalle('aprobada'));
+      const { user, admin, withdrawal } = await retiroPendiente();
+      await aprobar(withdrawal.id, admin);
+
+      const res = await request(app).get(`/api/withdrawals/${withdrawal.id}/respuestas`).set('Authorization', `Bearer ${tokenPara(admin)}`);
+      expect(res.status).toBe(200);
+      expect(res.body.ticket).toBe('T-1');
+      expect(res.body.respuestas.map((r: any) => r.etapa)).toEqual(['init', 'estado']);
+
+      const comoUsuario = await request(app).get(`/api/withdrawals/${withdrawal.id}/respuestas`).set('Authorization', `Bearer ${tokenPara(user)}`);
+      expect(comoUsuario.status).toBe(403);
+    });
+
     it('un retiro manual (sin ticket) no tiene consulta en Kushki', async () => {
       const { admin, withdrawal } = await retiroPendiente();
       const res = await request(app).get(`/api/withdrawals/${withdrawal.id}/kushki`).set('Authorization', `Bearer ${tokenPara(admin)}`);

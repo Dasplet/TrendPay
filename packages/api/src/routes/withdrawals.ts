@@ -191,6 +191,23 @@ router.get('/:id/kushki', authenticate, requireAdmin, async (req: Request, res: 
   }
 });
 
+// ══ GET /api/withdrawals/:id/respuestas ══ (admin — historial de respuestas de Kushki guardadas)
+router.get('/:id/respuestas', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const withdrawal = await prisma.withdrawal.findUnique({ where: { id: req.params.id } });
+    if (!withdrawal) return res.status(404).json({ ok: false, mensaje: 'Retiro no encontrado' });
+    res.json({
+      ok: true,
+      ticket: withdrawal.payoutTicket,
+      referencia: withdrawal.payoutReference,
+      respuestas: Array.isArray(withdrawal.payoutRespuestas) ? withdrawal.payoutRespuestas : [],
+    });
+  } catch (err: any) {
+    logger.error('Error consultando respuestas de Kushki', { err: err.message, id: req.params.id });
+    res.status(500).json({ ok: false, mensaje: 'Error consultando las respuestas' });
+  }
+});
+
 // ══ PUT /api/withdrawals/:id/approve ══
 // Con KUSHKI_PAYOUTS_ENABLED el retiro se envía por Kushki (dispersión ACH) y
 // queda "en_proceso" hasta que el banco responde; sin él, el admin transfiere a

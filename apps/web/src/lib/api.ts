@@ -133,6 +133,7 @@ export const adminApi = {
   approveWD:    (id: string, manual = false) => api.put(`/withdrawals/${id}/approve`, { manual }),
   rejectWD:     (id: string, motivo: string) => api.put(`/withdrawals/${id}/reject`, { motivo }),
   kushkiWD:     (id: string) => api.get(`/withdrawals/${id}/kushki`),
+  respuestasWD: (id: string) => api.get(`/withdrawals/${id}/respuestas`),
   banks:        () => api.get('/admin/banks'),
   createBank:   (data: any) => api.post('/admin/banks', data),
   updateBank:   (id: string, data: any) => api.put(`/admin/banks/${id}`, data),
