@@ -1,6 +1,6 @@
 import request from 'supertest';
 import app, { prisma } from '../index';
-import { limpiarBaseDeDatos, crearUsuarioDePrueba, crearSubcuentaDePrueba, tokenPara } from '../tests/testUtils';
+import { limpiarBaseDeDatos, crearUsuarioDePrueba, tokenPara } from '../tests/testUtils';
 
 const nuevoUsuario = {
   cedula: '9988776655',
@@ -165,90 +165,6 @@ describe('Admin API', () => {
 
       const auditLog = await prisma.auditLog.findFirst({ where: { accion: 'ELIMINAR_USUARIO', registroId: target.id } });
       expect((auditLog!.datos as any).antes.nombre).toBe('Por Eliminar');
-    });
-  });
-
-  describe('POST /api/admin/users/:id/ajustar-saldo', () => {
-    it('un usuario normal no puede ajustar saldos', async () => {
-      const user = await crearUsuarioDePrueba();
-      const res = await request(app)
-        .post(`/api/admin/users/${user.id}/ajustar-saldo`)
-        .set('Authorization', `Bearer ${tokenPara(user)}`)
-        .send({ monto: 1000, motivo: 'Intento ajeno' });
-      expect(res.status).toBe(403);
-    });
-
-    it('suma saldo y deja movimiento, notificación y auditoría', async () => {
-      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
-      const target = await crearUsuarioDePrueba({ saldo: 1000 });
-
-      const res = await request(app)
-        .post(`/api/admin/users/${target.id}/ajustar-saldo`)
-        .set('Authorization', `Bearer ${tokenPara(admin)}`)
-        .send({ monto: 400000, motivo: 'Saldo de prueba' });
-      expect(res.status).toBe(200);
-      expect(res.body.saldo).toBe(401000);
-
-      const wallet = await prisma.wallet.findUnique({ where: { userId: target.id } });
-      expect(Number(wallet!.saldo)).toBe(401000);
-
-      const tx = await prisma.transaction.findFirst({ where: { userId: target.id, categoria: 'ajuste' } });
-      expect(Number(tx!.saldoAntes)).toBe(1000);
-      expect(Number(tx!.saldoDespues)).toBe(401000);
-      expect(tx!.codigo.startsWith('AJU')).toBe(true);
-
-      expect(await prisma.notification.count({ where: { userId: target.id, titulo: 'Ajuste de saldo' } })).toBe(1);
-      const log = await prisma.auditLog.findFirst({ where: { accion: 'AJUSTAR_SALDO', userId: admin.id } });
-      expect((log!.datos as any).monto).toBe(400000);
-    });
-
-    it('descuenta saldo, pero no deja la billetera en negativo', async () => {
-      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
-      const target = await crearUsuarioDePrueba({ saldo: 5000 });
-      const auth = { Authorization: `Bearer ${tokenPara(admin)}` };
-
-      const ok = await request(app).post(`/api/admin/users/${target.id}/ajustar-saldo`).set(auth).send({ monto: -3000, motivo: 'Corrección' });
-      expect(ok.status).toBe(200);
-      expect(ok.body.saldo).toBe(2000);
-
-      const excede = await request(app).post(`/api/admin/users/${target.id}/ajustar-saldo`).set(auth).send({ monto: -3000, motivo: 'Corrección' });
-      expect(excede.status).toBe(400);
-      const wallet = await prisma.wallet.findUnique({ where: { userId: target.id } });
-      expect(Number(wallet!.saldo)).toBe(2000);
-    });
-
-    it('rechaza monto cero, motivo vacío y montos exagerados', async () => {
-      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
-      const target = await crearUsuarioDePrueba();
-      const auth = { Authorization: `Bearer ${tokenPara(admin)}` };
-      const url = `/api/admin/users/${target.id}/ajustar-saldo`;
-
-      expect((await request(app).post(url).set(auth).send({ monto: 0, motivo: 'Sin monto' })).status).toBe(400);
-      expect((await request(app).post(url).set(auth).send({ monto: 1000, motivo: '' })).status).toBe(400);
-      expect((await request(app).post(url).set(auth).send({ monto: 99999999, motivo: 'Demasiado' })).status).toBe(400);
-    });
-
-    it('opera sobre la billetera del padre cuando es una subcuenta', async () => {
-      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
-      const padre = await crearUsuarioDePrueba({ saldo: 0 });
-      const sub = await crearSubcuentaDePrueba(padre.id);
-
-      const res = await request(app)
-        .post(`/api/admin/users/${sub.id}/ajustar-saldo`)
-        .set('Authorization', `Bearer ${tokenPara(admin)}`)
-        .send({ monto: 2000, motivo: 'Fondeo subcuenta' });
-      expect(res.status).toBe(200);
-      const wallet = await prisma.wallet.findUnique({ where: { userId: padre.id } });
-      expect(Number(wallet!.saldo)).toBe(2000);
-    });
-
-    it('responde 404 si el usuario no existe', async () => {
-      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
-      const res = await request(app)
-        .post('/api/admin/users/no-existe/ajustar-saldo')
-        .set('Authorization', `Bearer ${tokenPara(admin)}`)
-        .send({ monto: 1000, motivo: 'Usuario fantasma' });
-      expect(res.status).toBe(404);
     });
   });
 

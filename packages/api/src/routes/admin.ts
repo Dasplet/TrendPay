@@ -5,7 +5,6 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '../index';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { conciliarPagosPendientes } from '../utils/kushkiPayments';
-import { genCodigo } from '../utils/security';
 
 const router = Router();
 
@@ -128,74 +127,6 @@ router.put('/users/:id', authenticate, requireAdmin, async (req: Request, res: R
     }).catch(() => {});
 
     res.json({ ok: true, mensaje: 'Usuario actualizado', usuario: user });
-  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
-});
-
-// ══ POST /api/admin/users/:id/ajustar-saldo ══
-// Ajuste manual de saldo (pruebas y correcciones): deja movimiento, notificación y auditoría.
-const ajusteSchema = z.object({
-  monto: z.number().refine(m => Number.isFinite(m) && m !== 0 && Math.abs(m) <= 10_000_000, 'Monto inválido (máximo 10.000.000)'),
-  motivo: z.string().trim().min(5, 'Escribe el motivo del ajuste').max(200),
-});
-
-router.post('/users/:id/ajustar-saldo', authenticate, requireAdmin, async (req: Request, res: Response) => {
-  const parse = ajusteSchema.safeParse(req.body);
-  if (!parse.success) return res.status(400).json({ ok: false, mensaje: parse.error.errors[0].message });
-  const { monto, motivo } = parse.data;
-
-  try {
-    const usuario = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true, nombre: true, cuentaPadreId: true } });
-    if (!usuario) return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado' });
-
-    const resultado = await prisma.$transaction(async (tx) => {
-      const wallet = await tx.wallet.findUnique({ where: { userId: usuario.cuentaPadreId ?? usuario.id } });
-      if (!wallet) return null;
-
-      // Si resta, la condición evita dejar el saldo en negativo aunque haya otra operación en paralelo
-      const actualizado = await tx.wallet.updateMany({
-        where: monto < 0 ? { id: wallet.id, saldo: { gte: -monto } } : { id: wallet.id },
-        data: { saldo: { increment: monto } },
-      });
-      if (actualizado.count === 0) return 'sin_saldo' as const;
-
-      const despues = await tx.wallet.findUniqueOrThrow({ where: { id: wallet.id } });
-      const saldoDespues = Number.parseFloat(despues.saldo.toString());
-      const abs = Math.abs(monto);
-
-      await tx.transaction.create({
-        data: {
-          walletId: wallet.id,
-          userId: usuario.id,
-          codigo: genCodigo('AJU'),
-          categoria: 'ajuste',
-          descripcion: `Ajuste de saldo · ${motivo}`,
-          montoBruto: abs,
-          comisionPct: 0,
-          comisionValor: 0,
-          montoNeto: abs,
-          saldoAntes: saldoDespues - monto,
-          saldoDespues,
-          status: 'exitosa',
-          metadata: { tipo: monto > 0 ? 'credito' : 'debito', motivo, ajustadoPor: req.user!.id },
-        },
-      });
-      await tx.notification.create({
-        data: {
-          userId: usuario.id,
-          tipo: 'info',
-          titulo: 'Ajuste de saldo',
-          mensaje: `Se ${monto > 0 ? 'acreditaron' : 'descontaron'} ${abs.toLocaleString('es-CO')} COP en tu billetera. Motivo: ${motivo}`,
-        },
-      });
-      await tx.auditLog.create({
-        data: { userId: req.user!.id, accion: 'AJUSTAR_SALDO', tabla: 'wallets', registroId: wallet.id, ip: req.ip, datos: { usuarioId: usuario.id, monto, motivo, saldoDespues } },
-      });
-      return { saldoDespues };
-    });
-
-    if (resultado === null) return res.status(404).json({ ok: false, mensaje: 'El usuario no tiene billetera' });
-    if (resultado === 'sin_saldo') return res.status(400).json({ ok: false, mensaje: 'El saldo no alcanza para ese descuento' });
-    res.json({ ok: true, mensaje: `Saldo ajustado. Nuevo saldo: ${resultado.saldoDespues.toLocaleString('es-CO')} COP`, saldo: resultado.saldoDespues });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 
