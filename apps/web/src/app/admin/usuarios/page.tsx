@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, Tr, Td, StatusBadge, KycBadge, Avatar, Btn, Modal, Input, Select, fmt, fmtDate } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
-import { Users, Download, Eye, Pencil, Lock, Trash2, AlertTriangle } from 'lucide-react';
+import { Users, Download, Eye, Pencil, Lock, Trash2, AlertTriangle, Wallet } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
 
 export default function UsuariosPage() {
@@ -15,6 +15,7 @@ export default function UsuariosPage() {
   const [newUser, setNewUser]   = useState({ nombre:'', cedula:'', correo:'', celular:'', ciudad:'', pin:'', rol:'usuario' });
   const [showEdit, setShowEdit] = useState<any>(null);
   const [showDel, setShowDel]   = useState<any>(null);
+  const [ajuste, setAjuste]     = useState<{ user: any; tipo: 'credito' | 'debito'; monto: string; motivo: string } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -37,6 +38,20 @@ export default function UsuariosPage() {
   function exportarCsv() {
     downloadCsv('usuarios', ['Nombre', 'Correo', 'Cédula', 'Rol', 'Saldo', 'KYC', 'Transacciones', 'Estado'],
       users.map((u: any) => [u.nombre, u.correo, u.cedula, u.rol === 'admin' ? 'Admin' : 'Usuario', u.saldo || 0, u.kycNivel || u.kyc_nivel || 1, u._txCount || 0, u.bloqueado ? 'Bloqueado' : 'Activo']));
+  }
+
+  const ajusteMut = useMutation({
+    mutationFn: ({ id, monto, motivo }: { id: string; monto: number; motivo: string }) => adminApi.ajustarSaldo(id, { monto, motivo }),
+    onSuccess: (res) => { qc.invalidateQueries({ queryKey:['admin-users'] }); toast.success(res.data?.mensaje || 'Saldo ajustado'); setAjuste(null); },
+    onError: (e:any) => toast.error(e.response?.data?.mensaje || 'No se pudo ajustar el saldo'),
+  });
+
+  function submitAjuste() {
+    if (!ajuste || ajusteMut.isPending) return;
+    const valor = Number.parseInt(ajuste.monto, 10);
+    if (!valor || valor <= 0) { toast.error('Escribe un monto válido'); return; }
+    if (ajuste.motivo.trim().length < 5) { toast.error('Escribe el motivo del ajuste'); return; }
+    ajusteMut.mutate({ id: ajuste.user.id, monto: ajuste.tipo === 'credito' ? valor : -valor, motivo: ajuste.motivo.trim() });
   }
 
   const deleteMut = useMutation({
@@ -106,6 +121,7 @@ export default function UsuariosPage() {
                 <div style={{ display:'flex', gap:6 }}>
                   <Btn variant="ghost" onClick={() => setSelected(u)} style={{ padding:'5px 8px' }}><Eye size={14} /></Btn>
                   <Btn variant="ghost" onClick={() => setShowEdit({...u})} style={{ padding:'5px 8px' }}><Pencil size={14} /></Btn>
+                  <Btn variant="ghost" onClick={() => setAjuste({ user:u, tipo:'credito', monto:'', motivo:'' })} style={{ padding:'5px 8px' }} title="Ajustar saldo"><Wallet size={14} /></Btn>
                   <Btn variant="ghost" onClick={() => updateMut.mutate({ id:u.id, data:{ bloqueado: !u.bloqueado } })} style={{ padding:'5px 8px' }}><Lock size={14} /></Btn>
                   <Btn variant="danger" onClick={() => setShowDel(u)} style={{ padding:'5px 8px' }}><Trash2 size={14} /></Btn>
                 </div>
@@ -168,6 +184,26 @@ export default function UsuariosPage() {
             <Btn variant="primary" style={{ width:'100%', justifyContent:'center', marginTop:8 }}
               onClick={() => updateMut.mutate({ id:showEdit.id, data:{ nombre:showEdit.nombre, correo:showEdit.correo, celular:showEdit.celular, ciudad:showEdit.ciudad, ...(showEdit.nuevo_pin?{nuevo_pin:showEdit.nuevo_pin}:{}) }})}>
               Guardar cambios
+            </Btn>
+          </div>
+        )}
+      </Modal>
+
+      {/* Ajuste de saldo */}
+      <Modal open={!!ajuste} onClose={() => setAjuste(null)} title="Ajustar saldo">
+        {ajuste && (
+          <div>
+            <div style={{ fontSize:13, color:'var(--adm-muted)', marginBottom:14 }}>
+              {ajuste.user.nombre} · saldo actual <strong style={{ color:'var(--adm-text)' }}>{fmt(ajuste.user.saldo||0)}</strong>
+            </div>
+            <Select label="Tipo de ajuste" value={ajuste.tipo} onChange={e => setAjuste(p => p && ({...p, tipo: e.target.value as 'credito' | 'debito'}))}>
+              <option value="credito">Sumar saldo</option>
+              <option value="debito">Descontar saldo</option>
+            </Select>
+            <Input label="Monto (COP)" inputMode="numeric" value={ajuste.monto} onChange={e => setAjuste(p => p && ({...p, monto: e.target.value.replaceAll(/\D/g,'').slice(0,8)}))} />
+            <Input label="Motivo (queda en el historial y la auditoría)" value={ajuste.motivo} onChange={e => setAjuste(p => p && ({...p, motivo: e.target.value}))} />
+            <Btn variant="primary" style={{ width:'100%', justifyContent:'center', marginTop:8 }} disabled={ajusteMut.isPending} onClick={submitAjuste}>
+              {ajusteMut.isPending ? 'Aplicando...' : 'Aplicar ajuste'}
             </Btn>
           </div>
         )}

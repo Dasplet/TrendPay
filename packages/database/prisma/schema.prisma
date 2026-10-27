@@ -88,7 +88,7 @@ model Transaction {
   walletId      String   @map("wallet_id")
   userId        String   @map("user_id")
   codigo        String   @unique
-  categoria     String   // consigna | cobro_qr | envio | retiro | comision
+  categoria     String   // consigna | cobro_qr | envio | retiro | comision | ajuste
   descripcion   String
   montoBruto    Decimal  @map("monto_bruto") @db.Decimal(18, 2)
   comisionPct   Decimal  @default(0) @map("comision_pct") @db.Decimal(5, 2)

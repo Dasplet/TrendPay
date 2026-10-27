@@ -128,6 +128,7 @@ export const adminApi = {
   createUser:   (data: any) => api.post('/admin/users', data),
   updateUser:   (id: string, data: any) => api.put(`/admin/users/${id}`, data),
   deleteUser:   (id: string) => api.delete(`/admin/users/${id}`),
+  ajustarSaldo: (id: string, data: { monto: number; motivo: string }) => api.post(`/admin/users/${id}/ajustar-saldo`, data),
   pending:      () => api.get('/withdrawals/pending'),
   withdrawalsAll: () => api.get('/withdrawals'),
   approveWD:    (id: string, manual = false) => api.put(`/withdrawals/${id}/approve`, { manual }),
