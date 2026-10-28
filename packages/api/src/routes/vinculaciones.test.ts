@@ -3,6 +3,7 @@ import app, { prisma } from '../index';
 import { limpiarBaseDeDatos, crearUsuarioDePrueba, tokenPara } from '../tests/testUtils';
 import * as storage from '../utils/storage';
 import * as email from '../utils/email';
+import { enlaceVinculacion } from '../utils/vinculaciones';
 
 jest.mock('../utils/storage', () => ({
   almacenamientoConfigurado: jest.fn(() => true),
@@ -47,6 +48,30 @@ async function subirTodos(token: string) {
     expect(res.status).toBe(200);
   }
 }
+
+describe('Enlace de vinculación', () => {
+  const entorno = { front: process.env.FRONTEND_URL, node: process.env.NODE_ENV };
+  afterEach(() => {
+    if (entorno.front === undefined) delete process.env.FRONTEND_URL; else process.env.FRONTEND_URL = entorno.front;
+    (process.env as Record<string, string | undefined>).NODE_ENV = entorno.node;
+  });
+
+  it('usa FRONTEND_URL cuando es una dirección pública', () => {
+    process.env.FRONTEND_URL = 'https://app.trendpay.test/';
+    expect(enlaceVinculacion('abc')).toBe('https://app.trendpay.test/vinculacion/abc');
+  });
+
+  it('en producción ignora un FRONTEND_URL de desarrollo y usa el dominio real', () => {
+    process.env.FRONTEND_URL = 'http://localhost:3000';
+    (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
+    expect(enlaceVinculacion('abc')).toBe('https://trendpay.com.co/vinculacion/abc');
+  });
+
+  it('en desarrollo conserva localhost para poder probar', () => {
+    process.env.FRONTEND_URL = 'http://localhost:3000';
+    expect(enlaceVinculacion('abc')).toBe('http://localhost:3000/vinculacion/abc');
+  });
+});
 
 describe('Vinculación de clientes', () => {
   afterAll(async () => {
