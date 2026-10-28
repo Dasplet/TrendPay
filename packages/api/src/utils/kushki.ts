@@ -127,7 +127,8 @@ export async function getTransferStatus(token: string): Promise<KushkiTransferSt
 // crea con la llave pública; el init y la consulta usan la privada.
 
 export function dispersionHabilitada(): boolean {
-  return process.env.KUSHKI_PAYOUTS_ENABLED === 'true' && !!PRIVATE_MERCHANT_ID && !!PUBLIC_MERCHANT_ID;
+  const activa = (process.env.KUSHKI_PAYOUTS_ENABLED ?? '').trim().replace(/^["']|["']$/g, '').toLowerCase() === 'true';
+  return activa && !!PRIVATE_MERCHANT_ID && !!PUBLIC_MERCHANT_ID;
 }
 
 interface BancoKushki {
