@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, Tr, Td, StatusBadge, Btn, Modal, Input, fmt, fmtDate } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
-import { Clock, CheckCircle2, Check, X, Download } from 'lucide-react';
+import { Clock, CheckCircle2, Check, X, Download, RefreshCw, FileText } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
 
 export default function RetirosPage() {
@@ -160,10 +160,14 @@ export default function RetirosPage() {
               <Td><StatusBadge status={w.status} /></Td>
               <Td style={{ fontSize:11 }}>
                 {w.payout_ticket ? (
-                  <div style={{ display:'flex', flexDirection:'column', gap:4, alignItems:'flex-start' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, whiteSpace:'nowrap' }}>
                     <span style={{ fontFamily:'monospace', color:'rgba(var(--adm-fg-rgb),.6)' }}>{w.payout_ticket}</span>
-                    <Btn variant="ghost" onClick={() => consultarKushki(w.id)} disabled={consultando === w.id}>{consultando === w.id ? 'Consultando…' : 'Consultar en Kushki'}</Btn>
-                    <Btn variant="ghost" onClick={() => verRespuestas(w)}>Ver respuestas</Btn>
+                    <Btn variant="ghost" title="Consultar estado en Kushki" onClick={() => consultarKushki(w.id)} disabled={consultando === w.id} style={{ padding:'5px 7px' }}>
+                      <RefreshCw size={13} className={consultando === w.id ? 'animate-spin' : undefined} />
+                    </Btn>
+                    <Btn variant="ghost" title="Ver respuestas guardadas" onClick={() => verRespuestas(w)} style={{ padding:'5px 7px' }}>
+                      <FileText size={13} />
+                    </Btn>
                   </div>
                 ) : <span style={{ color:'rgba(var(--adm-fg-rgb),.3)' }}>—</span>}
               </Td>
