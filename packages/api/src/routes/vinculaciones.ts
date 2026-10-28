@@ -4,7 +4,7 @@ import { prisma } from '../index';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { sendVinculacionEmail, MotivoCorreoVinculacion } from '../utils/email';
-import { almacenamientoConfigurado, urlTemporal, borrarObjeto } from '../utils/storage';
+import { modoAlmacenamiento, urlTemporal, borrarObjeto } from '../utils/storage';
 import { DOCUMENTOS_VINCULACION, buscarDocumento } from '../utils/vinculacionDocs';
 import { DIAS_VIGENCIA_ENLACE, documentosConEstado, enlaceVinculacion, fechaEnDias, generarToken } from '../utils/vinculaciones';
 
@@ -89,7 +89,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.get('/', async (_req: Request, res: Response) => {
   try {
     const lista = await prisma.vinculacion.findMany({ orderBy: { createdAt: 'desc' }, take: 200, include: { documentos: true } });
-    res.json({ ok: true, vinculaciones: lista.map(resumen), almacenamiento: almacenamientoConfigurado() });
+    res.json({ ok: true, vinculaciones: lista.map(resumen), almacenamiento: modoAlmacenamiento() });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 
@@ -108,7 +108,6 @@ router.get('/:id/documentos/:tipo/archivo', async (req: Request, res: Response) 
   try {
     const doc = await prisma.vinculacionDocumento.findUnique({ where: { vinculacionId_tipo: { vinculacionId: req.params.id, tipo: req.params.tipo } } });
     if (!doc) return res.status(404).json({ ok: false, mensaje: 'Documento no encontrado' });
-    if (!almacenamientoConfigurado()) return res.status(503).json({ ok: false, mensaje: 'El almacenamiento de documentos no está configurado' });
     const url = await urlTemporal(doc.storageKey, doc.nombreOriginal);
     await auditar(req, 'VER_DOCUMENTO_VINCULACION', req.params.id, { tipo: doc.tipo });
     res.json({ ok: true, url, nombre: doc.nombreOriginal, mime: doc.mime });
@@ -218,9 +217,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     const v = await prisma.vinculacion.findUnique({ where: { id: req.params.id }, include: { documentos: true } });
     if (!v) return res.status(404).json({ ok: false, mensaje: 'Solicitud no encontrada' });
     if (v.estado === 'en_revision') return res.status(409).json({ ok: false, mensaje: 'No se puede eliminar una solicitud en revisión' });
-    if (almacenamientoConfigurado()) {
-      await Promise.all(v.documentos.map(d => borrarObjeto(d.storageKey).catch(e => logger.warn('Vinculación: archivo no borrado', { error: e.message }))));
-    }
+    await Promise.all(v.documentos.map(d => borrarObjeto(d.storageKey).catch(e => logger.warn('Vinculación: archivo no borrado', { error: e.message }))));
     await prisma.vinculacion.delete({ where: { id: v.id } });
     await auditar(req, 'ELIMINAR_VINCULACION', v.id, { razonSocial: v.razonSocial });
     res.json({ ok: true });

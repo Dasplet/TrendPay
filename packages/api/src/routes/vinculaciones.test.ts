@@ -6,8 +6,8 @@ import * as email from '../utils/email';
 import { enlaceVinculacion } from '../utils/vinculaciones';
 
 jest.mock('../utils/storage', () => ({
-  almacenamientoConfigurado: jest.fn(() => true),
-  guardarObjeto: jest.fn(async () => undefined),
+  modoAlmacenamiento: jest.fn(() => 's3'),
+  guardarObjeto: jest.fn(async (key: string) => key),
   borrarObjeto: jest.fn(async () => undefined),
   urlTemporal: jest.fn(async (key: string) => `https://almacen.test/${key}?firma=abc`),
 }));
@@ -81,7 +81,6 @@ describe('Vinculación de clientes', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    (storage.almacenamientoConfigurado as jest.Mock).mockReturnValue(true);
     await limpiarBaseDeDatos();
   });
 
@@ -187,12 +186,6 @@ describe('Vinculación de clientes', () => {
       await subir(token, 'cedula_rep_legal', { archivo: PNG, nombre: 'nueva.png' });
       expect(storage.borrarObjeto).toHaveBeenCalledTimes(1);
       expect(await prisma.vinculacionDocumento.count()).toBe(1);
-    });
-
-    it('responde 503 si el almacenamiento no está configurado', async () => {
-      (storage.almacenamientoConfigurado as jest.Mock).mockReturnValue(false);
-      const { token } = await crearSolicitud();
-      expect((await subir(token, 'cedula_rep_legal')).status).toBe(503);
     });
 
     it('no permite enviar la solicitud incompleta', async () => {

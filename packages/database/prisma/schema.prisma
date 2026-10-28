@@ -92,6 +92,16 @@ model Vinculacion {
   @@map("vinculaciones")
 }
 
+// Archivos de vinculación guardados cifrados en la propia base de datos
+// (se usa cuando no hay almacenamiento S3/R2 configurado).
+model VinculacionArchivo {
+  key       String   @id
+  contenido Bytes
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("vinculacion_archivos")
+}
+
 model VinculacionDocumento {
   id               String    @id @default(uuid())
   vinculacionId    String    @map("vinculacion_id")

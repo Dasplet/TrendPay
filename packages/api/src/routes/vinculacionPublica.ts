@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { prisma } from '../index';
 import { logger } from '../utils/logger';
 import { DOCUMENTOS_VINCULACION, buscarDocumento, detectarTipoArchivo, parsearFecha, validarVigencia } from '../utils/vinculacionDocs';
-import { almacenamientoConfigurado, guardarObjeto, borrarObjeto } from '../utils/storage';
+import { guardarObjeto, borrarObjeto, leerArchivoBd, leerTokenArchivo } from '../utils/storage';
 import { hashToken, documentosConEstado } from '../utils/vinculaciones';
 
 const router = Router();
@@ -51,6 +51,32 @@ function esEditable(v: VinculacionConDocs) {
   return v.estado === 'invitada' || v.estado === 'requiere_correccion';
 }
 
+// ══ GET /api/vinculacion/archivo/:token ══
+// Descarga de un archivo guardado en la base de datos. El token lo emite el panel admin (autenticado),
+// dura 2 minutos y solo sirve para ese archivo.
+router.get('/archivo/:token', async (req: Request, res: Response) => {
+  const permiso = leerTokenArchivo(req.params.token);
+  if (!permiso) return res.status(401).json({ ok: false, mensaje: 'El enlace del documento venció. Ábrelo de nuevo desde el panel.' });
+  try {
+    const [doc, contenido] = await Promise.all([
+      prisma.vinculacionDocumento.findFirst({ where: { storageKey: permiso.key }, select: { mime: true } }),
+      leerArchivoBd(permiso.key),
+    ]);
+    if (!doc || !contenido) return res.status(404).json({ ok: false, mensaje: 'Documento no encontrado' });
+    res.set({
+      'Content-Type': doc.mime,
+      'Content-Disposition': `inline; filename="${permiso.nombre}"`,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
+    });
+    res.send(contenido);
+  } catch (e: any) {
+    logger.error('Vinculación: error leyendo archivo', { error: e.message });
+    res.status(500).json({ ok: false, mensaje: 'No pudimos abrir el documento' });
+  }
+});
+
 // ══ GET /api/vinculacion/:token ══
 router.get('/:token', cargarVinculacion, (_req: Request, res: Response) => {
   const v: VinculacionConDocs = res.locals.vinculacion;
@@ -90,13 +116,7 @@ router.post('/:token/documentos/:tipo', cargarVinculacion, subirArchivo, async (
     const errorFecha = validarVigencia(def, fecha);
     if (errorFecha) return res.status(400).json({ ok: false, mensaje: errorFecha, campo: 'fechaExpedicion' });
 
-    if (!almacenamientoConfigurado()) {
-      logger.error('Vinculación: almacenamiento S3/R2 sin configurar');
-      return res.status(503).json({ ok: false, mensaje: 'El servicio de carga no está disponible por ahora. Intenta más tarde.' });
-    }
-
-    const storageKey = `vinculaciones/${v.id}/${def.tipo}/${randomUUID()}.${detectado.ext}`;
-    await guardarObjeto(storageKey, req.file.buffer, detectado.mime);
+    const storageKey = await guardarObjeto(`vinculaciones/${v.id}/${def.tipo}/${randomUUID()}.${detectado.ext}`, req.file.buffer, detectado.mime);
 
     const datos = {
       storageKey,

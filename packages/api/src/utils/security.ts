@@ -22,6 +22,21 @@ export function decrypt(data: string): string {
   }
 }
 
+// Cifrado de archivos completos (iv 16 B | tag 16 B | contenido), con la misma llave que los datos bancarios.
+export function encryptBuffer(data: Buffer): Buffer {
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(ALGORITHM, KEY, iv);
+  const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), encrypted]);
+}
+
+// Lanza si el contenido fue alterado o la llave no corresponde.
+export function decryptBuffer(data: Buffer): Buffer {
+  const decipher = crypto.createDecipheriv(ALGORITHM, KEY, data.subarray(0, 16));
+  decipher.setAuthTag(data.subarray(16, 32));
+  return Buffer.concat([decipher.update(data.subarray(32)), decipher.final()]);
+}
+
 export function maskAccount(num: string): string {
   if (num.length <= 4) return '****';
   return '*'.repeat(num.length - 4) + num.slice(-4);

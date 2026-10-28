@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { FolderCheck, Plus, Eye, Link2, Copy, Check, X, FileText, ExternalLink, AlertTriangle } from 'lucide-react';
+import { FolderCheck, Plus, Eye, Link2, Copy, Check, X, FileText, ExternalLink } from 'lucide-react';
 import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, Tr, Td, StatusBadge, Btn, Modal, Input, fmtDate } from '@/components/admin/ui';
 
@@ -14,6 +14,8 @@ const FILTROS = [
   { label: 'Aprobadas', value: 'aprobada' },
   { label: 'Rechazadas', value: 'rechazada' },
 ];
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 const VACIO = { razonSocial: '', nit: '', contactoNombre: '', contactoCorreo: '' };
 
@@ -93,7 +95,9 @@ export default function VinculacionesPage() {
     const ventana = window.open('about:blank', '_blank');
     try {
       const { data: res } = await adminApi.archivoVinculacion(abierta as string, tipo);
-      if (ventana) { ventana.opener = null; ventana.location.href = res.url; }
+      // En el almacenamiento propio la dirección es relativa al API; en S3/R2 ya es absoluta
+      const destino = res.url.startsWith('/') ? `${API_URL}${res.url}` : res.url;
+      if (ventana) { ventana.opener = null; ventana.location.href = destino; }
     } catch (e: any) {
       ventana?.close();
       toast.error(mensajeError(e, 'No se pudo abrir el documento'));
@@ -117,13 +121,6 @@ export default function VinculacionesPage() {
 
   return (
     <div>
-      {data && !data.almacenamiento && (
-        <div style={{ display:'flex', gap:10, alignItems:'flex-start', padding:'12px 16px', marginBottom:16, borderRadius:12, background:'rgba(212,160,23,.12)', border:'1px solid rgba(212,160,23,.35)', color:'#d4a017', fontSize:13 }}>
-          <AlertTriangle size={18} style={{ flex:'none' }} />
-          <span>El almacenamiento de documentos no está configurado. Los clientes no podrán cargar archivos hasta que se definan las variables <b>S3_BUCKET</b>, <b>S3_ACCESS_KEY_ID</b>, <b>S3_SECRET_ACCESS_KEY</b> (y <b>S3_ENDPOINT</b> si usas Cloudflare R2) en Railway.</span>
-        </div>
-      )}
-
       <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:16 }}>
         {FILTROS.map(f => (
           <button key={f.value} onClick={() => setFiltro(f.value)}
