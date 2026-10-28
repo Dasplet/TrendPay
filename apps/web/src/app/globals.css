@@ -291,7 +291,6 @@ input::placeholder { color: rgba(174,147,170,.5); }
 /* El reset global (margin:0) quita el centrado nativo del <dialog> */
 .adm-dialog {
   margin: auto;
-  max-width: min(480px, calc(100vw - 32px)) !important;
 }
 .adm-dialog::backdrop {
   background: rgba(0,0,0,.6);

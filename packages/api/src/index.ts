@@ -28,6 +28,8 @@ import adminRouter     from './routes/admin';
 import userAuditRouter from './routes/userAudit';
 import kushkiRouter    from './routes/kushki';
 import bankAccountsRouter from './routes/bankAccounts';
+import vinculacionesRouter from './routes/vinculaciones';
+import vinculacionPublicaRouter from './routes/vinculacionPublica';
 
 export const prisma = new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['query', 'error'] : ['error'],
@@ -106,6 +108,8 @@ app.use('/api/banks',       banksRouter);
 app.use('/api/withdrawals', withdrawalsRouter);
 app.use('/api/bank-accounts', bankAccountsRouter);
 app.use('/api/referrals',   referralsRouter);
+app.use('/api/admin/vinculaciones', vinculacionesRouter);
+app.use('/api/vinculacion', vinculacionPublicaRouter);
 app.use('/api/admin',       adminRouter);
 app.use('/api/user-audit',  userAuditRouter);
 app.use('/api/kushki',      kushkiRouter);

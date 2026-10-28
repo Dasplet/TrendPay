@@ -58,9 +58,59 @@ model User {
   rapydPayments   RapydPayment[]
   kushkiPayments  KushkiPayment[]
   transactions    Transaction[]
+  vinculaciones   Vinculacion[]
 
   @@index([cuentaPadreId])
   @@map("users")
+}
+
+// ══════════════════════════════════════
+// VINCULACIÓN DE CLIENTES EMPRESARIALES
+// ══════════════════════════════════════
+// El cliente entra con un enlace privado (solo se guarda el hash del token) y sube
+// sus documentos; el equipo de TrendPay los revisa uno por uno desde el panel admin.
+model Vinculacion {
+  id              String    @id @default(uuid())
+  tokenHash       String    @unique @map("token_hash")
+  razonSocial     String    @map("razon_social")
+  nit             String?
+  contactoNombre  String    @map("contacto_nombre")
+  contactoCorreo  String    @map("contacto_correo")
+  estado          String    @default("invitada") // invitada | en_revision | requiere_correccion | aprobada | rechazada
+  mensaje         String?   // mensaje del equipo al cliente (corrección o rechazo)
+  expiraAt        DateTime  @map("expira_at")
+  enviadaAt       DateTime? @map("enviada_at")
+  decididaAt      DateTime? @map("decidida_at")
+  creadaPor       String    @map("creada_por")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  creador    User                    @relation(fields: [creadaPor], references: [id])
+  documentos VinculacionDocumento[]
+
+  @@index([estado, createdAt(sort: Desc)])
+  @@map("vinculaciones")
+}
+
+model VinculacionDocumento {
+  id               String    @id @default(uuid())
+  vinculacionId    String    @map("vinculacion_id")
+  tipo             String    // cedula_rep_legal | rut | camara_comercio | cert_bancaria | composicion_accionaria
+  storageKey       String    @map("storage_key")
+  nombreOriginal   String    @map("nombre_original")
+  mime             String
+  tamano           Int
+  sha256           String
+  fechaExpedicion  DateTime? @map("fecha_expedicion") @db.Date
+  estado           String    @default("pendiente") // pendiente | aprobado | rechazado
+  motivo           String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  vinculacion Vinculacion @relation(fields: [vinculacionId], references: [id], onDelete: Cascade)
+
+  @@unique([vinculacionId, tipo])
+  @@map("vinculacion_documentos")
 }
 
 // ══════════════════════════════════════

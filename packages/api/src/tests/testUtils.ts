@@ -4,6 +4,8 @@ import { prisma } from '../index';
 
 // Orden pensado para respetar las foreign keys del schema.
 export async function limpiarBaseDeDatos() {
+  await prisma.vinculacionDocumento.deleteMany();
+  await prisma.vinculacion.deleteMany();
   await prisma.transaction.deleteMany();
   await prisma.qrCode.deleteMany();
   await prisma.withdrawal.deleteMany();

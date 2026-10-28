@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   LayoutDashboard, Users, GitBranch, ArrowLeftRight,
   Landmark, Percent, Building2, AlertTriangle, FileText,
-  Settings, ClipboardList, UserCheck, LogOut, Search, CreditCard
+  Settings, ClipboardList, UserCheck, LogOut, Search, CreditCard, FolderCheck
 } from 'lucide-react';
 import { NotificationBell } from '@/components/admin/NotificationBell';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -23,6 +23,7 @@ const NAV = [
     { href: '/admin/comisiones',    icon: Percent,         label: 'Comisiones'         },
     { href: '/admin/bancos',        icon: Building2,       label: 'Bancos'             },
     { href: '/admin/pagos-kushki',  icon: CreditCard,      label: 'Pagos Kushki'       },
+    { href: '/admin/vinculaciones', icon: FolderCheck,     label: 'Vinculaciones'      },
   ]},
   { section: 'SEGURIDAD', items: [
     { href: '/admin/alertas',       icon: AlertTriangle,   label: 'Alertas'            },
@@ -44,6 +45,7 @@ const PAGE_TITLES: Record<string, { title: string; sub: string }> = {
   '/admin/comisiones':         { title: 'Comisiones',          sub: 'Ingresos por comisiones del 3%'          },
   '/admin/bancos':             { title: 'Bancos',              sub: 'Bancos habilitados para retiro'           },
   '/admin/pagos-kushki':       { title: 'Pagos Kushki',        sub: 'Consignaciones con tarjeta y PSE'         },
+  '/admin/vinculaciones':      { title: 'Vinculaciones',       sub: 'Documentos de clientes empresariales'    },
   '/admin/alertas':            { title: 'Alertas de riesgo',   sub: 'Deteccion de operaciones inusuales'      },
   '/admin/reportes':           { title: 'Reportes',            sub: 'Exportacion y reportes regulatorios'     },
   '/admin/configuracion':      { title: 'Configuracion',       sub: 'Parametros del sistema'                  },

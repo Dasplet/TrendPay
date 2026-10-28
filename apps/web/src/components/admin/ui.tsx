@@ -88,6 +88,11 @@ export function StatusBadge({ status }: Readonly<{ status: string }>) {
     pagado:    { label:'Pagado',    color:'#6CC998', bg:'rgba(108,201,152,.15)' },
     activo:    { label:'Activo',    color:'#6CC998', bg:'rgba(108,201,152,.15)' },
     bloqueado: { label:'Bloqueado', color:'#C0392B', bg:'rgba(192,57,43,.15)'   },
+    invitada:  { label:'Invitada',  color:'#AE93AA', bg:'rgba(174,147,170,.15)' },
+    en_revision: { label:'En revisión', color:'#4a90d9', bg:'rgba(74,144,217,.15)' },
+    requiere_correccion: { label:'Con correcciones', color:'#d4a017', bg:'rgba(212,160,23,.15)' },
+    aprobada:  { label:'Aprobada',  color:'#6CC998', bg:'rgba(108,201,152,.15)' },
+    aprobado:  { label:'Aprobado',  color:'#6CC998', bg:'rgba(108,201,152,.15)' },
   };
   const s = map[status?.toLowerCase()] || { label: status, color:'#AE93AA', bg:'rgba(174,147,170,.15)' };
   return (
@@ -137,7 +142,7 @@ export function Btn({ children, onClick, variant = 'default', disabled, style, t
 }
 
 // ── Modal ──
-export function Modal({ open, onClose, title, children }: Readonly<{ open:boolean; onClose:()=>void; title:string; children:React.ReactNode }>) {
+export function Modal({ open, onClose, title, children, wide }: Readonly<{ open:boolean; onClose:()=>void; title:string; children:React.ReactNode; wide?:boolean }>) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -157,7 +162,7 @@ export function Modal({ open, onClose, title, children }: Readonly<{ open:boolea
       aria-label={title}
       onClose={onClose}
       onClick={e => { if (e.target === dialogRef.current) onClose(); }}
-      style={{ background:'var(--adm-panel)', border:'1px solid rgba(133,46,199,.3)', borderRadius:20, width:'100%', maxWidth:480, maxHeight:'90vh', overflowY:'auto', padding:28, color:'inherit' }}
+      style={{ background:'var(--adm-panel)', border:'1px solid rgba(133,46,199,.3)', borderRadius:20, width:'100%', maxWidth:`min(${wide ? 780 : 480}px, calc(100vw - 32px))`, maxHeight:'90vh', overflowY:'auto', padding:28, color:'inherit' }}
     >
       <button onClick={onClose} style={{ position:'absolute', top:16, right:16, width:28, height:28, borderRadius:8, background:'rgba(133,46,199,.12)', border:'none', color:'var(--adm-text)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><X size={16} /></button>
       <div style={{ fontSize:18, fontWeight:800, color:'var(--adm-text)', marginBottom:20 }}>{title}</div>
