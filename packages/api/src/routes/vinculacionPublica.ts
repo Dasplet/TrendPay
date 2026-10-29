@@ -5,8 +5,8 @@ import rateLimit from 'express-rate-limit';
 import { prisma } from '../index';
 import { logger } from '../utils/logger';
 import { DOCUMENTOS_VINCULACION, buscarDocumento, detectarTipoArchivo, parsearFecha, validarVigencia } from '../utils/vinculacionDocs';
-import { guardarObjeto, borrarObjeto, leerArchivoBd, leerTokenArchivo } from '../utils/storage';
-import { hashToken, documentosConEstado } from '../utils/vinculaciones';
+import { guardarObjeto, borrarObjeto, leerArchivoBd, leerTokenArchivo, urlTemporal } from '../utils/storage';
+import { hashToken, documentosConEstado, contratoPendiente, resumenContrato, guardarArchivoContrato } from '../utils/vinculaciones';
 
 const router = Router();
 
@@ -35,7 +35,7 @@ async function cargarVinculacion(req: Request, res: Response, next: NextFunction
   try {
     const vinculacion = await buscarPorToken(req.params.token);
     if (!vinculacion) return res.status(404).json({ ok: false, mensaje: 'Este enlace no es válido. Solicita uno nuevo a TrendPay.' });
-    const editable = vinculacion.estado === 'invitada' || vinculacion.estado === 'requiere_correccion';
+    const editable = vinculacion.estado === 'invitada' || vinculacion.estado === 'requiere_correccion' || contratoPendiente(vinculacion);
     if (editable && vinculacion.expiraAt.getTime() < Date.now()) {
       return res.status(410).json({ ok: false, mensaje: 'Este enlace venció. Solicita uno nuevo a TrendPay.' });
     }
@@ -84,8 +84,53 @@ router.get('/:token', cargarVinculacion, (_req: Request, res: Response) => {
     ok: true,
     vinculacion: { razonSocial: v.razonSocial, contactoNombre: v.contactoNombre, estado: v.estado, mensaje: v.mensaje, expiraAt: v.expiraAt, enviadaAt: v.enviadaAt },
     documentos: documentosConEstado(v.documentos),
+    contrato: resumenContrato(v),
     limiteMb: MAX_BYTES / (1024 * 1024),
   });
+});
+
+// ══ GET /api/vinculacion/:token/contrato ══
+// Enlace temporal para descargar el contrato que TrendPay le envió al cliente.
+router.get('/:token/contrato', cargarVinculacion, async (_req: Request, res: Response) => {
+  const v: VinculacionConDocs = res.locals.vinculacion;
+  try {
+    const doc = v.contratoEstado === 'ninguno' ? undefined : v.documentos.find(d => d.tipo === 'contrato');
+    if (!doc) return res.status(404).json({ ok: false, mensaje: 'Aún no hay un contrato disponible' });
+    res.json({ ok: true, url: await urlTemporal(doc.storageKey, doc.nombreOriginal), nombre: doc.nombreOriginal });
+  } catch (e: any) {
+    logger.error('Vinculación: error generando enlace del contrato', { error: e.message, vinculacionId: v.id });
+    res.status(500).json({ ok: false, mensaje: 'No pudimos abrir el contrato. Intenta de nuevo.' });
+  }
+});
+
+// ══ POST /api/vinculacion/:token/contrato-firmado ══
+router.post('/:token/contrato-firmado', cargarVinculacion, subirArchivo, async (req: Request, res: Response) => {
+  const v: VinculacionConDocs = res.locals.vinculacion;
+  try {
+    if (!contratoPendiente(v)) return res.status(409).json({ ok: false, mensaje: 'Ahora no es posible subir el contrato firmado' });
+    if (!req.file) return res.status(400).json({ ok: false, mensaje: 'Selecciona el contrato firmado' });
+
+    const guardado = await guardarArchivoContrato(v.id, 'contrato_firmado', req.file);
+    if (!guardado.ok) return res.status(400).json({ ok: false, mensaje: guardado.mensaje });
+
+    // Reclamo atómico: solo pasa a "firmado" si seguía esperando la firma
+    const reclamo = await prisma.vinculacion.updateMany({
+      where: { id: v.id, estado: 'aprobada', contratoEstado: { in: ['enviado', 'rechazado'] } },
+      data: { contratoEstado: 'firmado', contratoMotivo: null },
+    });
+    if (reclamo.count === 0) return res.status(409).json({ ok: false, mensaje: 'Ahora no es posible subir el contrato firmado' });
+
+    const admins = await prisma.user.findMany({ where: { rol: 'admin', bloqueado: false }, select: { id: true } });
+    if (admins.length) {
+      await prisma.notification.createMany({
+        data: admins.map(a => ({ userId: a.id, tipo: 'info', titulo: 'Contrato firmado por revisar', mensaje: `${v.razonSocial} subió su contrato firmado` })),
+      });
+    }
+    res.json({ ok: true, mensaje: 'Recibimos tu contrato firmado. Lo validaremos y te avisaremos por correo.' });
+  } catch (e: any) {
+    logger.error('Vinculación: error subiendo contrato firmado', { error: e.message, vinculacionId: v.id });
+    res.status(500).json({ ok: false, mensaje: 'No pudimos guardar el contrato. Intenta de nuevo.' });
+  }
 });
 
 function subirArchivo(req: Request, res: Response, next: NextFunction) {

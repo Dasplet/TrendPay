@@ -1,5 +1,8 @@
-import { createHash, randomBytes } from 'node:crypto';
-import { DOCUMENTOS_VINCULACION } from './vinculacionDocs';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { prisma } from '../index';
+import { logger } from './logger';
+import { DOCUMENTOS_VINCULACION, detectarTipoArchivo } from './vinculacionDocs';
+import { guardarObjeto, borrarObjeto } from './storage';
 
 export const DIAS_VIGENCIA_ENLACE = 30;
 
@@ -57,4 +60,51 @@ export function documentosConEstado(guardados: DocumentoGuardado[]) {
       subidoEn: doc?.updatedAt ?? null,
     };
   });
+}
+
+export type TipoArchivoContrato = 'contrato' | 'contrato_firmado';
+
+// El contrato está pendiente de firma del cliente: ya se le envió (o se le devolvió para corregir) y aún no firma.
+export function contratoPendiente(v: { estado: string; contratoEstado: string }): boolean {
+  return v.estado === 'aprobada' && (v.contratoEstado === 'enviado' || v.contratoEstado === 'rechazado');
+}
+
+interface DocumentoContrato { tipo: string; nombreOriginal: string; tamano: number; updatedAt: Date }
+
+export function resumenContrato(v: { contratoEstado: string; contratoMotivo: string | null; documentos: DocumentoContrato[] }) {
+  const ficha = (tipo: TipoArchivoContrato) => {
+    const d = v.documentos.find(x => x.tipo === tipo);
+    return d ? { nombre: d.nombreOriginal, tamano: d.tamano, subidoEn: d.updatedAt } : null;
+  };
+  return { estado: v.contratoEstado, motivo: v.contratoMotivo, enviado: ficha('contrato'), firmado: ficha('contrato_firmado') };
+}
+
+// Guarda (o reemplaza) el contrato o el contrato firmado. El contrato que sube TrendPay debe ser PDF.
+export async function guardarArchivoContrato(
+  vinculacionId: string,
+  tipo: TipoArchivoContrato,
+  archivo: { buffer: Buffer; originalname: string; size: number },
+): Promise<{ ok: true } | { ok: false; mensaje: string }> {
+  const detectado = detectarTipoArchivo(archivo.buffer);
+  if (!detectado) return { ok: false, mensaje: 'Solo se aceptan archivos PDF, JPG o PNG' };
+  if (tipo === 'contrato' && detectado.mime !== 'application/pdf') return { ok: false, mensaje: 'El contrato debe ser un archivo PDF' };
+
+  const previo = await prisma.vinculacionDocumento.findUnique({ where: { vinculacionId_tipo: { vinculacionId, tipo } } });
+  const storageKey = await guardarObjeto(`vinculaciones/${vinculacionId}/${tipo}/${randomUUID()}.${detectado.ext}`, archivo.buffer, detectado.mime);
+  const datos = {
+    storageKey,
+    nombreOriginal: archivo.originalname.slice(0, 200),
+    mime: detectado.mime,
+    tamano: archivo.size,
+    sha256: createHash('sha256').update(archivo.buffer).digest('hex'),
+    estado: 'pendiente',
+    motivo: null,
+  };
+  await prisma.vinculacionDocumento.upsert({
+    where: { vinculacionId_tipo: { vinculacionId, tipo } },
+    create: { vinculacionId, tipo, ...datos },
+    update: datos,
+  });
+  if (previo) await borrarObjeto(previo.storageKey).catch(e => logger.warn('Vinculación: no se pudo borrar el archivo anterior', { error: e.message }));
+  return { ok: true };
 }

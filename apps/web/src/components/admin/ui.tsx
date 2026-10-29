@@ -91,7 +91,11 @@ export function StatusBadge({ status }: Readonly<{ status: string }>) {
     invitada:  { label:'Invitada',  color:'#AE93AA', bg:'rgba(174,147,170,.15)' },
     en_revision: { label:'En revisión', color:'#4a90d9', bg:'rgba(74,144,217,.15)' },
     requiere_correccion: { label:'Con correcciones', color:'#d4a017', bg:'rgba(212,160,23,.15)' },
-    aprobada:  { label:'Aprobada',  color:'#6CC998', bg:'rgba(108,201,152,.15)' },
+    aprobada:  { label:'Docs aprobados', color:'#6CC998', bg:'rgba(108,201,152,.15)' },
+    completada: { label:'Completada', color:'#6CC998', bg:'rgba(108,201,152,.15)' },
+    enviado:   { label:'Enviado',   color:'#4a90d9', bg:'rgba(74,144,217,.15)'  },
+    firmado:   { label:'Firmado',   color:'#d4a017', bg:'rgba(212,160,23,.15)'  },
+    ninguno:   { label:'Sin contrato', color:'#AE93AA', bg:'rgba(174,147,170,.15)' },
     aprobado:  { label:'Aprobado',  color:'#6CC998', bg:'rgba(108,201,152,.15)' },
   };
   const s = map[status?.toLowerCase()] || { label: status, color:'#AE93AA', bg:'rgba(174,147,170,.15)' };

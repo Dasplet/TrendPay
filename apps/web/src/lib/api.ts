@@ -141,6 +141,12 @@ export const adminApi = {
   revisarDocVinculacion: (id: string, tipo: string, data: { estado: 'aprobado' | 'rechazado'; motivo?: string }) => api.put(`/admin/vinculaciones/${id}/documentos/${tipo}`, data),
   decidirVinculacion:   (id: string, data: { decision: 'aprobar' | 'solicitar_correccion' | 'rechazar'; mensaje?: string }) => api.put(`/admin/vinculaciones/${id}/decision`, data),
   enlaceVinculacion:    (id: string) => api.post(`/admin/vinculaciones/${id}/enlace`),
+  enviarContrato:       (id: string, archivo: File) => {
+    const form = new FormData();
+    form.append('archivo', archivo);
+    return api.post(`/admin/vinculaciones/${id}/contrato`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  revisarContrato:      (id: string, data: { decision: 'aprobar' | 'rechazar'; motivo?: string }) => api.put(`/admin/vinculaciones/${id}/contrato`, data),
   eliminarVinculacion:  (id: string) => api.delete(`/admin/vinculaciones/${id}`),
   banks:        () => api.get('/admin/banks'),
   createBank:   (data: any) => api.post('/admin/banks', data),

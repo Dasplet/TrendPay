@@ -13,6 +13,7 @@ interface Documento {
   tamano: number | null; fechaExpedicion: string | null; estado: string; motivo: string | null;
 }
 interface Solicitud { razonSocial: string; contactoNombre: string; estado: string; mensaje: string | null; expiraAt: string }
+interface Contrato { estado: string; motivo: string | null; enviado: { nombre: string } | null; firmado: { nombre: string } | null }
 
 const ESTILOS = `
 .vc-page { min-height:100vh; background:linear-gradient(180deg,#f4effb 0%,#faf8fd 320px,#faf8fd 100%); color:#241b2f; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
@@ -197,6 +198,113 @@ function TarjetaDocumento({ doc, indice, editable, token, onCambio }: Readonly<{
   );
 }
 
+// Paso final: el cliente descarga el contrato que le envió TrendPay, lo firma y sube el PDF firmado.
+function PasoContrato({ token, contrato, onCambio }: Readonly<{ token: string; contrato: Contrato; onCambio: () => void }>) {
+  const [abriendo, setAbriendo] = useState(false);
+  const [subiendo, setSubiendo] = useState(false);
+  const [arrastrando, setArrastrando] = useState(false);
+  const [error, setError] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const devuelto = contrato.estado === 'rechazado';
+
+  async function descargar() {
+    setError('');
+    setAbriendo(true);
+    const ventana = window.open('about:blank', '_blank');
+    try {
+      const res = await fetch(`${API_URL}/api/vinculacion/${token}/contrato`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { ventana?.close(); setError(data.mensaje || 'No pudimos abrir el contrato'); return; }
+      const destino = String(data.url).startsWith('/') ? `${API_URL}${data.url}` : data.url;
+      if (ventana) { ventana.opener = null; ventana.location.href = destino; }
+    } catch {
+      ventana?.close();
+      setError('No pudimos conectar con el servidor. Intenta de nuevo.');
+    } finally {
+      setAbriendo(false);
+    }
+  }
+
+  async function subir(archivo: File) {
+    setError('');
+    setSubiendo(true);
+    try {
+      const form = new FormData();
+      form.append('archivo', archivo);
+      const res = await fetch(`${API_URL}/api/vinculacion/${token}/contrato-firmado`, { method: 'POST', body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.mensaje || 'No pudimos cargar el contrato'); return; }
+      onCambio();
+    } catch {
+      setError('No pudimos conectar con el servidor. Revisa tu internet e intenta de nuevo.');
+    } finally {
+      setSubiendo(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  }
+
+  return (
+    <>
+      <section className="vc-hero">
+        <h1>¡Documentos aprobados! Falta firmar el contrato</h1>
+        <p>Descarga el contrato, fírmalo (a mano y escaneado, o con tu firma digital) y sube el archivo firmado. Cuando lo validemos, tu vinculación quedará completa.</p>
+      </section>
+
+      <div className="vc-steps" style={{ margin: '24px auto 8px', maxWidth: 520 }}>
+        <div className="vc-step done">Documentos aprobados</div>
+        <div className="vc-step now">Firma del contrato</div>
+        <div className="vc-step">Completada</div>
+      </div>
+
+      <div className="vc-list" style={{ marginTop: 22 }}>
+        {devuelto && contrato.motivo && (
+          <div className="vc-banner"><AlertCircle size={20} style={{ flex: 'none' }} />
+            <div><strong>Necesitamos que corrijas el contrato firmado.</strong> {contrato.motivo}</div>
+          </div>
+        )}
+
+        <div className="vc-card">
+          <div className="vc-card-head">
+            <div className="vc-num">1</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="vc-card-title">Descarga el contrato</div>
+              <div className="vc-card-desc">{contrato.enviado?.nombre || 'Contrato de vinculación'}</div>
+            </div>
+            <button className="vc-btn" disabled={abriendo} onClick={descargar}><FileText size={15} /> {abriendo ? 'Abriendo…' : 'Ver contrato'}</button>
+          </div>
+        </div>
+
+        <div className={`vc-card ${devuelto ? 'bad' : ''}`}>
+          <div className="vc-card-head">
+            <div className="vc-num">2</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="vc-card-title">Sube el contrato firmado</div>
+              <div className="vc-card-desc">Debe verse la firma del representante legal en el documento.</div>
+            </div>
+          </div>
+          <div className="vc-body">
+            <div
+              className={`vc-drop ${arrastrando ? 'over' : ''}`}
+              onClick={() => inputRef.current?.click()}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click(); }}
+              onDragOver={e => { e.preventDefault(); setArrastrando(true); }}
+              onDragLeave={() => setArrastrando(false)}
+              onDrop={e => { e.preventDefault(); setArrastrando(false); const f = e.dataTransfer.files?.[0]; if (f) subir(f); }}
+              role="button" tabIndex={0}
+            >
+              <span style={{ display: 'flex', justifyContent: 'center' }}><UploadCloud size={26} color="#852EC7" /></span>
+              <div style={{ marginTop: 6, fontSize: 14 }}>{subiendo ? 'Cargando…' : <>Arrastra el contrato firmado aquí o <b>búscalo en tu equipo</b></>}</div>
+              <small>PDF, JPG o PNG · máximo 8 MB</small>
+            </div>
+            <input ref={inputRef} type="file" accept="application/pdf,image/jpeg,image/png" hidden onChange={e => { const f = e.target.files?.[0]; if (f) subir(f); }} />
+            {error && <div className="vc-err"><AlertCircle size={16} style={{ flex: 'none', marginTop: 1 }} /> {error}</div>}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function Mensaje({ icono, color, titulo, texto, pasos }: Readonly<{ icono: React.ReactNode; color: string; titulo: string; texto: string; pasos?: { etiqueta: string; estado: 'done' | 'now' | 'next' }[] }>) {
   return (
     <div className="vc-center">
@@ -214,6 +322,7 @@ export default function VinculacionPage() {
   const [errorCarga, setErrorCarga] = useState('');
   const [sol, setSol] = useState<Solicitud | null>(null);
   const [docs, setDocs] = useState<Documento[]>([]);
+  const [contrato, setContrato] = useState<Contrato | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [errorEnvio, setErrorEnvio] = useState('');
 
@@ -224,6 +333,7 @@ export default function VinculacionPage() {
       if (!res.ok) { setErrorCarga(data.mensaje || 'No pudimos abrir este enlace'); return; }
       setSol(data.vinculacion);
       setDocs(data.documentos);
+      setContrato(data.contrato ?? null);
       setErrorCarga('');
     } catch {
       setErrorCarga('No pudimos conectar con el servidor. Revisa tu internet e intenta de nuevo.');
@@ -264,14 +374,28 @@ export default function VinculacionPage() {
   } else if (sol.estado === 'en_revision') {
     contenido = (
       <Mensaje icono={<Clock size={32} />} color="#852EC7" titulo="Estamos revisando tus documentos"
-        texto={`Recibimos la documentación de ${sol.razonSocial}. Nuestro equipo la está evaluando y te avisaremos el resultado por correo. No necesitas hacer nada más.`}
+        texto={`Recibimos la documentación de ${sol.razonSocial}; nuestro equipo la está evaluando y te avisaremos el resultado por correo. No necesitas hacer nada más.`}
         pasos={[{ etiqueta: 'Documentos recibidos', estado: 'done' }, { etiqueta: 'En evaluación', estado: 'now' }, { etiqueta: 'Resultado', estado: 'next' }]} />
+    );
+  } else if (sol.estado === 'aprobada' && contrato && (contrato.estado === 'enviado' || contrato.estado === 'rechazado')) {
+    contenido = <PasoContrato token={token} contrato={contrato} onCambio={cargar} />;
+  } else if (sol.estado === 'aprobada' && contrato?.estado === 'firmado') {
+    contenido = (
+      <Mensaje icono={<Clock size={32} />} color="#852EC7" titulo="Estamos validando tu contrato"
+        texto={`Recibimos el contrato firmado de ${sol.razonSocial}; lo validaremos y te avisaremos por correo cuando tu vinculación quede completa.`}
+        pasos={[{ etiqueta: 'Documentos aprobados', estado: 'done' }, { etiqueta: 'Contrato firmado', estado: 'now' }, { etiqueta: 'Completada', estado: 'next' }]} />
     );
   } else if (sol.estado === 'aprobada') {
     contenido = (
-      <Mensaje icono={<ShieldCheck size={34} />} color="#1e8a55" titulo="¡Vinculación aprobada!"
-        texto={`Los documentos de ${sol.razonSocial} fueron aprobados. Nuestro equipo se pondrá en contacto contigo para los siguientes pasos.`}
-        pasos={[{ etiqueta: 'Documentos recibidos', estado: 'done' }, { etiqueta: 'Evaluación', estado: 'done' }, { etiqueta: 'Aprobada', estado: 'done' }]} />
+      <Mensaje icono={<ShieldCheck size={34} />} color="#1e8a55" titulo="¡Tus documentos fueron aprobados!"
+        texto={`Los documentos de ${sol.razonSocial} fueron aprobados. En breve te enviaremos el contrato por correo para que lo firmes.`}
+        pasos={[{ etiqueta: 'Documentos aprobados', estado: 'done' }, { etiqueta: 'Contrato', estado: 'now' }, { etiqueta: 'Completada', estado: 'next' }]} />
+    );
+  } else if (sol.estado === 'completada') {
+    contenido = (
+      <Mensaje icono={<ShieldCheck size={34} />} color="#1e8a55" titulo="¡Vinculación completada!"
+        texto={`Validamos el contrato firmado de ${sol.razonSocial}: tu vinculación con TrendPay está completa y nuestro equipo se pondrá en contacto contigo para activar tu cuenta.`}
+        pasos={[{ etiqueta: 'Documentos aprobados', estado: 'done' }, { etiqueta: 'Contrato firmado', estado: 'done' }, { etiqueta: 'Completada', estado: 'done' }]} />
     );
   } else if (sol.estado === 'rechazada') {
     contenido = (

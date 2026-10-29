@@ -37,7 +37,7 @@ function escapar(texto: string): string {
   return texto.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 }
 
-export type MotivoCorreoVinculacion = 'invitacion' | 'correccion' | 'aprobada' | 'rechazada';
+export type MotivoCorreoVinculacion = 'invitacion' | 'correccion' | 'aprobada' | 'rechazada' | 'contrato' | 'contrato_correccion' | 'completada';
 
 const TEXTOS_VINCULACION: Record<MotivoCorreoVinculacion, { asunto: string; titulo: string; cuerpo: string; boton?: string }> = {
   invitacion: {
@@ -53,9 +53,26 @@ const TEXTOS_VINCULACION: Record<MotivoCorreoVinculacion, { asunto: string; titu
     boton: 'Corregir documentos',
   },
   aprobada: {
-    asunto: 'Vinculación a TrendPay aprobada',
-    titulo: '¡Vinculación aprobada!',
-    cuerpo: 'Los documentos de {empresa} fueron aprobados. Pronto nos pondremos en contacto contigo para los siguientes pasos.',
+    asunto: 'Documentos aprobados: sigue el contrato',
+    titulo: '¡Tus documentos fueron aprobados!',
+    cuerpo: 'Los documentos de {empresa} fueron aprobados. El siguiente paso es el contrato: en breve te lo enviaremos por este mismo medio para que lo firmes.',
+  },
+  contrato: {
+    asunto: 'Tu contrato con TrendPay está listo para firma',
+    titulo: 'Firma tu contrato',
+    cuerpo: 'Ya está listo el contrato de {empresa}: descárgalo desde el portal, fírmalo (a mano o con firma digital) y sube el PDF firmado.',
+    boton: 'Ver y firmar el contrato',
+  },
+  contrato_correccion: {
+    asunto: 'Tu contrato firmado necesita una corrección',
+    titulo: 'Necesitamos corregir el contrato',
+    cuerpo: 'Revisamos el contrato firmado de {empresa} y necesita una corrección. Entra al portal para ver el detalle y subirlo de nuevo.',
+    boton: 'Subir el contrato de nuevo',
+  },
+  completada: {
+    asunto: '¡Vinculación a TrendPay completada!',
+    titulo: '¡Vinculación completada!',
+    cuerpo: 'Recibimos y validamos el contrato firmado de {empresa}: tu vinculación con TrendPay está completa y nuestro equipo se pondrá en contacto contigo para activar tu cuenta.',
   },
   rechazada: {
     asunto: 'Vinculación a TrendPay: resultado de la evaluación',

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { FolderCheck, Plus, Eye, Link2, Copy, Check, X, FileText, ExternalLink } from 'lucide-react';
@@ -11,7 +11,8 @@ const FILTROS = [
   { label: 'Por revisar', value: 'en_revision' },
   { label: 'Invitadas', value: 'invitada' },
   { label: 'Con correcciones', value: 'requiere_correccion' },
-  { label: 'Aprobadas', value: 'aprobada' },
+  { label: 'Docs aprobados', value: 'aprobada' },
+  { label: 'Completadas', value: 'completada' },
   { label: 'Rechazadas', value: 'rechazada' },
 ];
 
@@ -31,6 +32,8 @@ export default function VinculacionesPage() {
   const [abierta, setAbierta] = useState<string | null>(null);
   const [rechazando, setRechazando] = useState<{ tipo: string; motivo: string } | null>(null);
   const [decision, setDecision] = useState<{ tipo: 'solicitar_correccion' | 'rechazar'; mensaje: string } | null>(null);
+  const [rechazoContrato, setRechazoContrato] = useState<string | null>(null);
+  const contratoInput = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-vinculaciones'],
@@ -47,6 +50,7 @@ export default function VinculacionesPage() {
   });
   const sol = detalle.data?.vinculacion;
   const documentos: any[] = detalle.data?.documentos || [];
+  const contrato = detalle.data?.contrato;
 
   function refrescar() {
     qc.invalidateQueries({ queryKey: ['admin-vinculaciones'] });
@@ -89,6 +93,28 @@ export default function VinculacionesPage() {
       if (res.enlace) { setEnlace({ url: res.enlace, correoEnviado: res.correoEnviado }); setNueva(true); setAbierta(null); }
     },
     onError: (e: any) => toast.error(mensajeError(e, 'No se pudo registrar la decisión')),
+  });
+
+  const contratoMut = useMutation({
+    mutationFn: (archivo: File) => adminApi.enviarContrato(abierta as string, archivo),
+    onSuccess: ({ data: res }) => {
+      refrescar();
+      setEnlace({ url: res.enlace, correoEnviado: res.correoEnviado });
+      setNueva(true);
+      toast.success(res.correoEnviado ? 'Contrato enviado al cliente por correo' : 'Contrato cargado: envía el enlace al cliente');
+    },
+    onError: (e: any) => toast.error(mensajeError(e, 'No se pudo enviar el contrato')),
+  });
+
+  const revisarContratoMut = useMutation({
+    mutationFn: (a: { decision: 'aprobar' | 'rechazar'; motivo?: string }) => adminApi.revisarContrato(abierta as string, a),
+    onSuccess: ({ data: res }, vars) => {
+      refrescar();
+      setRechazoContrato(null);
+      toast.success(vars.decision === 'aprobar' ? 'Contrato aprobado: vinculación completada' : 'Contrato devuelto al cliente para corregir');
+      if (res.enlace) { setEnlace({ url: res.enlace, correoEnviado: res.correoEnviado }); setNueva(true); }
+    },
+    onError: (e: any) => toast.error(mensajeError(e, 'No se pudo registrar la revisión del contrato')),
   });
 
   async function verArchivo(tipo: string) {
@@ -142,7 +168,10 @@ export default function VinculacionesPage() {
             <Tr key={v.id}>
               <Td><div style={{ fontWeight:700, color:'var(--adm-text)' }}>{v.razonSocial}</div>{v.nit && <div style={{ fontSize:11, color:'var(--adm-muted)' }}>NIT {v.nit}</div>}</Td>
               <Td><div style={{ fontSize:13 }}>{v.contactoNombre}</div><div style={{ fontSize:11, color:'var(--adm-muted)' }}>{v.contactoCorreo}</div></Td>
-              <Td><StatusBadge status={v.estado} /></Td>
+              <Td>
+                <StatusBadge status={v.estado} />
+                {v.estado === 'aprobada' && v.contratoEstado !== 'ninguno' && <div style={{ fontSize:11, color:'var(--adm-muted)', marginTop:4 }}>Contrato: {{ enviado:'esperando firma', firmado:'por validar', rechazado:'devuelto' }[v.contratoEstado as string] ?? v.contratoEstado}</div>}
+              </Td>
               <Td>
                 <div style={{ fontSize:12, marginBottom:5 }}>{v.documentosSubidos}/{v.documentosTotales} cargados · {v.documentosAprobados} aprobados</div>
                 <div style={{ height:5, width:120, borderRadius:9, background:'rgba(var(--adm-fg-rgb),.1)', overflow:'hidden' }}>
@@ -153,7 +182,7 @@ export default function VinculacionesPage() {
               <Td>
                 <div style={{ display:'flex', gap:6 }}>
                   <Btn variant={v.estado === 'en_revision' ? 'primary' : 'ghost'} title="Abrir y revisar" onClick={() => setAbierta(v.id)} style={{ padding:'5px 8px' }}><Eye size={14} /></Btn>
-                  {(v.estado === 'invitada' || v.estado === 'requiere_correccion') && (
+                  {(v.estado === 'invitada' || v.estado === 'requiere_correccion' || (v.estado === 'aprobada' && (v.contratoEstado === 'enviado' || v.contratoEstado === 'rechazado'))) && (
                     <Btn variant="ghost" title="Generar enlace nuevo y reenviarlo" disabled={enlaceMut.isPending} onClick={() => enlaceMut.mutate(v.id)} style={{ padding:'5px 8px' }}><Link2 size={14} /></Btn>
                   )}
                 </div>
@@ -234,6 +263,47 @@ export default function VinculacionesPage() {
                 </div>
               ))}
             </div>
+
+            {(sol.estado === 'aprobada' || sol.estado === 'completada') && contrato && (
+              <div style={{ marginTop:18, paddingTop:16, borderTop:'1px solid rgba(var(--adm-fg-rgb),.1)' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:'var(--adm-text)' }}>Contrato</div>
+                  <StatusBadge status={contrato.estado} />
+                </div>
+
+                {contrato.enviado && <div style={{ fontSize:12, color:'var(--adm-muted)', marginBottom:4 }}>Enviado: {contrato.enviado.nombre}</div>}
+                {contrato.firmado && <div style={{ fontSize:12, color:'var(--adm-muted)', marginBottom:4 }}>Firmado por el cliente: {contrato.firmado.nombre}</div>}
+                {contrato.estado === 'rechazado' && contrato.motivo && <div style={{ fontSize:12, color:'#C0392B', marginBottom:4 }}>Devuelto al cliente: {contrato.motivo}</div>}
+                {contrato.estado === 'enviado' && <div style={{ fontSize:12, color:'var(--adm-muted)', marginBottom:4 }}>Esperando que el cliente suba el contrato firmado.</div>}
+
+                <input ref={contratoInput} type="file" accept="application/pdf" hidden
+                  onChange={e => { const f = e.target.files?.[0]; if (f) contratoMut.mutate(f); if (contratoInput.current) contratoInput.current.value = ''; }} />
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:10 }}>
+                  {sol.estado === 'aprobada' && (contrato.estado === 'ninguno' || contrato.estado === 'enviado') && (
+                    <Btn variant="primary" disabled={contratoMut.isPending} onClick={() => contratoInput.current?.click()}>
+                      <FileText size={14} /> {contratoMut.isPending ? 'Enviando…' : contrato.estado === 'ninguno' ? 'Subir y enviar contrato (PDF)' : 'Reemplazar contrato'}
+                    </Btn>
+                  )}
+                  {contrato.enviado && <Btn variant="ghost" onClick={() => verArchivo('contrato')}><ExternalLink size={14} /> Ver contrato</Btn>}
+                  {contrato.firmado && <Btn variant="ghost" onClick={() => verArchivo('contrato_firmado')}><ExternalLink size={14} /> Ver contrato firmado</Btn>}
+                </div>
+
+                {contrato.estado === 'firmado' && (
+                  rechazoContrato === null ? (
+                    <div style={{ display:'flex', gap:8, marginTop:12 }}>
+                      <Btn variant="primary" disabled={revisarContratoMut.isPending} onClick={() => revisarContratoMut.mutate({ decision: 'aprobar' })}><Check size={14} /> Aprobar contrato</Btn>
+                      <Btn variant="danger" onClick={() => setRechazoContrato('')}>Devolver para corregir</Btn>
+                    </div>
+                  ) : (
+                    <div style={{ display:'flex', gap:8, marginTop:12, alignItems:'flex-end' }}>
+                      <div style={{ flex:1 }}><Input label="Qué debe corregir el cliente" value={rechazoContrato} onChange={e => setRechazoContrato(e.target.value)} /></div>
+                      <Btn variant="ghost" onClick={() => setRechazoContrato(null)} style={{ marginBottom:14 }}>Cancelar</Btn>
+                      <Btn variant="danger" disabled={!rechazoContrato.trim() || revisarContratoMut.isPending} onClick={() => revisarContratoMut.mutate({ decision: 'rechazar', motivo: rechazoContrato.trim() })} style={{ marginBottom:14 }}>Devolver</Btn>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
 
             {enRevision && (
               <div style={{ marginTop:18, paddingTop:16, borderTop:'1px solid rgba(var(--adm-fg-rgb),.1)' }}>

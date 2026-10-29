@@ -76,8 +76,12 @@ model Vinculacion {
   nit             String?
   contactoNombre  String    @map("contacto_nombre")
   contactoCorreo  String    @map("contacto_correo")
-  estado          String    @default("invitada") // invitada | en_revision | requiere_correccion | aprobada | rechazada
+  estado          String    @default("invitada") // invitada | en_revision | requiere_correccion | aprobada (documentos) | completada (contrato firmado y validado) | rechazada
   mensaje         String?   // mensaje del equipo al cliente (corrección o rechazo)
+  // Contrato: lo sube TrendPay, el cliente lo descarga, lo firma y sube el PDF firmado.
+  // Los archivos viven en vinculacion_documentos con tipo "contrato" y "contrato_firmado".
+  contratoEstado  String    @default("ninguno") @map("contrato_estado") // ninguno | enviado | firmado | rechazado | aprobado
+  contratoMotivo  String?   @map("contrato_motivo")
   expiraAt        DateTime  @map("expira_at")
   enviadaAt       DateTime? @map("enviada_at")
   decididaAt      DateTime? @map("decidida_at")

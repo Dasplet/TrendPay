@@ -49,6 +49,149 @@ async function subirTodos(token: string) {
   }
 }
 
+const nombreDe = (r: request.Response) => (r.body.enlace as string).split('/').pop() as string;
+
+// Solicitud con los 5 documentos ya aprobados (estado "aprobada"), lista para enviar el contrato
+async function solicitudAprobada() {
+  const ctx = await crearSolicitud();
+  await subirTodos(ctx.token);
+  await request(app).post(`/api/vinculacion/${ctx.token}/enviar`);
+  for (const tipo of TIPOS) {
+    await request(app).put(`/api/admin/vinculaciones/${ctx.id}/documentos/${tipo}`).set(ctx.auth).send({ estado: 'aprobado' });
+  }
+  await request(app).put(`/api/admin/vinculaciones/${ctx.id}/decision`).set(ctx.auth).send({ decision: 'aprobar' });
+  return ctx;
+}
+
+function enviarContrato(id: string, auth: Record<string, string>, archivo: Buffer = PDF, nombre = 'contrato.pdf') {
+  return request(app).post(`/api/admin/vinculaciones/${id}/contrato`).set(auth).attach('archivo', archivo, nombre);
+}
+
+function firmar(token: string, archivo: Buffer = PDF, nombre = 'contrato-firmado.pdf') {
+  return request(app).post(`/api/vinculacion/${token}/contrato-firmado`).attach('archivo', archivo, nombre);
+}
+
+describe('Contrato de vinculación', () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await limpiarBaseDeDatos();
+  });
+
+  it('no se puede enviar el contrato mientras los documentos no estén aprobados', async () => {
+    const { auth, id } = await crearSolicitud();
+    expect((await enviarContrato(id, auth)).status).toBe(409);
+  });
+
+  it('el contrato debe ser un PDF', async () => {
+    const { auth, id } = await solicitudAprobada();
+    const res = await enviarContrato(id, auth, PNG, 'contrato.png');
+    expect(res.status).toBe(400);
+    expect(res.body.mensaje).toContain('PDF');
+  });
+
+  it('al enviar el contrato el cliente recibe un enlace nuevo y puede descargarlo', async () => {
+    const { auth, id, token } = await solicitudAprobada();
+    const antes = await request(app).get(`/api/vinculacion/${token}/contrato`);
+    expect(antes.status).toBe(404); // aún no hay contrato
+
+    const res = await enviarContrato(id, auth);
+    expect(res.status).toBe(200);
+    expect(email.sendVinculacionEmail).toHaveBeenLastCalledWith('laura@andina.test', expect.objectContaining({ motivo: 'contrato' }));
+    const nuevo = nombreDe(res);
+    expect(nuevo).not.toBe(token);
+    expect((await request(app).get(`/api/vinculacion/${token}`)).status).toBe(404);
+
+    const vista = await request(app).get(`/api/vinculacion/${nuevo}`);
+    expect(vista.body.vinculacion.estado).toBe('aprobada');
+    expect(vista.body.contrato).toMatchObject({ estado: 'enviado', enviado: { nombre: 'contrato.pdf' }, firmado: null });
+
+    const descarga = await request(app).get(`/api/vinculacion/${nuevo}/contrato`);
+    expect(descarga.status).toBe(200);
+    expect(descarga.body.url).toContain('https://almacen.test/');
+  });
+
+  it('el contrato y el firmado no cuentan como documentos del catálogo', async () => {
+    const { auth, id } = await solicitudAprobada();
+    await enviarContrato(id, auth);
+    const lista = await request(app).get('/api/admin/vinculaciones').set(auth);
+    const fila = lista.body.vinculaciones.find((v: any) => v.id === id);
+    expect(fila.documentosSubidos).toBe(5);
+    expect(fila.contratoEstado).toBe('enviado');
+  });
+
+  it('el cliente sube el contrato firmado una sola vez y se avisa a los administradores', async () => {
+    const { auth, id, admin } = await solicitudAprobada();
+    const nuevo = nombreDe(await enviarContrato(id, auth));
+
+    expect((await firmar(nuevo, Buffer.from('no soy un pdf'))).status).toBe(400);
+    const ok = await firmar(nuevo, PNG, 'firmado.png');
+    expect(ok.status).toBe(200);
+    expect((await prisma.vinculacion.findUnique({ where: { id } }))!.contratoEstado).toBe('firmado');
+    expect(await prisma.notification.count({ where: { userId: admin.id, titulo: 'Contrato firmado por revisar' } })).toBe(1);
+
+    expect((await firmar(nuevo)).status).toBe(409);
+    const archivo = await request(app).get(`/api/admin/vinculaciones/${id}/documentos/contrato_firmado/archivo`).set(auth);
+    expect(archivo.status).toBe(200);
+  });
+
+  it('no permite firmar si no se ha enviado ningún contrato', async () => {
+    const { token } = await solicitudAprobada();
+    expect((await firmar(token)).status).toBe(409);
+  });
+
+  it('el administrador no puede validar un contrato que el cliente no ha firmado', async () => {
+    const { auth, id } = await solicitudAprobada();
+    await enviarContrato(id, auth);
+    const res = await request(app).put(`/api/admin/vinculaciones/${id}/contrato`).set(auth).send({ decision: 'aprobar' });
+    expect(res.status).toBe(409);
+  });
+
+  it('si el contrato firmado se rechaza, el cliente lo sube de nuevo con un enlace nuevo', async () => {
+    const { auth, id } = await solicitudAprobada();
+    const primero = nombreDe(await enviarContrato(id, auth));
+    await firmar(primero);
+
+    const sinMotivo = await request(app).put(`/api/admin/vinculaciones/${id}/contrato`).set(auth).send({ decision: 'rechazar' });
+    expect(sinMotivo.status).toBe(400);
+    const rechazo = await request(app).put(`/api/admin/vinculaciones/${id}/contrato`).set(auth).send({ decision: 'rechazar', motivo: 'Falta la firma en la página 3' });
+    expect(rechazo.status).toBe(200);
+    expect(email.sendVinculacionEmail).toHaveBeenLastCalledWith('laura@andina.test', expect.objectContaining({ motivo: 'contrato_correccion', mensaje: 'Falta la firma en la página 3' }));
+
+    const segundo = nombreDe(rechazo);
+    expect((await request(app).get(`/api/vinculacion/${primero}`)).status).toBe(404);
+    const vista = await request(app).get(`/api/vinculacion/${segundo}`);
+    expect(vista.body.contrato).toMatchObject({ estado: 'rechazado', motivo: 'Falta la firma en la página 3' });
+
+    expect((await firmar(segundo, PDF, 'corregido.pdf')).status).toBe(200);
+    expect(await prisma.vinculacionDocumento.count({ where: { vinculacionId: id, tipo: 'contrato_firmado' } })).toBe(1);
+  });
+
+  it('al aprobar el contrato firmado la vinculación queda completada', async () => {
+    const { auth, id } = await solicitudAprobada();
+    const nuevo = nombreDe(await enviarContrato(id, auth));
+    await firmar(nuevo);
+
+    const res = await request(app).put(`/api/admin/vinculaciones/${id}/contrato`).set(auth).send({ decision: 'aprobar' });
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('completada');
+    expect(email.sendVinculacionEmail).toHaveBeenLastCalledWith('laura@andina.test', expect.objectContaining({ motivo: 'completada' }));
+
+    const vista = await request(app).get(`/api/vinculacion/${nuevo}`);
+    expect(vista.body.vinculacion.estado).toBe('completada');
+    expect(vista.body.contrato.estado).toBe('aprobado');
+    expect((await firmar(nuevo)).status).toBe(409);
+    expect((await enviarContrato(id, auth)).status).toBe(409);
+  });
+
+  it('reenviar el enlace mientras se espera la firma conserva el contrato y manda el correo correcto', async () => {
+    const { auth, id } = await solicitudAprobada();
+    await enviarContrato(id, auth);
+    const res = await request(app).post(`/api/admin/vinculaciones/${id}/enlace`).set(auth);
+    expect(res.status).toBe(200);
+    expect(email.sendVinculacionEmail).toHaveBeenLastCalledWith('laura@andina.test', expect.objectContaining({ motivo: 'contrato' }));
+  });
+});
+
 describe('Enlace de vinculación', () => {
   const entorno = { front: process.env.FRONTEND_URL, node: process.env.NODE_ENV };
   afterEach(() => {
