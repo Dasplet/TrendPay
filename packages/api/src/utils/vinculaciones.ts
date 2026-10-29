@@ -3,12 +3,31 @@ import { prisma } from '../index';
 import { logger } from './logger';
 import { DOCUMENTOS_VINCULACION, detectarTipoArchivo } from './vinculacionDocs';
 import { guardarObjeto, borrarObjeto } from './storage';
+import { encrypt, decrypt } from './security';
 
 export const DIAS_VIGENCIA_ENLACE = 30;
 
 export function generarToken(): { token: string; tokenHash: string } {
   const token = randomBytes(32).toString('base64url');
   return { token, tokenHash: hashToken(token) };
+}
+
+// Token de una solicitud existente, si se puede recuperar (las anteriores a este cambio solo guardaban la huella).
+export function tokenGuardado(v: { tokenCifrado: string | null }): string | null {
+  if (!v.tokenCifrado) return null;
+  const token = decrypt(v.tokenCifrado);
+  return token === '****' ? null : token;
+}
+
+// Datos para dejar la solicitud con un enlace vigente. Conserva el MISMO enlace (el cliente lo puede
+// seguir usando o recargar durante todo el proceso) y solo extiende su vencimiento. Si no se puede
+// recuperar, o se pide renovar (por ejemplo porque se filtró), emite uno nuevo y el anterior deja de servir.
+export function enlaceVigente(v: { tokenCifrado: string | null }, renovar = false) {
+  const expiraAt = fechaEnDias(DIAS_VIGENCIA_ENLACE);
+  const existente = renovar ? null : tokenGuardado(v);
+  if (existente) return { token: existente, expiraAt, data: { expiraAt } };
+  const { token, tokenHash } = generarToken();
+  return { token, expiraAt, data: { expiraAt, tokenHash, tokenCifrado: encrypt(token) } };
 }
 
 export function hashToken(token: string): string {

@@ -72,6 +72,8 @@ model User {
 model Vinculacion {
   id              String    @id @default(uuid())
   tokenHash       String    @unique @map("token_hash")
+  // El mismo enlace sirve durante todo el proceso: se guarda cifrado para poder reenviarlo por correo.
+  tokenCifrado    String?   @map("token_cifrado")
   razonSocial     String    @map("razon_social")
   nit             String?
   contactoNombre  String    @map("contacto_nombre")

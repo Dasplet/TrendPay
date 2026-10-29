@@ -72,7 +72,7 @@ export default function VinculacionesPage() {
     onSuccess: ({ data: res }) => {
       setNueva(true);
       setEnlace({ url: res.enlace, correoEnviado: res.correoEnviado });
-      toast.success('Enlace nuevo generado; el anterior dejó de funcionar');
+      toast.success(res.correoEnviado ? 'Enlace reenviado al cliente por correo' : 'No se pudo enviar el correo: copia el enlace y envíaselo');
     },
     onError: (e: any) => toast.error(mensajeError(e, 'No se pudo generar el enlace')),
   });
@@ -183,7 +183,7 @@ export default function VinculacionesPage() {
                 <div style={{ display:'flex', gap:6 }}>
                   <Btn variant={v.estado === 'en_revision' ? 'primary' : 'ghost'} title="Abrir y revisar" onClick={() => setAbierta(v.id)} style={{ padding:'5px 8px' }}><Eye size={14} /></Btn>
                   {(v.estado === 'invitada' || v.estado === 'requiere_correccion' || (v.estado === 'aprobada' && (v.contratoEstado === 'enviado' || v.contratoEstado === 'rechazado'))) && (
-                    <Btn variant="ghost" title="Generar enlace nuevo y reenviarlo" disabled={enlaceMut.isPending} onClick={() => enlaceMut.mutate(v.id)} style={{ padding:'5px 8px' }}><Link2 size={14} /></Btn>
+                    <Btn variant="ghost" title="Reenviar el enlace al cliente por correo" disabled={enlaceMut.isPending} onClick={() => enlaceMut.mutate(v.id)} style={{ padding:'5px 8px' }}><Link2 size={14} /></Btn>
                   )}
                 </div>
               </Td>
@@ -203,7 +203,7 @@ export default function VinculacionesPage() {
               <code style={{ flex:1, fontSize:11, wordBreak:'break-all', color:'var(--adm-text)' }}>{enlace.url}</code>
               <Btn variant="ghost" title="Copiar enlace" onClick={() => copiar(enlace.url)} style={{ padding:'6px 9px' }}>{copiado ? <Check size={14} /> : <Copy size={14} />}</Btn>
             </div>
-            <p style={{ fontSize:11, color:'var(--adm-muted)', marginTop:10 }}>Por seguridad, este enlace solo se muestra ahora. Si lo pierdes, genera uno nuevo y el anterior dejará de funcionar.</p>
+            <p style={{ fontSize:11, color:'var(--adm-muted)', marginTop:10 }}>Este es el enlace del cliente y es el mismo durante todo el proceso. Puedes volver a copiarlo cuando quieras desde la solicitud.</p>
             <Btn variant="primary" style={{ width:'100%', justifyContent:'center', marginTop:14 }} onClick={cerrarNueva}>Listo</Btn>
           </div>
         ) : (
@@ -225,7 +225,14 @@ export default function VinculacionesPage() {
           <div>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8, marginBottom:16 }}>
               <div style={{ fontSize:12, color:'var(--adm-muted)' }}>{sol.contactoNombre} · {sol.contactoCorreo}{sol.nit ? ` · NIT ${sol.nit}` : ''}</div>
-              <StatusBadge status={sol.estado} />
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                {detalle.data?.enlace && (
+                  <Btn variant="ghost" title="Copiar el enlace del cliente" onClick={() => copiar(detalle.data.enlace)} style={{ padding:'4px 9px' }}>
+                    {copiado ? <Check size={13} /> : <Copy size={13} />} Copiar enlace
+                  </Btn>
+                )}
+                <StatusBadge status={sol.estado} />
+              </div>
             </div>
             {sol.mensaje && <div style={{ fontSize:12, padding:'8px 12px', borderRadius:8, background:'rgba(133,46,199,.1)', marginBottom:14 }}>Mensaje al cliente: {sol.mensaje}</div>}
 

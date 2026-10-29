@@ -7,7 +7,8 @@ import { sendVinculacionEmail, MotivoCorreoVinculacion } from '../utils/email';
 import { modoAlmacenamiento, urlTemporal, borrarObjeto } from '../utils/storage';
 import multer from 'multer';
 import { DOCUMENTOS_VINCULACION, buscarDocumento } from '../utils/vinculacionDocs';
-import { DIAS_VIGENCIA_ENLACE, contratoPendiente, documentosConEstado, enlaceVinculacion, fechaEnDias, generarToken, guardarArchivoContrato, resumenContrato } from '../utils/vinculaciones';
+import { DIAS_VIGENCIA_ENLACE, contratoPendiente, documentosConEstado, enlaceVigente, enlaceVinculacion, fechaEnDias, generarToken, guardarArchivoContrato, resumenContrato, tokenGuardado } from '../utils/vinculaciones';
+import { encrypt } from '../utils/security';
 
 const router = Router();
 router.use(authenticate, requireAdmin);
@@ -83,7 +84,7 @@ router.post('/', async (req: Request, res: Response) => {
     const { token, tokenHash } = generarToken();
     const expiraAt = fechaEnDias(DIAS_VIGENCIA_ENLACE);
     const v = await prisma.vinculacion.create({
-      data: { ...parse.data, nit: parse.data.nit || null, tokenHash, expiraAt, creadaPor: req.user!.id },
+      data: { ...parse.data, nit: parse.data.nit || null, tokenHash, tokenCifrado: encrypt(token), expiraAt, creadaPor: req.user!.id },
     });
     await auditar(req, 'CREAR_VINCULACION', v.id, { razonSocial: v.razonSocial, contactoCorreo: v.contactoCorreo });
     const correoEnviado = await enviarCorreo(v, 'invitacion', { token, expiraAt });
@@ -104,7 +105,15 @@ router.get('/:id', async (req: Request, res: Response) => {
   try {
     const v = await prisma.vinculacion.findUnique({ where: { id: req.params.id }, include: { documentos: true } });
     if (!v) return res.status(404).json({ ok: false, mensaje: 'Solicitud no encontrada' });
-    res.json({ ok: true, vinculacion: resumen(v), documentos: documentosConEstado(v.documentos.filter(d => buscarDocumento(d.tipo))), contrato: resumenContrato(v) });
+    const token = tokenGuardado(v);
+    res.json({
+      ok: true,
+      vinculacion: resumen(v),
+      documentos: documentosConEstado(v.documentos.filter(d => buscarDocumento(d.tipo))),
+      contrato: resumenContrato(v),
+      // El administrador puede volver a copiar el enlace del cliente cuando quiera
+      enlace: token ? enlaceVinculacion(token) : null,
+    });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 
@@ -175,9 +184,8 @@ router.put('/:id/decision', async (req: Request, res: Response) => {
     }
     if (decision === 'rechazar' && !mensaje) return res.status(400).json({ ok: false, mensaje: 'Escribe el motivo para el cliente' });
 
-    // Al pedir correcciones se emite un enlace nuevo: el anterior deja de servir
-    const nuevo = decision === 'solicitar_correccion' ? generarToken() : null;
-    const expiraAt = nuevo ? fechaEnDias(DIAS_VIGENCIA_ENLACE) : v.expiraAt;
+    // Al pedir correcciones el cliente sigue usando el MISMO enlace; solo se extiende su vencimiento
+    const enlace = decision === 'solicitar_correccion' ? enlaceVigente(v) : null;
     const estadoNuevo = { aprobar: 'aprobada', solicitar_correccion: 'requiere_correccion', rechazar: 'rechazada' }[decision];
 
     const reclamo = await prisma.vinculacion.updateMany({
@@ -186,20 +194,21 @@ router.put('/:id/decision', async (req: Request, res: Response) => {
         estado: estadoNuevo,
         mensaje: mensaje || null,
         decididaAt: decision === 'solicitar_correccion' ? null : new Date(),
-        ...(nuevo ? { tokenHash: nuevo.tokenHash, expiraAt } : {}),
+        ...(enlace ? enlace.data : {}),
       },
     });
     if (reclamo.count === 0) return res.status(409).json({ ok: false, mensaje: 'La solicitud ya fue decidida' });
 
     await auditar(req, 'DECIDIR_VINCULACION', v.id, { decision, mensaje, rechazados: rechazados.map(d => d.tipo) });
     const motivoCorreo = ({ aprobar: 'aprobada', solicitar_correccion: 'correccion', rechazar: 'rechazada' } as const)[decision];
-    const correoEnviado = await enviarCorreo(v, motivoCorreo, { token: nuevo?.token, expiraAt: nuevo ? expiraAt : undefined, mensaje });
-    res.json({ ok: true, estado: estadoNuevo, correoEnviado, enlace: nuevo ? enlaceVinculacion(nuevo.token) : undefined });
+    const correoEnviado = await enviarCorreo(v, motivoCorreo, { token: enlace?.token, expiraAt: enlace?.expiraAt, mensaje });
+    res.json({ ok: true, estado: estadoNuevo, correoEnviado, enlace: enlace ? enlaceVinculacion(enlace.token) : undefined });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 
 // ══ POST /api/admin/vinculaciones/:id/enlace ══
-// Emite un enlace nuevo (el anterior queda inválido) y lo reenvía por correo.
+// Reenvía por correo el MISMO enlace del cliente (y extiende su vencimiento). Con { renovar: true }
+// emite uno nuevo y el anterior deja de servir (por ejemplo si se filtró).
 router.post('/:id/enlace', async (req: Request, res: Response) => {
   try {
     const v = await prisma.vinculacion.findUnique({ where: { id: req.params.id } });
@@ -208,10 +217,10 @@ router.post('/:id/enlace', async (req: Request, res: Response) => {
     if (v.estado !== 'invitada' && v.estado !== 'requiere_correccion' && !esperaContrato) {
       return res.status(409).json({ ok: false, mensaje: 'Esta solicitud ya no admite documentos nuevos' });
     }
-    const { token, tokenHash } = generarToken();
-    const expiraAt = fechaEnDias(DIAS_VIGENCIA_ENLACE);
-    await prisma.vinculacion.update({ where: { id: v.id }, data: { tokenHash, expiraAt } });
-    await auditar(req, 'REENVIAR_ENLACE_VINCULACION', v.id);
+    const renovar = req.body?.renovar === true;
+    const { token, expiraAt, data } = enlaceVigente(v, renovar);
+    await prisma.vinculacion.update({ where: { id: v.id }, data });
+    await auditar(req, 'REENVIAR_ENLACE_VINCULACION', v.id, { renovado: renovar });
     const motivoCorreo = esperaContrato ? (v.contratoEstado === 'rechazado' ? 'contrato_correccion' : 'contrato') : v.estado === 'invitada' ? 'invitacion' : 'correccion';
     const correoEnviado = await enviarCorreo(v, motivoCorreo, { token, expiraAt, mensaje: esperaContrato ? v.contratoMotivo : v.mensaje });
     res.json({ ok: true, enlace: enlaceVinculacion(token), correoEnviado });
@@ -240,9 +249,8 @@ router.post('/:id/contrato', (req: Request, res: Response, next) => {
     const guardado = await guardarArchivoContrato(v.id, 'contrato', req.file);
     if (!guardado.ok) return res.status(400).json({ ok: false, mensaje: guardado.mensaje });
 
-    const { token, tokenHash } = generarToken();
-    const expiraAt = fechaEnDias(DIAS_VIGENCIA_ENLACE);
-    await prisma.vinculacion.update({ where: { id: v.id }, data: { contratoEstado: 'enviado', contratoMotivo: null, tokenHash, expiraAt } });
+    const { token, expiraAt, data } = enlaceVigente(v);
+    await prisma.vinculacion.update({ where: { id: v.id }, data: { contratoEstado: 'enviado', contratoMotivo: null, ...data } });
     await auditar(req, 'ENVIAR_CONTRATO_VINCULACION', v.id, { archivo: req.file.originalname });
     const correoEnviado = await enviarCorreo(v, 'contrato', { token, expiraAt });
     res.json({ ok: true, enlace: enlaceVinculacion(token), correoEnviado });
@@ -278,12 +286,11 @@ router.put('/:id/contrato', async (req: Request, res: Response) => {
       return res.json({ ok: true, estado: 'completada', correoEnviado });
     }
 
-    // Al devolverlo se emite un enlace nuevo para que el cliente suba el contrato corregido
-    const { token, tokenHash } = generarToken();
-    const expiraAt = fechaEnDias(DIAS_VIGENCIA_ENLACE);
+    // Al devolverlo el cliente sigue usando el mismo enlace para subir el contrato corregido
+    const { token, expiraAt, data } = enlaceVigente(v);
     const reclamo = await prisma.vinculacion.updateMany({
       where: { id: v.id, contratoEstado: 'firmado' },
-      data: { contratoEstado: 'rechazado', contratoMotivo: motivo, tokenHash, expiraAt },
+      data: { contratoEstado: 'rechazado', contratoMotivo: motivo, ...data },
     });
     if (reclamo.count === 0) return res.status(409).json({ ok: false, mensaje: 'El contrato ya fue revisado' });
     await auditar(req, 'RECHAZAR_CONTRATO_VINCULACION', v.id, { motivo });

@@ -89,7 +89,7 @@ describe('Contrato de vinculación', () => {
     expect(res.body.mensaje).toContain('PDF');
   });
 
-  it('al enviar el contrato el cliente recibe un enlace nuevo y puede descargarlo', async () => {
+  it('al enviar el contrato el cliente conserva el mismo enlace y puede descargarlo', async () => {
     const { auth, id, token } = await solicitudAprobada();
     const antes = await request(app).get(`/api/vinculacion/${token}/contrato`);
     expect(antes.status).toBe(404); // aún no hay contrato
@@ -98,8 +98,7 @@ describe('Contrato de vinculación', () => {
     expect(res.status).toBe(200);
     expect(email.sendVinculacionEmail).toHaveBeenLastCalledWith('laura@andina.test', expect.objectContaining({ motivo: 'contrato' }));
     const nuevo = nombreDe(res);
-    expect(nuevo).not.toBe(token);
-    expect((await request(app).get(`/api/vinculacion/${token}`)).status).toBe(404);
+    expect(nuevo).toBe(token);
 
     const vista = await request(app).get(`/api/vinculacion/${nuevo}`);
     expect(vista.body.vinculacion.estado).toBe('aprobada');
@@ -146,7 +145,7 @@ describe('Contrato de vinculación', () => {
     expect(res.status).toBe(409);
   });
 
-  it('si el contrato firmado se rechaza, el cliente lo sube de nuevo con un enlace nuevo', async () => {
+  it('si el contrato firmado se rechaza, el cliente lo sube de nuevo con el mismo enlace', async () => {
     const { auth, id } = await solicitudAprobada();
     const primero = nombreDe(await enviarContrato(id, auth));
     await firmar(primero);
@@ -158,7 +157,7 @@ describe('Contrato de vinculación', () => {
     expect(email.sendVinculacionEmail).toHaveBeenLastCalledWith('laura@andina.test', expect.objectContaining({ motivo: 'contrato_correccion', mensaje: 'Falta la firma en la página 3' }));
 
     const segundo = nombreDe(rechazo);
-    expect((await request(app).get(`/api/vinculacion/${primero}`)).status).toBe(404);
+    expect(segundo).toBe(primero);
     const vista = await request(app).get(`/api/vinculacion/${segundo}`);
     expect(vista.body.contrato).toMatchObject({ estado: 'rechazado', motivo: 'Falta la firma en la página 3' });
 
@@ -398,7 +397,7 @@ describe('Vinculación de clientes', () => {
       expect(otra.status).toBe(409);
     });
 
-    it('pide correcciones con un enlace nuevo y el cliente solo vuelve a subir lo rechazado', async () => {
+    it('pide correcciones con el mismo enlace y el cliente solo vuelve a subir lo rechazado', async () => {
       const { auth, id, token } = await solicitudEnRevision();
       for (const tipo of TIPOS.filter(t => t !== 'rut')) {
         await request(app).put(`/api/admin/vinculaciones/${id}/documentos/${tipo}`).set(auth).send({ estado: 'aprobado' });
@@ -409,10 +408,9 @@ describe('Vinculación de clientes', () => {
       expect(res.status).toBe(200);
       expect(res.body.estado).toBe('requiere_correccion');
       const nuevoToken = res.body.enlace.split('/').pop() as string;
-      expect(nuevoToken).not.toBe(token);
+      expect(nuevoToken).toBe(token);
 
-      // El enlace anterior ya no sirve; el nuevo muestra el motivo del rechazo
-      expect((await request(app).get(`/api/vinculacion/${token}`)).status).toBe(404);
+      // El mismo enlace sigue sirviendo y ahora muestra el motivo del rechazo
       const vista = await request(app).get(`/api/vinculacion/${nuevoToken}`);
       expect(vista.body.vinculacion.mensaje).toBe('Revisa el RUT');
       expect(vista.body.documentos.find((d: any) => d.tipo === 'rut').motivo).toBe('Actividad económica incorrecta');
@@ -447,12 +445,54 @@ describe('Vinculación de clientes', () => {
       expect(fila.documentosTotales).toBe(5);
     });
 
-    it('reenviar el enlace invalida el anterior', async () => {
+    it('reenviar el enlace conserva el mismo y vuelve a mandar el correo', async () => {
       const { auth, id, token } = await crearSolicitud();
+      jest.clearAllMocks();
       const res = await request(app).post(`/api/admin/vinculaciones/${id}/enlace`).set(auth);
       expect(res.status).toBe(200);
+      expect(res.body.enlace.split('/').pop()).toBe(token);
+      expect((await request(app).get(`/api/vinculacion/${token}`)).status).toBe(200);
+      expect(email.sendVinculacionEmail).toHaveBeenCalledWith('laura@andina.test', expect.objectContaining({ motivo: 'invitacion', enlace: expect.stringContaining(token) }));
+    });
+
+    it('el administrador puede volver a copiar el enlace del cliente desde la solicitud', async () => {
+      const { auth, id, token } = await crearSolicitud();
+      const detalle = await request(app).get(`/api/admin/vinculaciones/${id}`).set(auth);
+      expect(detalle.body.enlace).toMatch(new RegExp(`/vinculacion/${token}$`));
+    });
+
+    it('renovar el enlace invalida el anterior (por si se filtró)', async () => {
+      const { auth, id, token } = await crearSolicitud();
+      const res = await request(app).post(`/api/admin/vinculaciones/${id}/enlace`).set(auth).send({ renovar: true });
+      expect(res.status).toBe(200);
+      const nuevo = res.body.enlace.split('/').pop();
+      expect(nuevo).not.toBe(token);
       expect((await request(app).get(`/api/vinculacion/${token}`)).status).toBe(404);
-      expect((await request(app).get(`/api/vinculacion/${res.body.enlace.split('/').pop()}`)).status).toBe(200);
+      expect((await request(app).get(`/api/vinculacion/${nuevo}`)).status).toBe(200);
+      // y desde ahí el nuevo es el que se conserva
+      const otra = await request(app).post(`/api/admin/vinculaciones/${id}/enlace`).set(auth);
+      expect(otra.body.enlace.split('/').pop()).toBe(nuevo);
+    });
+
+    it('una solicitud anterior sin enlace recuperable recibe uno nuevo al reenviar, y desde entonces se conserva', async () => {
+      const { auth, id, token } = await crearSolicitud();
+      await prisma.vinculacion.update({ where: { id }, data: { tokenCifrado: null } }); // como las creadas antes de este cambio
+      const detalle = await request(app).get(`/api/admin/vinculaciones/${id}`).set(auth);
+      expect(detalle.body.enlace).toBeNull();
+
+      const res = await request(app).post(`/api/admin/vinculaciones/${id}/enlace`).set(auth);
+      const nuevo = res.body.enlace.split('/').pop();
+      expect(nuevo).not.toBe(token);
+      expect((await request(app).get(`/api/vinculacion/${nuevo}`)).status).toBe(200);
+      const otra = await request(app).post(`/api/admin/vinculaciones/${id}/enlace`).set(auth);
+      expect(otra.body.enlace.split('/').pop()).toBe(nuevo);
+    });
+
+    it('el enlace guardado no queda en claro en la base de datos', async () => {
+      const { id, token } = await crearSolicitud();
+      const fila = await prisma.vinculacion.findUniqueOrThrow({ where: { id } });
+      expect(fila.tokenCifrado).toBeTruthy();
+      expect(fila.tokenCifrado!.includes(token)).toBe(false);
     });
   });
 });
