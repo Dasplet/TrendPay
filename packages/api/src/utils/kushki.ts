@@ -196,6 +196,18 @@ function errorDeKushki(err: any, etapa: string): KushkiError {
 
 // Crea el token con la cuenta destino y lo confirma. Si lanza, no se envió
 // dinero: el error ocurrió antes de que Kushki aceptara la dispersión.
+// Webhook por API: Kushki permite indicar en el init la URL a la que avisar cuando la dispersión se aprueba o
+// se rechaza (se suma al que haya registrado la consola). Es opcional y solo se envía si KUSHKI_WEBHOOK_URL
+// existe, así un sandbox que no lo acepte no afecta los retiros: basta con quitar la variable.
+export const EVENTOS_WEBHOOK_DISPERSION = ['approvedTransaction', 'declinedTransaction'];
+
+export function webhooksDeInit(): { webhooks?: { events: string[]; urls: string[] }[] } {
+  const url = process.env.KUSHKI_WEBHOOK_URL?.trim().replace(/^["']|["']$/g, '');
+  if (!url) return {};
+  if (!/^https?:\/\//i.test(url)) return {};
+  return { webhooks: [{ events: EVENTOS_WEBHOOK_DISPERSION, urls: [url] }] };
+}
+
 export async function iniciarDispersion(datos: DatosDispersion): Promise<KushkiPayoutResult> {
   let bankId: string | null;
   try {
@@ -230,7 +242,7 @@ export async function iniciarDispersion(datos: DatosDispersion): Promise<KushkiP
   try {
     const { data } = await axios.post(
       `${BASE_URL}/payouts/transfer/v1/init`,
-      { token: tk.token, amount: { subtotalIva: 0, subtotalIva0: datos.monto, iva: 0 } },
+      { token: tk.token, amount: { subtotalIva: 0, subtotalIva0: datos.monto, iva: 0 }, ...webhooksDeInit() },
       { headers: { 'Private-Merchant-Id': PRIVATE_MERCHANT_ID, 'Content-Type': 'application/json' } }
     );
     return {
