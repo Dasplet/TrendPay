@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../index';
 import { authenticate } from '../middleware/auth';
-import { walletLimiter } from '../middleware/rateLimiter';
+import { walletLimiter, webhookLimiter } from '../middleware/rateLimiter';
+import { registrarWebhook } from '../utils/kushkiWebhookLog';
 import { genCodigo } from '../utils/security';
 import { chargeCardToken, initTransfer, KushkiError } from '../utils/kushki';
 import { resolverPagoPse } from '../utils/kushkiPayments';
@@ -22,10 +23,11 @@ const router = Router();
 // porque resolverRetiroEnProceso solo actúa sobre retiros "en_proceso".
 // El estado final se confirma consultando la API de Kushki: el aviso solo
 // dice de qué retiro se trata, no decide el resultado.
-router.post('/webhooks/payout', async (req: Request, res: Response) => {
+router.post('/webhooks/payout', webhookLimiter, async (req: Request, res: Response) => {
   const secreto = process.env.KUSHKI_WEBHOOK_SECRET;
   if (!secreto) {
     logger.error('Webhook de Kushki recibido sin KUSHKI_WEBHOOK_SECRET configurado');
+    await registrarWebhook(req, { firmaValida: false, estadoHttp: 503, detalle: 'Sin KUSHKI_WEBHOOK_SECRET en el servidor' });
     return res.status(503).json({ ok: false });
   }
 
@@ -39,14 +41,19 @@ router.post('/webhooks/payout', async (req: Request, res: Response) => {
     },
     secreto
   );
+  const ticket = typeof req.body?.ticketNumber === 'string' && req.body.ticketNumber ? (req.body.ticketNumber as string) : null;
   if (!firmaOk) {
     logger.warn('Webhook de Kushki con firma inválida', { ip: req.ip });
+    const motivo = req.get('x-kushki-signature') || req.get('x-kushki-simplesignature')
+      ? 'Firma inválida: el secreto o el formato de la firma no coinciden'
+      : 'Sin firma: la llamada no trae X-Kushki-Signature ni X-Kushki-SimpleSignature';
+    await registrarWebhook(req, { ticket, firmaValida: false, estadoHttp: 401, detalle: motivo });
     return res.status(401).json({ ok: false });
   }
 
-  const ticket = req.body?.ticketNumber;
-  if (typeof ticket !== 'string' || !ticket) {
+  if (!ticket) {
     logger.warn('Webhook de Kushki firmado pero sin ticketNumber');
+    await registrarWebhook(req, { firmaValida: true, estadoHttp: 200, detalle: 'Firma válida pero sin ticketNumber' });
     return res.status(200).json({ ok: true });
   }
 
@@ -54,13 +61,16 @@ router.post('/webhooks/payout', async (req: Request, res: Response) => {
     const retiro = await prisma.withdrawal.findFirst({ where: { payoutTicket: ticket } });
     if (!retiro) {
       logger.warn('Webhook de Kushki para un ticket desconocido; Kushki reintentará', { ticket });
+      await registrarWebhook(req, { ticket, firmaValida: true, estadoHttp: 404, detalle: 'Ticket desconocido: no hay un retiro con ese ticket' });
       return res.status(404).json({ ok: false });
     }
     await anexarRespuesta(retiro.id, 'webhook', sanitizarWebhook(req.body));
     await resolverRetiroEnProceso(retiro);
+    await registrarWebhook(req, { ticket, firmaValida: true, estadoHttp: 200, detalle: 'Procesado' });
     res.status(200).json({ ok: true });
   } catch (err: any) {
     logger.error('Error procesando webhook de Kushki', { err: err.message, ticket });
+    await registrarWebhook(req, { ticket, firmaValida: true, estadoHttp: 500, detalle: 'Error interno al procesar el aviso' });
     res.status(500).json({ ok: false });
   }
 });

@@ -14,6 +14,16 @@ export const authLimiter = rateLimit({
   message: { ok: false, mensaje: 'Demasiados intentos de acceso. Intenta en 15 minutos.' },
 });
 
+// El webhook no lleva sesión; este límite evita que se use para saturar el servidor o la base de datos.
+export const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+  message: { ok: false },
+});
+
 export const walletLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,

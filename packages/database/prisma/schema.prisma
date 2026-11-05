@@ -64,6 +64,23 @@ model User {
   @@map("users")
 }
 
+// Registro de cada llamada que recibe el webhook de Kushki (válida o no), para poder diagnosticar
+// si Kushki está llamando y por qué se rechaza. Solo se conservan los últimos registros.
+model KushkiWebhookLog {
+  id          String   @id @default(uuid())
+  ticket      String?
+  firmaValida Boolean  @map("firma_valida")
+  estadoHttp  Int      @map("estado_http")
+  detalle     String?  // motivo corto: "firma inválida", "ticket desconocido", "procesado"...
+  ip          String?
+  cabeceras   Json?    // nombres de las cabeceras recibidas (sin valores sensibles)
+  cuerpo      Json?    // cuerpo sin datos bancarios
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt(sort: Desc)])
+  @@map("kushki_webhook_logs")
+}
+
 // ══════════════════════════════════════
 // VINCULACIÓN DE CLIENTES EMPRESARIALES
 // ══════════════════════════════════════

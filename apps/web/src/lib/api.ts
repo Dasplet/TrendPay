@@ -153,4 +153,5 @@ export const adminApi = {
   updateBank:   (id: string, data: any) => api.put(`/admin/banks/${id}`, data),
   kushkiPagos:     (params?: any) => api.get('/admin/kushki/pagos', { params }),
   kushkiConciliar: () => api.post('/admin/kushki/conciliar'),
+  kushkiWebhooks:  () => api.get('/admin/kushki/webhooks'),
 };

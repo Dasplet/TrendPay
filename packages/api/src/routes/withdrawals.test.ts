@@ -433,6 +433,70 @@ describe('Withdrawals API', () => {
         mockDetalle.mockRejectedValue(new KushkiError('caído', 502));
         expect((await enviarAviso(avisoDe('T-1'))).status).toBe(500);
       });
+
+      describe('registro de avisos para el panel', () => {
+        const ultimo = () => prisma.kushkiWebhookLog.findFirstOrThrow({ orderBy: { createdAt: 'desc' } });
+
+        it('registra una llamada sin firma y dice por qué se rechazó', async () => {
+          await enviarAviso(avisoDe('T-9'), { firmar: false });
+          const log = await ultimo();
+          expect(log).toMatchObject({ firmaValida: false, estadoHttp: 401, ticket: 'T-9' });
+          expect(log.detalle).toContain('Sin firma');
+          expect((log.cabeceras as any).conFirma).toBe(false);
+        });
+
+        it('registra una firma que no coincide como inválida (secreto o formato distinto)', async () => {
+          await request(app).post('/api/kushki/webhooks/payout').set('Content-Type', 'application/json')
+            .set('X-Kushki-Id', '55').set('X-Kushki-Signature', hmac('otro')).send(avisoDe('T-9'));
+          const log = await ultimo();
+          expect(log).toMatchObject({ firmaValida: false, estadoHttp: 401 });
+          expect(log.detalle).toContain('Firma inválida');
+          expect((log.cabeceras as any)).toMatchObject({ conFirma: true, kushkiId: '55' });
+        });
+
+        it('registra los avisos aceptados, los de ticket desconocido y la falta de secreto', async () => {
+          await enviarAviso(avisoDe('NO-EXISTE'));
+          expect(await ultimo()).toMatchObject({ firmaValida: true, estadoHttp: 404, ticket: 'NO-EXISTE' });
+
+          await retiroEnProceso();
+          mockDetalle.mockResolvedValue(detalle('aprobada'));
+          await enviarAviso(avisoDe('T-1', { transactionStatus: 'APPROVAL' }));
+          expect(await ultimo()).toMatchObject({ firmaValida: true, estadoHttp: 200, ticket: 'T-1', detalle: 'Procesado' });
+
+          delete process.env.KUSHKI_WEBHOOK_SECRET;
+          await enviarAviso(avisoDe('T-1'));
+          expect((await ultimo()).detalle).toContain('KUSHKI_WEBHOOK_SECRET');
+        });
+
+        it('no guarda los datos bancarios ni los valores de las firmas', async () => {
+          await enviarAviso(avisoDe('T-9'));
+          const texto = JSON.stringify(await ultimo());
+          expect(texto).not.toContain('04512345678');
+          expect(texto).not.toContain('1023456789');
+          expect(texto).not.toContain(hmac('1792600000'));
+        });
+
+        it('conserva solo los últimos 300 registros', async () => {
+          await prisma.kushkiWebhookLog.createMany({ data: Array.from({ length: 305 }, () => ({ firmaValida: false, estadoHttp: 401 })) });
+          await enviarAviso(avisoDe('T-9'), { firmar: false });
+          expect(await prisma.kushkiWebhookLog.count()).toBe(300);
+        });
+
+        it('el panel de administración los lista y un usuario normal no puede verlos', async () => {
+          await enviarAviso(avisoDe('T-9'), { firmar: false });
+          const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+          const user = await crearUsuarioDePrueba();
+
+          const ok = await request(app).get('/api/admin/kushki/webhooks').set('Authorization', `Bearer ${tokenPara(admin)}`);
+          expect(ok.status).toBe(200);
+          expect(ok.body.secretoConfigurado).toBe(true);
+          expect(ok.body.avisos).toHaveLength(1);
+          expect(ok.body.avisos[0].ticket).toBe('T-9');
+
+          const no = await request(app).get('/api/admin/kushki/webhooks').set('Authorization', `Bearer ${tokenPara(user)}`);
+          expect(no.status).toBe(403);
+        });
+      });
     });
   });
 });

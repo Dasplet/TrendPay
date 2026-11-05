@@ -306,6 +306,18 @@ router.get('/kushki/pagos', authenticate, requireAdmin, async (req: Request, res
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 
+// ══ GET /api/admin/kushki/webhooks ══
+// Últimas llamadas que recibió el webhook de Kushki, válidas o no, para ver si Kushki está llamando.
+router.get('/kushki/webhooks', authenticate, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const [avisos, configurado] = await Promise.all([
+      prisma.kushkiWebhookLog.findMany({ orderBy: { createdAt: 'desc' }, take: 50 }),
+      Promise.resolve(!!process.env.KUSHKI_WEBHOOK_SECRET),
+    ]);
+    res.json({ ok: true, secretoConfigurado: configurado, avisos });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
 // ══ POST /api/admin/kushki/conciliar ══
 // Fuerza ahora la misma conciliación que corre cada 5 minutos.
 router.post('/kushki/conciliar', authenticate, requireAdmin, async (_req: Request, res: Response) => {
