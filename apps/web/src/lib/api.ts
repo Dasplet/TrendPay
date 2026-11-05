@@ -154,4 +154,6 @@ export const adminApi = {
   kushkiPagos:     (params?: any) => api.get('/admin/kushki/pagos', { params }),
   kushkiConciliar: () => api.post('/admin/kushki/conciliar'),
   kushkiWebhooks:  () => api.get('/admin/kushki/webhooks'),
+  kushkiProbarWebhook: () => api.post('/admin/kushki/webhooks/probar'),
+  kushkiLimpiarWebhooks: () => api.delete('/admin/kushki/webhooks'),
 };

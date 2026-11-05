@@ -8,7 +8,7 @@ import { genCodigo } from '../utils/security';
 import { chargeCardToken, initTransfer, KushkiError } from '../utils/kushki';
 import { resolverPagoPse } from '../utils/kushkiPayments';
 import { anexarRespuesta, resolverRetiroEnProceso } from '../utils/retiros';
-import { firmaKushkiValida, sanitizarWebhook } from '../utils/kushkiWebhook';
+import { firmaKushkiValida, sanitizarWebhook, TICKET_PRUEBA_WEBHOOK } from '../utils/kushkiWebhook';
 import { logger } from '../utils/logger';
 import { conCuenta, miembrosDe, saldoVisible } from '../utils/cuentas';
 
@@ -54,6 +54,12 @@ router.post('/webhooks/payout', webhookLimiter, async (req: Request, res: Respon
   if (!ticket) {
     logger.warn('Webhook de Kushki firmado pero sin ticketNumber');
     await registrarWebhook(req, { firmaValida: true, estadoHttp: 200, detalle: 'Firma válida pero sin ticketNumber' });
+    return res.status(200).json({ ok: true });
+  }
+
+  // Prueba interna lanzada desde el panel de administración: confirma que el secreto y la firma funcionan
+  if (ticket === TICKET_PRUEBA_WEBHOOK) {
+    await registrarWebhook(req, { ticket, firmaValida: true, estadoHttp: 200, detalle: 'Prueba interna de TrendPay: firma válida' });
     return res.status(200).json({ ok: true });
   }
 

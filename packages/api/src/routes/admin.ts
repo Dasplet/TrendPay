@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { prisma } from '../index';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { conciliarPagosPendientes } from '../utils/kushkiPayments';
+import { TICKET_PRUEBA_WEBHOOK, firmarAvisoDePrueba } from '../utils/kushkiWebhook';
 
 const router = Router();
 
@@ -315,6 +316,47 @@ router.get('/kushki/webhooks', authenticate, requireAdmin, async (_req: Request,
       Promise.resolve(!!process.env.KUSHKI_WEBHOOK_SECRET),
     ]);
     res.json({ ok: true, secretoConfigurado: configurado, avisos });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// ══ POST /api/admin/kushki/webhooks/probar ══
+// El servidor se manda a sí mismo un aviso firmado con el secreto real, por la misma ruta pública que usa
+// Kushki. Confirma que el secreto, la firma y el registro funcionan, sin que nadie tenga que ver el secreto.
+router.post('/kushki/webhooks/probar', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  const secreto = process.env.KUSHKI_WEBHOOK_SECRET;
+  if (!secreto) return res.status(400).json({ ok: false, mensaje: 'Falta KUSHKI_WEBHOOK_SECRET en el servidor' });
+
+  const proto = req.get('x-forwarded-proto')?.split(',')[0].trim() || req.protocol;
+  const host = req.get('x-forwarded-host')?.split(',')[0].trim() || req.get('host');
+  const id = Date.now().toString();
+  const cuerpo = JSON.stringify({ ticketNumber: TICKET_PRUEBA_WEBHOOK, transactionStatus: 'APPROVAL', origen: 'prueba-interna' });
+
+  try {
+    const respuesta = await fetch(`${proto}://${host}/api/kushki/webhooks/payout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Kushki-Id': id,
+        'X-Kushki-Signature': firmarAvisoDePrueba(cuerpo, id, secreto),
+        'User-Agent': 'TrendPay-prueba-interna',
+      },
+      body: cuerpo,
+      signal: AbortSignal.timeout(10000),
+    });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'PROBAR_WEBHOOK_KUSHKI', tabla: 'kushki_webhook_logs', ip: req.ip, datos: { estadoHttp: respuesta.status } } }).catch(() => {});
+    res.json({ ok: respuesta.ok, estadoHttp: respuesta.status, mensaje: respuesta.ok ? 'La prueba firmada fue aceptada' : `El servidor respondió ${respuesta.status}` });
+  } catch (e: any) {
+    res.status(502).json({ ok: false, mensaje: `No se pudo completar la prueba: ${e.message}` });
+  }
+});
+
+// ══ DELETE /api/admin/kushki/webhooks ══
+// Vacía el registro de avisos (por ejemplo para quitar las pruebas). Queda constancia en la auditoría.
+router.delete('/kushki/webhooks', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { count } = await prisma.kushkiWebhookLog.deleteMany();
+    await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'LIMPIAR_AVISOS_KUSHKI', tabla: 'kushki_webhook_logs', ip: req.ip, datos: { eliminados: count } } }).catch(() => {});
+    res.json({ ok: true, eliminados: count });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 

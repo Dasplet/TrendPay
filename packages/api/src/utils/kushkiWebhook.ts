@@ -34,3 +34,11 @@ const CAMPOS_SENSIBLES = ['accountNumber', 'documentNumber', 'documentType', 'to
 export function sanitizarWebhook(cuerpo: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(cuerpo).filter(([clave]) => !CAMPOS_SENSIBLES.includes(clave)));
 }
+
+// Ticket reservado para la prueba interna del panel; no corresponde a ningún retiro.
+export const TICKET_PRUEBA_WEBHOOK = 'PRUEBA-TRENDPAY';
+
+// Firma un aviso como lo haría Kushki (X-Kushki-Signature = HMAC(secreto, `${cuerpo}.${id}`)).
+export function firmarAvisoDePrueba(cuerpo: string, id: string, secreto: string): string {
+  return hmac(secreto, Buffer.concat([Buffer.from(cuerpo), Buffer.from(`.${id}`)])).toString('hex');
+}

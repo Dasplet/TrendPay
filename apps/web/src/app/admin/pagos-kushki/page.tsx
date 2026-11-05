@@ -43,6 +43,18 @@ export default function PagosKushkiPage() {
   });
   const avisos: any[] = avisosQ.data?.avisos || [];
 
+  const probar = useMutation({
+    mutationFn: () => adminApi.kushkiProbarWebhook(),
+    onSuccess: () => { toast.success('Prueba firmada aceptada por el webhook'); avisosQ.refetch(); },
+    onError: (err: any) => { toast.error(err.response?.data?.mensaje || 'La prueba falló'); avisosQ.refetch(); },
+  });
+
+  const limpiar = useMutation({
+    mutationFn: () => adminApi.kushkiLimpiarWebhooks(),
+    onSuccess: ({ data: res }) => { toast.success(`Registro limpiado (${res.eliminados} avisos eliminados)`); avisosQ.refetch(); },
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo limpiar el registro'),
+  });
+
   const pagos: any[] = data?.pagos || [];
   const totales: Total[] = data?.totales || [];
 
@@ -100,7 +112,18 @@ export default function PagosKushkiPage() {
 
       <Panel style={{ marginTop: 16 }}>
         <PanelHeader title="Avisos de Kushki (webhook de retiros)" icon={<Webhook size={16} />}
-          actions={<Btn variant="ghost" onClick={() => avisosQ.refetch()} title="Actualizar"><RefreshCw size={13} /> Actualizar</Btn>} />
+          actions={
+            <>
+              <Btn variant="primary" disabled={probar.isPending} onClick={() => probar.mutate()}
+                title="El servidor se envía un aviso firmado con el secreto real, por la misma ruta que usa Kushki">
+                {probar.isPending ? 'Probando...' : 'Enviar prueba firmada'}
+              </Btn>
+              <Btn variant="ghost" disabled={limpiar.isPending || avisos.length === 0}
+                onClick={() => { if (window.confirm('¿Vaciar el registro de avisos? Queda constancia en la auditoría.')) limpiar.mutate(); }}
+                title="Elimina todos los avisos registrados">Limpiar registro</Btn>
+              <Btn variant="ghost" onClick={() => avisosQ.refetch()} title="Actualizar"><RefreshCw size={13} /> Actualizar</Btn>
+            </>
+          } />
         <div style={{ padding: '12px 16px', fontSize: 12, color: 'rgba(var(--adm-fg-rgb),.6)', borderBottom: '1px solid rgba(133,46,199,.12)', lineHeight: 1.6 }}>
           Cada vez que Kushki llama a TrendPay para avisar el resultado de un retiro, queda aquí (incluso si se rechaza). Se actualiza solo cada 15 segundos.
           {avisosQ.data && !avisosQ.data.secretoConfigurado && (

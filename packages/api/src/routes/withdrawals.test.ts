@@ -482,6 +482,47 @@ describe('Withdrawals API', () => {
           expect(await prisma.kushkiWebhookLog.count()).toBe(300);
         });
 
+        it('la prueba firmada del panel es aceptada y queda registrada como válida', async () => {
+          const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+          const res = await request(app).post('/api/admin/kushki/webhooks/probar').set('Authorization', `Bearer ${tokenPara(admin)}`);
+          expect(res.status).toBe(200);
+          expect(res.body.estadoHttp).toBe(200);
+
+          const log = await ultimo();
+          expect(log).toMatchObject({ firmaValida: true, estadoHttp: 200, ticket: 'PRUEBA-TRENDPAY' });
+          expect(log.detalle).toContain('Prueba interna');
+          expect((log.cabeceras as any).userAgent).toBe('TrendPay-prueba-interna');
+          expect(await prisma.auditLog.count({ where: { accion: 'PROBAR_WEBHOOK_KUSHKI', userId: admin.id } })).toBe(1);
+        });
+
+        it('la prueba firmada avisa si falta el secreto y solo la puede lanzar un administrador', async () => {
+          const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+          const user = await crearUsuarioDePrueba();
+          expect((await request(app).post('/api/admin/kushki/webhooks/probar').set('Authorization', `Bearer ${tokenPara(user)}`)).status).toBe(403);
+
+          delete process.env.KUSHKI_WEBHOOK_SECRET;
+          const sinSecreto = await request(app).post('/api/admin/kushki/webhooks/probar').set('Authorization', `Bearer ${tokenPara(admin)}`);
+          expect(sinSecreto.status).toBe(400);
+          expect(sinSecreto.body.mensaje).toContain('KUSHKI_WEBHOOK_SECRET');
+        });
+
+        it('el administrador puede limpiar el registro y queda constancia en la auditoría', async () => {
+          await enviarAviso(avisoDe('T-9'), { firmar: false });
+          await enviarAviso(avisoDe('T-8'), { firmar: false });
+          const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+          const user = await crearUsuarioDePrueba();
+
+          expect((await request(app).delete('/api/admin/kushki/webhooks').set('Authorization', `Bearer ${tokenPara(user)}`)).status).toBe(403);
+          expect(await prisma.kushkiWebhookLog.count()).toBe(2);
+
+          const res = await request(app).delete('/api/admin/kushki/webhooks').set('Authorization', `Bearer ${tokenPara(admin)}`);
+          expect(res.status).toBe(200);
+          expect(res.body.eliminados).toBe(2);
+          expect(await prisma.kushkiWebhookLog.count()).toBe(0);
+          const auditoria = await prisma.auditLog.findFirstOrThrow({ where: { accion: 'LIMPIAR_AVISOS_KUSHKI' } });
+          expect((auditoria.datos as any).eliminados).toBe(2);
+        });
+
         it('el panel de administración los lista y un usuario normal no puede verlos', async () => {
           await enviarAviso(avisoDe('T-9'), { firmar: false });
           const admin = await crearUsuarioDePrueba({ rol: 'admin' });
