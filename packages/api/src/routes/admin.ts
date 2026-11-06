@@ -6,6 +6,8 @@ import { prisma } from '../index';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { conciliarPagosPendientes } from '../utils/kushkiPayments';
 import { TICKET_PRUEBA_WEBHOOK, firmarAvisoDePrueba } from '../utils/kushkiWebhook';
+import { cifradoV2Activo } from '../utils/security';
+import { modoAlmacenamiento, cifradoDelBucket } from '../utils/storage';
 
 const router = Router();
 
@@ -316,6 +318,43 @@ router.get('/kushki/webhooks', authenticate, requireAdmin, async (_req: Request,
       Promise.resolve(!!process.env.KUSHKI_WEBHOOK_SECRET),
     ]);
     res.json({ ok: true, secretoConfigurado: configurado, avisos });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// ══ GET /api/admin/seguridad/estado ══
+// Qué protecciones están activas. Solo muestra si cada una está encendida: nunca valores ni llaves.
+router.get('/seguridad/estado', authenticate, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const noV2 = { not: { startsWith: 'v2:' } };
+    const [cuentas, retiros, enlaces, archivosBd] = await Promise.all([
+      prisma.bankAccount.count({ where: { numeroCuenta: noV2 } }),
+      prisma.withdrawal.count({ where: { numeroCuenta: noV2 } }),
+      prisma.vinculacion.count({ where: { tokenCifrado: noV2 } }), // los NULL (sin enlace guardado) quedan fuera solos
+      prisma.vinculacionArchivo.count(),
+    ]);
+    const modo = modoAlmacenamiento();
+    const cifradoBucket = Object.keys(cifradoDelBucket()).length === 0 ? 'ninguno'
+      : (process.env.S3_KMS_KEY_ID?.trim() ? 'kms' : 's3');
+    const kms = cifradoV2Activo();
+    const secretos = !!process.env.AWS_SECRETS_ID;
+    const pendientes = { cuentasBancarias: cuentas, retiros, enlaces };
+    const porMigrar = cuentas + retiros + enlaces;
+
+    const alertas: string[] = [];
+    if (!secretos) alertas.push('Las credenciales siguen solo en las variables de Railway (falta AWS Secrets Manager).');
+    if (!kms) alertas.push('La llave de cifrado de datos no está protegida por AWS KMS.');
+    if (kms && porMigrar > 0) alertas.push(`Hay ${porMigrar} registros todavía cifrados con la llave antigua: falta ejecutar el script de re-cifrado.`);
+    if (modo === 's3' && cifradoBucket === 'ninguno') alertas.push('El bucket de documentos no tiene cifrado con tu llave de KMS (falta S3_KMS_KEY_ID).');
+    if (modo === 'bd' && kms === false) alertas.push('Los documentos se guardan en la base de datos con la llave antigua.');
+
+    res.json({
+      ok: true,
+      secretosAws: { activo: secretos, cargados: Number(process.env.TP_SECRETOS_AWS || 0) },
+      llaveKms: kms,
+      almacenamiento: { modo, cifradoBucket, archivosEnBaseDeDatos: archivosBd },
+      pendientesDeMigrar: pendientes,
+      alertas,
+    });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 

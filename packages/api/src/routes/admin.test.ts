@@ -272,4 +272,24 @@ describe('Admin API', () => {
       expect(res.body.banco.orden).toBe(5);
     });
   });
+
+  describe('GET /api/admin/seguridad/estado', () => {
+    it('un usuario normal no puede verlo', async () => {
+      const user = await crearUsuarioDePrueba();
+      const res = await request(app).get('/api/admin/seguridad/estado').set('Authorization', `Bearer ${tokenPara(user)}`);
+      expect(res.status).toBe(403);
+    });
+
+    it('el admin ve qué protecciones están activas y nunca valores secretos', async () => {
+      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+      const res = await request(app).get('/api/admin/seguridad/estado').set('Authorization', `Bearer ${tokenPara(admin)}`);
+      expect(res.status).toBe(200);
+      expect(res.body.llaveKms).toBe(false);
+      expect(res.body.secretosAws.activo).toBe(false);
+      expect(res.body.almacenamiento.modo).toBe('bd');
+      expect(res.body.pendientesDeMigrar).toEqual({ cuentasBancarias: 0, retiros: 0, enlaces: 0 });
+      expect(res.body.alertas.length).toBeGreaterThan(0);
+      expect(JSON.stringify(res.body)).not.toContain(process.env.JWT_SECRET as string);
+    });
+  });
 });

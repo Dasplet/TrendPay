@@ -4,12 +4,14 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node dist/bootstrap.js",
     "test": "jest --runInBand",
     "test:coverage": "jest --runInBand --coverage && node scripts/fix-lcov-paths.js"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "^3.1163.0",
     "@aws-sdk/client-s3": "^3.1158.0",
+    "@aws-sdk/client-secrets-manager": "^3.1163.0",
     "@aws-sdk/s3-request-presigner": "^3.1158.0",
     "@prisma/client": "^5.7.0",
     "@trendpay/database": "*",

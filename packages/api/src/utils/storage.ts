@@ -43,9 +43,19 @@ export async function guardarObjeto(key: string, cuerpo: Buffer, mime: string): 
     Key: key,
     Body: cuerpo,
     ContentType: mime,
-    ServerSideEncryption: process.env.S3_SSE === 'true' ? 'AES256' : undefined,
+    ...cifradoDelBucket(),
   }));
   return key;
+}
+
+// Cifrado en reposo del lado de AWS. Con S3_KMS_KEY_ID cada archivo se cifra con TU llave de KMS (cada lectura
+// queda en el registro de auditoría de AWS y se puede revocar el acceso borrando el permiso). S3_SSE=true usa
+// la llave gestionada por S3. Sin ninguna, depende de lo que tenga configurado el bucket.
+export function cifradoDelBucket(): { ServerSideEncryption?: 'aws:kms' | 'AES256'; SSEKMSKeyId?: string } {
+  const llaveKms = process.env.S3_KMS_KEY_ID?.trim();
+  if (llaveKms) return { ServerSideEncryption: 'aws:kms', SSEKMSKeyId: llaveKms };
+  if (process.env.S3_SSE === 'true') return { ServerSideEncryption: 'AES256' };
+  return {};
 }
 
 // La clave guardada en el documento dice dónde vive el archivo, aunque después cambie el modo configurado.
