@@ -5,7 +5,7 @@ import { authenticate } from '../middleware/auth';
 import { walletLimiter, webhookLimiter } from '../middleware/rateLimiter';
 import { registrarWebhook } from '../utils/kushkiWebhookLog';
 import { genCodigo } from '../utils/security';
-import { chargeCardToken, initTransfer, iniciarPagoBreB, brebHabilitado, KushkiError } from '../utils/kushki';
+import { chargeCardToken, initTransfer, iniciarPagoBreB, cancelarPagoBreB, brebHabilitado, KushkiError } from '../utils/kushki';
 import { resolverPagoPse } from '../utils/kushkiPayments';
 import { anexarRespuesta, resolverRetiroEnProceso } from '../utils/retiros';
 import { firmaKushkiValida, sanitizarWebhook, TICKET_PRUEBA_WEBHOOK } from '../utils/kushkiWebhook';
@@ -282,6 +282,37 @@ router.post('/consignar/breb/iniciar', authenticate, walletLimiter, conCuenta('r
     }
     logger.error('Error iniciando Bre-B', { err: err.message, userId: req.user?.id });
     res.status(500).json({ ok: false, mensaje: 'Error iniciando el pago' });
+  }
+});
+
+// ══ POST /api/kushki/consignar/breb/cancelar ══
+// El cliente se arrepiente o se equivocó de monto: se invalida el QR en Kushki y el pago queda cerrado. Si el
+// banco ya lo había resuelto (Kushki responde T023) no se cancela: se consulta el estado real, que puede
+// acreditar el saldo si en ese instante ya estaba aprobado.
+const brebCancelarSchema = z.object({ token: z.string().min(10) });
+
+router.post('/consignar/breb/cancelar', authenticate, walletLimiter, conCuenta('recargar'), async (req: Request, res: Response) => {
+  const parse = brebCancelarSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Token inválido' });
+
+  try {
+    const pago = await prisma.kushkiPayment.findUnique({ where: { reference: parse.data.token } });
+    if (pago?.userId !== req.user!.id || pago.metodo !== 'breb') return res.status(404).json({ ok: false, mensaje: 'Pago no encontrado' });
+    if (pago.estado !== 'pendiente') return res.json({ ok: true, estado: pago.estado });
+
+    const cancelado = await cancelarPagoBreB(pago.reference);
+    if (!cancelado) {
+      const resultado = await resolverPagoPse(pago);
+      return res.json({ ok: true, ...resultado, saldo: resultado.saldo === undefined ? undefined : saldoVisible(req.cuenta, resultado.saldo) });
+    }
+
+    await prisma.kushkiPayment.updateMany({ where: { id: pago.id, estado: 'pendiente' }, data: { estado: 'rechazado' } });
+    logger.info('Bre-B cancelado por el cliente', { userId: req.user!.id });
+    res.json({ ok: true, estado: 'cancelado' });
+  } catch (err: any) {
+    if (err instanceof KushkiError) return res.status(502).json({ ok: false, mensaje: err.message });
+    logger.error('Error cancelando Bre-B', { err: err.message, userId: req.user?.id });
+    res.status(500).json({ ok: false, mensaje: 'Error cancelando el pago' });
   }
 });
 

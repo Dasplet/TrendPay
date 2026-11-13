@@ -179,6 +179,22 @@ export default function ConsignarPage() {
     onError: (err: any) => toast.error(err.response?.data?.mensaje || err.message || 'No se pudo generar el código QR'),
   });
 
+  const cancelarBrebMutation = useMutation({
+    mutationFn: async () => (await kushkiApi.cancelarBreB(breb!.token)).data as { estado: string },
+    onSuccess: async (data) => {
+      if (data.estado === 'completado') {
+        // El banco alcanzó a aprobarlo antes de cancelar: ya se acreditó
+        await refreshUser();
+        toast.success('El pago ya había sido aprobado; tu saldo fue actualizado');
+        window.location.href = '/dashboard';
+        return;
+      }
+      setBreb(null);
+      toast.success('Código QR cancelado');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo cancelar el código QR'),
+  });
+
   const formCompletoTarjeta = amount > 0 && card.name && card.number.length >= 15 && card.expiryMonth && card.expiryYear && card.cvc.length >= 3;
   const formCompletoPse = amount > 0 && pse.bankId && pse.documentNumber.length >= 5 && pse.email && pse.nombreCompleto.length >= 3;
 
@@ -316,7 +332,12 @@ export default function ConsignarPage() {
                   <p className="tp-modal-label" style={{ textAlign: 'center' }}>Esperando la confirmación de tu banco…</p>
                 </div>
                 {resumenComision}
-                <ThemeButton tone="ghost" href="/dashboard/consignaciones">Ver mis consignaciones</ThemeButton>
+                <div className="tp-button-row">
+                  <ThemeButton tone="ghost" disabled={cancelarBrebMutation.isPending} onClick={() => cancelarBrebMutation.mutate()}>
+                    {cancelarBrebMutation.isPending ? 'Cancelando...' : 'Cancelar este QR'}
+                  </ThemeButton>
+                  <ThemeButton tone="ghost" href="/dashboard/consignaciones">Ver mis consignaciones</ThemeButton>
+                </div>
               </>
             )}
           </>

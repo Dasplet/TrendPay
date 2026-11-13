@@ -112,6 +112,7 @@ export const kushkiApi = {
   confirmarPSE: (token: string) => api.post('/kushki/consignar/pse/confirmar', { token }),
   metodos: () => api.get('/kushki/metodos'),
   iniciarBreB: (monto: number) => api.post('/kushki/consignar/breb/iniciar', { monto }),
+  cancelarBreB: (token: string) => api.post('/kushki/consignar/breb/cancelar', { token }),
   consignaciones: () => api.get('/kushki/consignaciones'),
 };
 

@@ -236,6 +236,21 @@ export async function iniciarPagoBreB(montoCop: number): Promise<PagoBreB> {
   }
 }
 
+// Anula un QR Bre-B antes de que llegue a un estado final (PATCH /transfer/v1/cancel/{token}, Private-Merchant-Id).
+// 204 sin cuerpo = cancelado y el QR queda inválido. Si la transacción ya terminó Kushki responde 400 T023: en
+// ese caso devuelve false (no se pudo cancelar porque ya se resolvió) y quien llama debe consultar el estado real.
+export async function cancelarPagoBreB(token: string): Promise<boolean> {
+  try {
+    await axios.patch(`${BASE_URL}/transfer/v1/cancel/${encodeURIComponent(token)}`, undefined, {
+      headers: { 'Private-Merchant-Id': PRIVATE_MERCHANT_ID },
+    });
+    return true;
+  } catch (err: any) {
+    if (err.response?.status === 400 && err.response?.data?.code === 'T023') return false;
+    throw errorDeKushki(err, 'cancel-bre-b');
+  }
+}
+
 // ¿Tiene el comercio Bre-B (QR) activo? Se consulta a Kushki y se recuerda 5 minutos. Si Kushki no responde
 // se considera apagado (la opción simplemente no se muestra), sin guardar ese resultado.
 let cacheBreB: { hasta: number; activo: boolean } | null = null;

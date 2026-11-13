@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getConfigTransferencias, solicitarTokenBreB, iniciarPagoBreB, brebHabilitado, olvidarCacheBreB, KushkiError } from './kushki';
+import { getConfigTransferencias, solicitarTokenBreB, iniciarPagoBreB, cancelarPagoBreB, brebHabilitado, olvidarCacheBreB, KushkiError } from './kushki';
 
 jest.mock('axios');
 const http = axios as jest.Mocked<typeof axios>;
@@ -89,6 +89,23 @@ describe('Bre-B: token, init y disponibilidad', () => {
       throw { message: 'x', response: { status: 422, data: { code: 'E046', message: 'Token y procesador no coinciden' } } };
     });
     await expect(iniciarPagoBreB(10000)).rejects.toMatchObject({ status: 422, codigo: 'E046' });
+  });
+
+  it('cancelarPagoBreB: PATCH con la llave privada; 204 = cancelado, T023 = ya terminó, otro error se propaga', async () => {
+    const patch = jest.fn();
+    (http as any).patch = patch;
+    patch.mockResolvedValueOnce({ status: 204 });
+    expect(await cancelarPagoBreB('tok/abc')).toBe(true);
+    const [url, cuerpo, opciones] = patch.mock.calls[0];
+    expect(url).toMatch(/\/transfer\/v1\/cancel\/tok%2Fabc$/);
+    expect(cuerpo).toBeUndefined();
+    expect(Object.keys(opciones.headers)).toEqual(['Private-Merchant-Id']);
+
+    patch.mockRejectedValueOnce({ message: 'x', response: { status: 400, data: { code: 'T023', message: 'ya final' } } });
+    expect(await cancelarPagoBreB('tok_abc')).toBe(false);
+
+    patch.mockRejectedValueOnce({ message: 'x', response: { status: 500, data: { message: 'boom' } } });
+    await expect(cancelarPagoBreB('tok_abc')).rejects.toMatchObject({ status: 500 });
   });
 
   it('brebHabilitado: true/false según la configuración, y recuerda la respuesta', async () => {

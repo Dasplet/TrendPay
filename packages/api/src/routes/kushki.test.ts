@@ -4,9 +4,9 @@ import { limpiarBaseDeDatos, crearUsuarioDePrueba, tokenPara } from '../tests/te
 
 jest.mock('../utils/kushki', () => {
   const actual = jest.requireActual('../utils/kushki');
-  return { ...actual, chargeCardToken: jest.fn(), initTransfer: jest.fn(), getTransferStatus: jest.fn(), iniciarPagoBreB: jest.fn(), brebHabilitado: jest.fn() };
+  return { ...actual, chargeCardToken: jest.fn(), initTransfer: jest.fn(), getTransferStatus: jest.fn(), iniciarPagoBreB: jest.fn(), cancelarPagoBreB: jest.fn(), brebHabilitado: jest.fn() };
 });
-import { chargeCardToken, initTransfer, getTransferStatus, iniciarPagoBreB, brebHabilitado, KushkiError } from '../utils/kushki';
+import { chargeCardToken, initTransfer, getTransferStatus, iniciarPagoBreB, cancelarPagoBreB, brebHabilitado, KushkiError } from '../utils/kushki';
 import { conciliarPagosPendientes, resolverPagoPse } from '../utils/kushkiPayments';
 
 describe('Kushki routes', () => {
@@ -404,6 +404,54 @@ describe('Kushki routes', () => {
       expect(otra.body.estado).toBe('completado');
       const wallet = await prisma.wallet.findUnique({ where: { userId: user.id } });
       expect(Number(wallet!.saldo)).toBe(20000);
+    });
+
+    describe('POST /consignar/breb/cancelar', () => {
+      const cancelar = (user: any, token: string) => request(app).post('/api/kushki/consignar/breb/cancelar').set('Authorization', `Bearer ${tokenPara(user)}`).send({ token });
+      const crearPendiente = (userId: string, reference: string, metodo = 'breb') =>
+        prisma.kushkiPayment.create({ data: { userId, reference, metodo, monto: 20000, estado: 'pendiente' } });
+
+      it('cancela el QR en Kushki y cierra el pago sin acreditar nada', async () => {
+        const user = await crearUsuarioDePrueba({ saldo: 0 });
+        await crearPendiente(user.id, 'tok_breb_cancelar_1');
+        (cancelarPagoBreB as jest.Mock).mockResolvedValue(true);
+        const res = await cancelar(user, 'tok_breb_cancelar_1');
+        expect(res.body).toEqual({ ok: true, estado: 'cancelado' });
+        expect(cancelarPagoBreB).toHaveBeenCalledWith('tok_breb_cancelar_1');
+        expect((await prisma.kushkiPayment.findUnique({ where: { reference: 'tok_breb_cancelar_1' } }))!.estado).toBe('rechazado');
+        expect(Number((await prisma.wallet.findUnique({ where: { userId: user.id } }))!.saldo)).toBe(0);
+      });
+
+      it('si Kushki dice que ya terminó (T023) consulta el estado real y acredita si estaba aprobado', async () => {
+        const user = await crearUsuarioDePrueba({ saldo: 0 });
+        await crearPendiente(user.id, 'tok_breb_cancelar_2');
+        (cancelarPagoBreB as jest.Mock).mockResolvedValue(false);
+        (getTransferStatus as jest.Mock).mockResolvedValue({ estado: 'aprobada', ticketNumber: 'BREB-9' });
+        const res = await cancelar(user, 'tok_breb_cancelar_2');
+        expect(res.body).toMatchObject({ ok: true, estado: 'completado', saldo: 20000 });
+      });
+
+      it('no cancela pagos de otro usuario, ni que no sean Bre-B, ni uno ya resuelto', async () => {
+        const dueno = await crearUsuarioDePrueba();
+        const otro = await crearUsuarioDePrueba();
+        await crearPendiente(dueno.id, 'tok_breb_ajeno_123');
+        await crearPendiente(otro.id, 'tok_pse_no_breb_12', 'pse');
+        await prisma.kushkiPayment.create({ data: { userId: otro.id, reference: 'tok_breb_ya_hecho_1', metodo: 'breb', monto: 1000, estado: 'completado' } });
+
+        expect((await cancelar(otro, 'tok_breb_ajeno_123')).status).toBe(404);
+        expect((await cancelar(otro, 'tok_pse_no_breb_12')).status).toBe(404);
+        const resuelto = await cancelar(otro, 'tok_breb_ya_hecho_1');
+        expect(resuelto.body).toEqual({ ok: true, estado: 'completado' });
+        expect(cancelarPagoBreB).not.toHaveBeenCalled();
+      });
+
+      it('si Kushki falla al cancelar, el pago sigue pendiente', async () => {
+        const user = await crearUsuarioDePrueba();
+        await crearPendiente(user.id, 'tok_breb_cancelar_3');
+        (cancelarPagoBreB as jest.Mock).mockRejectedValue(new KushkiError('Kushki no respondió', 502));
+        expect((await cancelar(user, 'tok_breb_cancelar_3')).status).toBe(502);
+        expect((await prisma.kushkiPayment.findUnique({ where: { reference: 'tok_breb_cancelar_3' } }))!.estado).toBe('pendiente');
+      });
     });
 
     it('la conciliación automática también revisa los pagos Bre-B pendientes', async () => {
