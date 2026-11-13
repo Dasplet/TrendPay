@@ -7,6 +7,7 @@ import { authenticate, requireAdmin } from '../middleware/auth';
 import { conciliarPagosPendientes } from '../utils/kushkiPayments';
 import { TICKET_PRUEBA_WEBHOOK, firmarAvisoDePrueba } from '../utils/kushkiWebhook';
 import { cifradoV2Activo } from '../utils/security';
+import { getConfigTransferencias, KushkiError } from '../utils/kushki';
 import { modoAlmacenamiento, cifradoDelBucket } from '../utils/storage';
 
 const router = Router();
@@ -319,6 +320,18 @@ router.get('/kushki/webhooks', authenticate, requireAdmin, async (_req: Request,
     ]);
     res.json({ ok: true, secretoConfigurado: configurado, avisos });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// ══ GET /api/admin/kushki/config-transferencias ══
+// Qué métodos de consignación por transferencia tiene habilitados el comercio en Kushki (PSE, Bre-B/QR).
+router.get('/kushki/config-transferencias', authenticate, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const config = await getConfigTransferencias();
+    res.json({ ok: true, ...config });
+  } catch (e: any) {
+    const status = e instanceof KushkiError ? e.status : 500;
+    res.status(status).json({ ok: false, mensaje: e.message || 'No se pudo consultar la configuración de Kushki', respuesta: e instanceof KushkiError ? e.respuesta : undefined });
+  }
 });
 
 // ══ GET /api/admin/seguridad/estado ══

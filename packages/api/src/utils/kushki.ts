@@ -121,6 +121,59 @@ export async function getTransferStatus(token: string): Promise<KushkiTransferSt
   }
 }
 
+// ── Configuración de consignaciones por transferencia (Transfer In) ──
+// GET /transfer/v1/config?paymentType=PAYMENT (Beta). Dice qué procesadores tiene habilitados el comercio:
+// PSE (tradicional, sin canales) y Bre-B (APM, canal "QR"). Es de solo lectura y usa la llave pública.
+export interface ProcesadorTransferencia {
+  name: string;
+  currency: string;
+  tipo: 'pse' | 'bre-b' | 'apm' | 'tradicional';
+  canales: string[];
+}
+
+export interface ConfigTransferencias {
+  procesadores: ProcesadorTransferencia[];
+  respuesta: unknown;
+}
+
+function canalesDeFlujos(flujos: unknown): string[] {
+  if (!Array.isArray(flujos)) return [];
+  const canales = new Set<string>();
+  for (const f of flujos as { channels?: unknown }[]) {
+    if (Array.isArray(f?.channels)) for (const c of f.channels) if (typeof c === 'string') canales.add(c);
+  }
+  return [...canales];
+}
+
+function tipoDeProcesador(nombre: string, flujos: unknown): ProcesadorTransferencia['tipo'] {
+  const n = nombre.toLowerCase();
+  if (n.includes('pse')) return 'pse';
+  if (n.includes('bre')) return 'bre-b';
+  return Array.isArray(flujos) && flujos.length > 0 ? 'apm' : 'tradicional';
+}
+
+export async function getConfigTransferencias(): Promise<ConfigTransferencias> {
+  try {
+    const { data } = await axios.get(`${BASE_URL}/transfer/v1/config`, {
+      params: { paymentType: 'PAYMENT' },
+      headers: { 'Public-Merchant-Id': PUBLIC_MERCHANT_ID },
+    });
+    const lista: { name?: unknown; currency?: unknown; supportedFlows?: unknown }[] = Array.isArray(data?.processors) ? data.processors : [];
+    const procesadores = lista
+      .filter((p) => typeof p?.name === 'string')
+      .map((p) => ({
+        name: p.name as string,
+        currency: typeof p.currency === 'string' ? p.currency : '',
+        tipo: tipoDeProcesador(p.name as string, p.supportedFlows),
+        canales: canalesDeFlujos(p.supportedFlows),
+      }));
+    return { procesadores, respuesta: data };
+  } catch (err: any) {
+    const kushkiMessage = err.response?.data?.message;
+    throw new KushkiError(kushkiMessage || err.message || 'Error comunicando con Kushki', err.response?.status || 502, { respuesta: err.response?.data });
+  }
+}
+
 // ── Dispersión (retiros a cuenta bancaria vía ACH) ──
 // Endpoints confirmados contra el sandbox UAT. A diferencia de los pagos
 // entrantes, el token de dispersión lleva los datos de la cuenta destino y se

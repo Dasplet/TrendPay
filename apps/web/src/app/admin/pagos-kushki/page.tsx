@@ -55,6 +55,12 @@ export default function PagosKushkiPage() {
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo limpiar el registro'),
   });
 
+  const configQ = useMutation({
+    mutationFn: () => adminApi.kushkiConfigTransferencias(),
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo consultar a Kushki'),
+  });
+  const procesadores: any[] = configQ.data?.data?.procesadores || [];
+
   const pagos: any[] = data?.pagos || [];
   const totales: Total[] = data?.totales || [];
 
@@ -108,6 +114,36 @@ export default function PagosKushkiPage() {
         <Table headers={['Fecha', 'Usuario', 'Método', 'Monto', 'Estado', 'Ticket Kushki']}>
           {rows}
         </Table>
+      </Panel>
+
+      <Panel style={{ marginTop: 16 }}>
+        <PanelHeader title="Métodos de consignación habilitados en Kushki" icon={<CreditCard size={16} />}
+          actions={
+            <Btn variant="primary" disabled={configQ.isPending} onClick={() => configQ.mutate()}
+              title="Consulta a Kushki qué procesadores de transferencia tiene activos tu comercio (PSE, Bre-B)">
+              {configQ.isPending ? 'Consultando...' : 'Consultar a Kushki'}
+            </Btn>
+          } />
+        <div style={{ padding: '12px 16px', fontSize: 12, color: 'rgba(var(--adm-fg-rgb),.6)', lineHeight: 1.6 }}>
+          {configQ.data ? (
+            procesadores.length === 0
+              ? 'Kushki respondió que no hay procesadores de transferencia configurados para este comercio.'
+              : (
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {procesadores.map((p) => (
+                    <div key={p.name} style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <strong style={{ color: 'var(--adm-text)' }}>{p.name}</strong>
+                      <span>{p.currency}</span>
+                      <span style={{ background: 'rgba(133,46,199,.15)', color: '#c088f0', padding: '2px 10px', borderRadius: 20, fontWeight: 600 }}>
+                        {{ pse: 'PSE', 'bre-b': 'Bre-B', apm: 'APM', tradicional: 'Tradicional' }[p.tipo as string] || p.tipo}
+                      </span>
+                      {p.canales.length > 0 && <span>Canales: {p.canales.join(', ')}</span>}
+                    </div>
+                  ))}
+                </div>
+              )
+          ) : 'Pulsa el botón para ver si el comercio ya tiene PSE y Bre-B (QR) activos.'}
+        </div>
       </Panel>
 
       <Panel style={{ marginTop: 16 }}>

@@ -155,6 +155,7 @@ export const adminApi = {
   kushkiConciliar: () => api.post('/admin/kushki/conciliar'),
   kushkiWebhooks:  () => api.get('/admin/kushki/webhooks'),
   seguridadEstado: () => api.get('/admin/seguridad/estado'),
+  kushkiConfigTransferencias: () => api.get('/admin/kushki/config-transferencias'),
   kushkiProbarWebhook: () => api.post('/admin/kushki/webhooks/probar'),
   kushkiLimpiarWebhooks: () => api.delete('/admin/kushki/webhooks'),
 };
