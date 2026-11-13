@@ -1,0 +1,733 @@
+{
+  "info": {
+    "name": "TrendPay · Kushki (Transfer In, Bre-B y Retiros ACH)",
+    "description": "Colección para demostrar la integración de TrendPay con Kushki.\n\n1. Importa también el entorno \"TrendPay Kushki UAT\" y completa kushki_public, kushki_private y webhook_secret (marca las dos últimas como secretas).\n2. Ejecuta cada carpeta en orden (Run collection). Las pruebas (Tests) quedan en verde o rojo.\n3. Los pasos de Bre-B solo pasan si Kushki activó el procesador Bre-B en el comercio.\n\nNo contiene ninguna llave.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "A. Transfer In · PSE y Bre-B (QR)",
+      "item": [
+        {
+          "name": "1. Get Transfer In configuration",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Public-Merchant-Id",
+                "value": "{{kushki_public}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/transfer/v1/config?paymentType=PAYMENT",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "transfer",
+                "v1",
+                "config"
+              ],
+              "query": [
+                {
+                  "key": "paymentType",
+                  "value": "PAYMENT"
+                }
+              ]
+            },
+            "description": "Qué procesadores de Transfer In tiene el comercio (PSE, Bre-B). Si `processors` llega vacío, Kushki aún no los activó. Guarda el nombre del procesador Bre-B para el token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const ps = pm.response.json().processors || [];",
+                  "pm.test('Trae la lista de procesadores (puede estar vacía si Kushki no activó ninguno)', () => pm.expect(ps).to.be.an('array'));",
+                  "const breb = ps.find(p => /bre/i.test(p.name) && (p.supportedFlows || []).some(f => (f.channels || []).includes('QR')));",
+                  "if (breb) { pm.collectionVariables.set('breb_processor', breb.name); }",
+                  "pm.test('Bre-B (QR) habilitado en el comercio', () => pm.expect(!!breb, 'Kushki aún no activó Bre-B en este comercio').to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Get Bank List (solo PSE)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Public-Merchant-Id",
+                "value": "{{kushki_public}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/transfer/v1/bankList",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "transfer",
+                "v1",
+                "bankList"
+              ]
+            },
+            "description": "Lista de bancos para PSE. Bre-B no usa esta llamada."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const bancos = pm.response.json();",
+                  "pm.test('Trae bancos', () => pm.expect(bancos).to.be.an('array').that.is.not.empty);",
+                  "const b = bancos.find(x => x.code !== '0');",
+                  "if (b) { pm.collectionVariables.set('bank_id', b.code); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3a. Request a Transfer In token — PSE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Public-Merchant-Id",
+                "value": "{{kushki_public}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/transfer/v1/tokens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "transfer",
+                "v1",
+                "tokens"
+              ]
+            },
+            "description": "Token de un solo uso (vence en 30 min). Si el comercio es multiprocesador, agrega `processor: { \"name\": \"Pse Processor\" }`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bankId\": \"{{bank_id}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": \"{{monto}}\",\n    \"iva\": 0\n  },\n  \"callbackUrl\": \"{{frontend_url}}/dashboard/consignar/pse-resultado\",\n  \"userType\": \"0\",\n  \"documentType\": \"CC\",\n  \"documentNumber\": \"{{documento}}\",\n  \"paymentDescription\": \"Consignación TrendPay\",\n  \"email\": \"{{correo}}\",\n  \"currency\": \"COP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const t = pm.response.json().token;",
+                  "pm.test('Entrega un token', () => pm.expect(t).to.be.a('string'));",
+                  "pm.collectionVariables.set('token', t);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3b. Request a Transfer In token — Bre-B (QR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Public-Merchant-Id",
+                "value": "{{kushki_public}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/transfer/v1/tokens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "transfer",
+                "v1",
+                "tokens"
+              ]
+            },
+            "description": "El nombre del procesador se copia de la respuesta del paso 1. No lleva bankId. Va desde el backend: Kushki.js no soporta `processor`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": \"{{monto}}\",\n    \"iva\": 0\n  },\n  \"currency\": \"COP\",\n  \"processor\": {\n    \"name\": \"{{breb_processor}}\",\n    \"channel\": \"QR\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const t = pm.response.json().token;",
+                  "pm.test('Entrega un token Bre-B', () => pm.expect(t).to.be.a('string'));",
+                  "pm.collectionVariables.set('token', t);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Init Transaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Private-Merchant-Id",
+                "value": "{{kushki_private}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/transfer/v1/init",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "transfer",
+                "v1",
+                "init"
+              ]
+            },
+            "description": "PSE devuelve `redirectUrl`; Bre-B devuelve `qr` (PNG en base64 como data URI, vence en 10 min). El monto debe ser el mismo del token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{token}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": \"{{monto}}\",\n    \"iva\": 0\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const r = pm.response.json();",
+                  "pm.test('Devuelve redirectUrl (PSE) o qr (Bre-B)', () => pm.expect(r.redirectUrl || r.qr).to.be.a('string'));",
+                  "if (r.qr) pm.test('El QR es una imagen data URI', () => pm.expect(r.qr).to.match(/^data:image\\/(png|jpeg);base64,/));",
+                  "if (r.ticketNumber) { pm.collectionVariables.set('ticket_transfer_in', r.ticketNumber); }",
+                  "console.log(r.qr ? 'QR recibido (' + r.qr.length + ' caracteres)' : 'redirectUrl: ' + r.redirectUrl);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Get Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Private-Merchant-Id",
+                "value": "{{kushki_private}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/transfer/v1/status/{{token}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "transfer",
+                "v1",
+                "status",
+                "{{token}}"
+              ]
+            },
+            "description": "Estado real del pago. TrendPay solo acredita saldo cuando aquí figura como aprobado."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "console.log('Estado:', r.processorState || r.status);",
+                  "pm.test('Trae un estado', () => pm.expect(r.processorState || r.status).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6. Cancel Transaction (Bre-B)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Private-Merchant-Id",
+                "value": "{{kushki_private}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/transfer/v1/cancel/{{token}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "transfer",
+                "v1",
+                "cancel",
+                "{{token}}"
+              ]
+            },
+            "description": "204 = QR cancelado. 400 con código T023 = la transacción ya llegó a un estado final y no se puede cancelar."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 cancelado, o 400 T023 si ya terminó', () => {",
+                  "  if (pm.response.code === 204) return;",
+                  "  pm.expect(pm.response.code).to.eql(400);",
+                  "  pm.expect(pm.response.json().code).to.eql('T023');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "B. Retiros ACH (Payouts)",
+      "item": [
+        {
+          "name": "1. Payouts · Bank List",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Public-Merchant-Id",
+                "value": "{{kushki_public}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payouts/transfer/v1/bankList",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "payouts",
+                "transfer",
+                "v1",
+                "bankList"
+              ]
+            },
+            "description": "Bancos soportados para dispersión ACH. TrendPay busca aquí el código del banco por nombre."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const bancos = pm.response.json();",
+                  "const b = bancos.find(x => /bancolombia/i.test(x.name)) || bancos[0];",
+                  "pm.collectionVariables.set('payout_bank_id', b.code);",
+                  "pm.test('Trae bancos', () => pm.expect(bancos).to.be.an('array').that.is.not.empty);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Payouts · Token (cuenta destino)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Public-Merchant-Id",
+                "value": "{{kushki_public}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payouts/transfer/v1/tokens",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "payouts",
+                "transfer",
+                "v1",
+                "tokens"
+              ]
+            },
+            "description": "En el sandbox el resultado lo decide el documento: 123456789 = aprobada, 999999990 = rechazada.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentType\": \"CC\",\n  \"documentNumber\": \"{{payout_documento}}\",\n  \"accountType\": \"CA\",\n  \"accountNumber\": \"{{payout_cuenta}}\",\n  \"bankId\": \"{{payout_bank_id}}\",\n  \"totalAmount\": \"{{payout_monto}}\",\n  \"currency\": \"COP\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "pm.collectionVariables.set('payout_token', pm.response.json().token);",
+                  "pm.test('Entrega un token', () => pm.expect(pm.response.json().token).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Payouts · Init (con webhooks)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Private-Merchant-Id",
+                "value": "{{kushki_private}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payouts/transfer/v1/init",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "payouts",
+                "transfer",
+                "v1",
+                "init"
+              ]
+            },
+            "description": "Es lo que hace TrendPay al pulsar \"Enviar por ACH\". El campo `webhooks` le pide a Kushki avisar a la URL de TrendPay cuando se apruebe o rechace.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{payout_token}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": \"{{payout_monto}}\",\n    \"iva\": 0\n  },\n  \"webhooks\": [\n    {\n      \"events\": [\n        \"approvedTransaction\",\n        \"declinedTransaction\"\n      ],\n      \"urls\": [\n        \"{{webhook_url}}\"\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 2xx', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const r = pm.response.json();",
+                  "pm.test('Devuelve ticketNumber', () => pm.expect(r.ticketNumber).to.be.a('string'));",
+                  "pm.collectionVariables.set('payout_ticket', r.ticketNumber);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Payouts · Consultar transacción",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Private-Merchant-Id",
+                "value": "{{kushki_private}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payouts/transfer/v1/transaction/{{payout_ticket}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "payouts",
+                "transfer",
+                "v1",
+                "transaction",
+                "{{payout_ticket}}"
+              ]
+            },
+            "description": "Estado final del retiro: APPROVAL o DECLINED. Es lo que TrendPay consulta al recibir el webhook."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "const estado = String(r.transactionStatus || r.status || '').toUpperCase();",
+                  "console.log('Estado del retiro:', estado);",
+                  "pm.test('Estado reconocido (APPROVAL, DECLINED o en proceso)', () => pm.expect(estado).to.be.a('string').that.is.not.empty);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "C. Webhook de TrendPay (receptor)",
+      "item": [
+        {
+          "name": "Aviso firmado correctamente → 200",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{trendpay_api}}/api/kushki/webhooks/payout",
+              "host": [
+                "{{trendpay_api}}"
+              ],
+              "path": [
+                "api",
+                "kushki",
+                "webhooks",
+                "payout"
+              ]
+            },
+            "description": "Simula a Kushki con la firma correcta. Usa el ticket reservado PRUEBA-TRENDPAY, que no mueve ningún retiro. Queda registrado en Admin > Pagos Kushki > Avisos de Kushki como Firma válida.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"ticketNumber\":\"PRUEBA-TRENDPAY\",\"status\":\"APPROVAL\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Firma el aviso igual que Kushki: HMAC-SHA256(secreto, cuerpo + \".\" + X-Kushki-Id), en hexadecimal",
+                  "const id = 'postman-' + Date.now();",
+                  "const cuerpo = pm.request.body.raw;",
+                  "const firma = CryptoJS.HmacSHA256(cuerpo + '.' + id, pm.collectionVariables.get('webhook_secret')).toString(CryptoJS.enc.Hex);",
+                  "pm.request.headers.upsert({ key: 'X-Kushki-Id', value: id });",
+                  "pm.request.headers.upsert({ key: 'X-Kushki-Signature', value: firma });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('El webhook acepta la firma → 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Responde ok: true', () => pm.expect(pm.response.json().ok).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aviso sin firma → 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{trendpay_api}}/api/kushki/webhooks/payout",
+              "host": [
+                "{{trendpay_api}}"
+              ],
+              "path": [
+                "api",
+                "kushki",
+                "webhooks",
+                "payout"
+              ]
+            },
+            "description": "Una llamada sin X-Kushki-Signature debe rechazarse. Queda en el panel como \"Sin firma\".",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"ticketNumber\":\"PRUEBA-TRENDPAY\",\"status\":\"APPROVAL\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Sin firma se rechaza → 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aviso con firma falsa → 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{trendpay_api}}/api/kushki/webhooks/payout",
+              "host": [
+                "{{trendpay_api}}"
+              ],
+              "path": [
+                "api",
+                "kushki",
+                "webhooks",
+                "payout"
+              ]
+            },
+            "description": "Firmado con un secreto equivocado: debe rechazarse. Queda en el panel como \"Firma inválida\".",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"ticketNumber\":\"PRUEBA-TRENDPAY\",\"status\":\"APPROVAL\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Firma el aviso igual que Kushki: HMAC-SHA256(secreto, cuerpo + \".\" + X-Kushki-Id), en hexadecimal",
+                  "const id = 'postman-' + Date.now();",
+                  "const cuerpo = pm.request.body.raw;",
+                  "const firma = CryptoJS.HmacSHA256(cuerpo + '.' + id, 'secreto-equivocado').toString(CryptoJS.enc.Hex);",
+                  "pm.request.headers.upsert({ key: 'X-Kushki-Id', value: id });",
+                  "pm.request.headers.upsert({ key: 'X-Kushki-Signature', value: firma });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Firma falsa se rechaza → 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://api-uat.kushkipagos.com"
+    },
+    {
+      "key": "monto",
+      "value": "10000"
+    },
+    {
+      "key": "documento",
+      "value": "1023456789"
+    },
+    {
+      "key": "correo",
+      "value": "prueba@trendpay.com.co"
+    },
+    {
+      "key": "frontend_url",
+      "value": "https://trendpay.com.co"
+    },
+    {
+      "key": "payout_monto",
+      "value": "10000"
+    },
+    {
+      "key": "payout_documento",
+      "value": "123456789"
+    },
+    {
+      "key": "payout_cuenta",
+      "value": "1234567890"
+    },
+    {
+      "key": "webhook_url",
+      "value": "https://trendpay-api-production.up.railway.app/api/kushki/webhooks/payout"
+    },
+    {
+      "key": "trendpay_api",
+      "value": "https://trendpay-api-production.up.railway.app"
+    }
+  ]
+}
