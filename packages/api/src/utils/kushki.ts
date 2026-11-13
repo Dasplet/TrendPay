@@ -174,6 +174,88 @@ export async function getConfigTransferencias(): Promise<ConfigTransferencias> {
   }
 }
 
+// Bre-B (Colombia, QR en tiempo real). Se pide el token desde el backend (Kushki.js todavía no soporta
+// "processor"). El nombre del procesador y el canal NO se escriben a mano: se copian de lo que devuelve
+// /transfer/v1/config, como exige Kushki. Pedir el token no cobra nada; el token caduca a los 30 minutos y
+// sirve para una sola transacción.
+export interface TokenBreB {
+  token: string | null;
+  procesador: { name: string; channel: string };
+  respuesta: unknown;
+}
+
+export async function solicitarTokenBreB(montoCop: number): Promise<TokenBreB> {
+  const config = await getConfigTransferencias();
+  const breb = config.procesadores.find((p) => p.tipo === 'bre-b' && p.canales.includes('QR'));
+  if (!breb) {
+    throw new KushkiError('Tu comercio no tiene Bre-B (canal QR) habilitado en Kushki; pídele a tu ejecutivo que lo active', 422, { respuesta: { etapa: 'config', procesadores: config.procesadores } });
+  }
+  const procesador = { name: breb.name, channel: 'QR' };
+  try {
+    const { data } = await axios.post(
+      `${BASE_URL}/transfer/v1/tokens`,
+      { amount: { subtotalIva: 0, subtotalIva0: montoCop, iva: 0 }, currency: 'COP', processor: procesador },
+      { headers: { 'Public-Merchant-Id': PUBLIC_MERCHANT_ID, 'Content-Type': 'application/json' } },
+    );
+    return { token: typeof data?.token === 'string' ? data.token : null, procesador, respuesta: data };
+  } catch (err: any) {
+    throw errorDeKushki(err, 'token-bre-b');
+  }
+}
+
+// Abre el pago Bre-B: pide el token y lo confirma en /transfer/v1/init. A diferencia de PSE no hay redirección
+// al banco: Kushki devuelve el QR (PNG en base64 como data URI) que el cliente escanea con su app bancaria.
+// El QR vence a los 10 minutos; pasado ese tiempo hay que pedir otro token y repetir. El estado final se
+// consulta con getTransferStatus (el mismo de PSE) y se acredita igual que PSE.
+export interface PagoBreB {
+  token: string;
+  qr: string;
+  ticketNumber?: string;
+  transactionReference?: string;
+}
+
+const QR_VALIDO = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
+
+export async function iniciarPagoBreB(montoCop: number): Promise<PagoBreB> {
+  const t = await solicitarTokenBreB(montoCop);
+  if (!t.token) throw new KushkiError('Kushki no entregó el token de Bre-B', 502, { respuesta: { etapa: 'token-bre-b', data: t.respuesta } });
+  try {
+    const { data } = await axios.post(
+      `${BASE_URL}/transfer/v1/init`,
+      { token: t.token, amount: { subtotalIva: 0, subtotalIva0: montoCop, iva: 0 } },
+      { headers: { 'Private-Merchant-Id': PRIVATE_MERCHANT_ID, 'Content-Type': 'application/json' } },
+    );
+    // Solo se acepta una imagen en data URI: el valor termina en el atributo src del navegador del cliente
+    if (typeof data?.qr !== 'string' || !QR_VALIDO.test(data.qr)) {
+      throw new KushkiError('Kushki no devolvió el código QR', 502, { respuesta: { etapa: 'init-bre-b', httpStatus: 201, campos: Object.keys(data ?? {}) } });
+    }
+    return { token: t.token, qr: data.qr, ticketNumber: data.ticketNumber, transactionReference: data.transactionReference };
+  } catch (err: any) {
+    if (err instanceof KushkiError) throw err;
+    throw errorDeKushki(err, 'init-bre-b');
+  }
+}
+
+// ¿Tiene el comercio Bre-B (QR) activo? Se consulta a Kushki y se recuerda 5 minutos. Si Kushki no responde
+// se considera apagado (la opción simplemente no se muestra), sin guardar ese resultado.
+let cacheBreB: { hasta: number; activo: boolean } | null = null;
+
+export async function brebHabilitado(): Promise<boolean> {
+  if (cacheBreB && cacheBreB.hasta > Date.now()) return cacheBreB.activo;
+  try {
+    const { procesadores } = await getConfigTransferencias();
+    const activo = procesadores.some((p) => p.tipo === 'bre-b' && p.canales.includes('QR'));
+    cacheBreB = { hasta: Date.now() + 5 * 60_000, activo };
+    return activo;
+  } catch {
+    return false;
+  }
+}
+
+export function olvidarCacheBreB(): void {
+  cacheBreB = null;
+}
+
 // ── Dispersión (retiros a cuenta bancaria vía ACH) ──
 // Endpoints confirmados contra el sandbox UAT. A diferencia de los pagos
 // entrantes, el token de dispersión lleva los datos de la cuenta destino y se

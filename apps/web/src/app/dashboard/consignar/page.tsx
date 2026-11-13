@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Kushki } from '@kushki/js';
-import { ArrowLeft, ArrowRight, Building2, CreditCard } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Building2, CreditCard, QrCode } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { kushkiApi } from '@/lib/api';
 import { AmountPicker, fmtCOP, InfoDestination, OperationCard, ThemeButton, UserModal } from '@/components/user/UserTheme';
@@ -12,8 +12,8 @@ import { AmountPicker, fmtCOP, InfoDestination, OperationCard, ThemeButton, User
 const KUSHKI_PUBLIC_MERCHANT_ID = process.env.NEXT_PUBLIC_KUSHKI_PUBLIC_MERCHANT_ID || '';
 const KUSHKI_IN_TEST_ENVIRONMENT = process.env.NEXT_PUBLIC_KUSHKI_IN_TEST_ENVIRONMENT !== 'false';
 
-type Paso = 'monto' | 'metodo' | 'tarjeta' | 'pse';
-type Metodo = 'tarjeta' | 'pse';
+type Paso = 'monto' | 'metodo' | 'tarjeta' | 'pse' | 'breb';
+type Metodo = 'tarjeta' | 'pse' | 'breb';
 
 function kushkiClient() {
   if (!KUSHKI_PUBLIC_MERCHANT_ID) return null;
@@ -86,6 +86,37 @@ export default function ConsignarPage() {
 
   const bancos = useBancosPSE();
 
+  // Bre-B solo se ofrece si Kushki lo tiene activo en el comercio
+  const metodosQ = useQuery({ queryKey: ['kushki-metodos'], queryFn: () => kushkiApi.metodos(), select: (r) => r.data as { breb: boolean }, staleTime: 60_000 });
+  const brebActivo = !!metodosQ.data?.breb;
+  const [breb, setBreb] = useState<{ qr: string; token: string; venceEn: number } | null>(null);
+  const [ahora, setAhora] = useState(() => Date.now());
+  const segundosRestantes = breb ? Math.max(0, Math.ceil((breb.venceEn - ahora) / 1000)) : 0;
+  const qrVencido = !!breb && segundosRestantes === 0;
+
+  // Mientras el QR esté vigente se pregunta cada 4 s si el banco ya aprobó el pago; la conciliación del
+  // servidor lo acredita igual aunque el usuario cierre esta pantalla.
+  useEffect(() => {
+    if (paso !== 'breb' || !breb || qrVencido) return;
+    const reloj = setInterval(() => setAhora(Date.now()), 1000);
+    const consulta = setInterval(async () => {
+      try {
+        const { data } = await kushkiApi.confirmarPSE(breb.token);
+        if (data.estado === 'completado') {
+          clearInterval(consulta);
+          await refreshUser();
+          toast.success('¡Pago recibido! Tu saldo ya fue actualizado');
+          window.location.href = '/dashboard';
+        } else if (data.estado === 'rechazado') {
+          clearInterval(consulta);
+          toast.error('El pago no fue autorizado. Genera un nuevo QR para intentarlo de nuevo');
+          setBreb(null);
+        }
+      } catch { /* se reintenta en el siguiente ciclo */ }
+    }, 4000);
+    return () => { clearInterval(reloj); clearInterval(consulta); };
+  }, [paso, breb, qrVencido, refreshUser]);
+
   function setCardField(field: keyof typeof card, value: string) {
     setCard((c) => ({ ...c, [field]: value }));
   }
@@ -139,6 +170,15 @@ export default function ConsignarPage() {
     onError: (err: any) => toast.error(err.response?.data?.mensaje || err.message || 'No se pudo iniciar el pago con PSE'),
   });
 
+  const brebMutation = useMutation({
+    mutationFn: async () => (await kushkiApi.iniciarBreB(amount)).data as { qr: string; token: string; expiraEnSegundos: number },
+    onSuccess: (data) => {
+      setAhora(Date.now());
+      setBreb({ qr: data.qr, token: data.token, venceEn: Date.now() + data.expiraEnSegundos * 1000 });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || err.message || 'No se pudo generar el código QR'),
+  });
+
   const formCompletoTarjeta = amount > 0 && card.name && card.number.length >= 15 && card.expiryMonth && card.expiryYear && card.cvc.length >= 3;
   const formCompletoPse = amount > 0 && pse.bankId && pse.documentNumber.length >= 5 && pse.email && pse.nombreCompleto.length >= 3;
 
@@ -149,7 +189,7 @@ export default function ConsignarPage() {
   );
 
   return (
-    <UserModal title="Consignar a mi billetera" subtitle="Paga con tarjeta o PSE">
+    <UserModal title="Consignar a mi billetera" subtitle={brebActivo ? 'Paga con tarjeta, PSE o Bre-B' : 'Paga con tarjeta o PSE'}>
       <div className="tp-modal-content">
         <InfoDestination saldo={user?.saldo ?? undefined} />
 
@@ -183,11 +223,21 @@ export default function ConsignarPage() {
               selected={metodo === 'pse'}
               onClick={() => setMetodo('pse')}
             />
+            {brebActivo && (
+              <OperationCard
+                icon={<QrCode size={20} />}
+                title="Bre-B (QR)"
+                description="Escanea el QR con la app de tu banco"
+                accent="blue"
+                selected={metodo === 'breb'}
+                onClick={() => setMetodo('breb')}
+              />
+            )}
             <div className="tp-button-row">
               <ThemeButton tone="ghost" onClick={() => setPaso('monto')}>
                 <ArrowLeft size={18} /> Atrás
               </ThemeButton>
-              <ThemeButton disabled={!metodo} onClick={() => setPaso(metodo === 'pse' ? 'pse' : 'tarjeta')}>
+              <ThemeButton disabled={!metodo} onClick={() => setPaso(metodo === 'pse' ? 'pse' : metodo === 'breb' ? 'breb' : 'tarjeta')}>
                 <ArrowRight size={18} /> Continuar
               </ThemeButton>
             </div>
@@ -233,6 +283,42 @@ export default function ConsignarPage() {
                 {consignarMutation.isPending ? 'Procesando...' : <><ArrowRight size={18} /> Consignar</>}
               </ThemeButton>
             </div>
+          </>
+        )}
+
+        {paso === 'breb' && (
+          <>
+            {(!breb || qrVencido) ? (
+              <>
+                <p className="tp-modal-label" style={{ textAlign: 'center' }}>
+                  {qrVencido
+                    ? 'El código QR venció. Genera uno nuevo para pagar.'
+                    : 'Generaremos un código QR para que lo escanees con la app de tu banco y autorices el pago.'}
+                </p>
+                {resumenComision}
+                <div className="tp-button-row">
+                  <ThemeButton tone="ghost" onClick={() => { setBreb(null); setPaso('metodo'); }}>
+                    <ArrowLeft size={18} /> Atrás
+                  </ThemeButton>
+                  <ThemeButton disabled={amount <= 0 || brebMutation.isPending} onClick={() => brebMutation.mutate()}>
+                    {brebMutation.isPending ? 'Generando QR...' : <><QrCode size={18} /> {qrVencido ? 'Generar nuevo QR' : 'Generar QR'}</>}
+                  </ThemeButton>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'grid', placeItems: 'center', gap: 10 }}>
+                  {/* data URI entregado por Kushki (validado en el servidor) */}
+                  <img src={breb.qr} alt="Código QR de Bre-B" width={240} height={240} style={{ background: '#fff', padding: 8, borderRadius: 12 }} />
+                  <p className="tp-modal-label" style={{ textAlign: 'center' }}>
+                    Abre la app de tu banco, elige pagar con QR y escanéalo. Vence en {Math.floor(segundosRestantes / 60)}:{String(segundosRestantes % 60).padStart(2, '0')}.
+                  </p>
+                  <p className="tp-modal-label" style={{ textAlign: 'center' }}>Esperando la confirmación de tu banco…</p>
+                </div>
+                {resumenComision}
+                <ThemeButton tone="ghost" href="/dashboard/consignaciones">Ver mis consignaciones</ThemeButton>
+              </>
+            )}
           </>
         )}
 

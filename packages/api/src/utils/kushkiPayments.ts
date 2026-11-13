@@ -55,7 +55,7 @@ export async function resolverPagoPse(pago: KushkiPayment): Promise<ResultadoPag
         userId: pago.userId,
         codigo: genCodigo('DEP'),
         categoria: 'consigna',
-        descripcion: 'Consignación PSE vía Kushki',
+        descripcion: pago.metodo === 'breb' ? 'Consignación Bre-B vía Kushki' : 'Consignación PSE vía Kushki',
         montoBruto: monto,
         comisionPct: 3,
         comisionValor,
@@ -105,7 +105,7 @@ export async function conciliarPagosPendientes(
 
   const pagos = await prisma.kushkiPayment.findMany({
     where: {
-      metodo: 'pse',
+      metodo: { in: ['pse', 'breb'] },
       estado: 'pendiente',
       createdAt: {
         lte: new Date(ahora - minEdadMin * 60_000),

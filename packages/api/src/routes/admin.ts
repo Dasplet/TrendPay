@@ -7,7 +7,7 @@ import { authenticate, requireAdmin } from '../middleware/auth';
 import { conciliarPagosPendientes } from '../utils/kushkiPayments';
 import { TICKET_PRUEBA_WEBHOOK, firmarAvisoDePrueba } from '../utils/kushkiWebhook';
 import { cifradoV2Activo } from '../utils/security';
-import { getConfigTransferencias, KushkiError } from '../utils/kushki';
+import { getConfigTransferencias, solicitarTokenBreB, KushkiError } from '../utils/kushki';
 import { modoAlmacenamiento, cifradoDelBucket } from '../utils/storage';
 
 const router = Router();
@@ -331,6 +331,24 @@ router.get('/kushki/config-transferencias', authenticate, requireAdmin, async (_
   } catch (e: any) {
     const status = e instanceof KushkiError ? e.status : 500;
     res.status(status).json({ ok: false, mensaje: e.message || 'No se pudo consultar la configuración de Kushki', respuesta: e instanceof KushkiError ? e.respuesta : undefined });
+  }
+});
+
+// ══ POST /api/admin/kushki/bre-b/probar-token ══
+// Pide a Kushki un token Bre-B (QR) de prueba. No cobra ni acredita nada: sirve para confirmar que el
+// procesador está activo y ver la respuesta real. El token se muestra recortado.
+router.post('/kushki/bre-b/probar-token', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  const monto = Number(req.body?.monto ?? 10000);
+  if (!Number.isInteger(monto) || monto < 1000 || monto > 5_000_000) {
+    return res.status(400).json({ ok: false, mensaje: 'El monto de prueba debe ser un entero entre 1.000 y 5.000.000' });
+  }
+  try {
+    const r = await solicitarTokenBreB(monto);
+    await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'PROBAR_TOKEN_BREB_KUSHKI', tabla: 'kushki', ip: req.ip, datos: { monto, obtuvoToken: !!r.token } } }).catch(() => {});
+    res.json({ ok: true, procesador: r.procesador, tokenObtenido: !!r.token, tokenParcial: r.token ? `${r.token.slice(0, 6)}…` : null, respuesta: r.token ? undefined : r.respuesta });
+  } catch (e: any) {
+    const status = e instanceof KushkiError ? e.status : 500;
+    res.status(status).json({ ok: false, mensaje: e.message || 'No se pudo pedir el token Bre-B', respuesta: e instanceof KushkiError ? e.respuesta : undefined });
   }
 });
 

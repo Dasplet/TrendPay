@@ -60,6 +60,14 @@ export default function PagosKushkiPage() {
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo consultar a Kushki'),
   });
   const procesadores: any[] = configQ.data?.data?.procesadores || [];
+  const hayBreB = procesadores.some((p) => p.tipo === 'bre-b');
+  const tokenBreB = useMutation({
+    mutationFn: () => adminApi.kushkiProbarTokenBreB(),
+    onSuccess: ({ data: r }) => (r.tokenObtenido
+      ? toast.success(`Kushki entregó un token Bre-B (${r.procesador.name}, canal ${r.procesador.channel}). No se cobró nada`)
+      : toast.error('Kushki respondió sin token; revisa la configuración')),
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo pedir el token Bre-B'),
+  });
 
   const pagos: any[] = data?.pagos || [];
   const totales: Total[] = data?.totales || [];
@@ -74,7 +82,7 @@ export default function PagosKushkiPage() {
       <Tr key={p.id}>
         <Td style={{ fontSize: 11, color: 'rgba(var(--adm-fg-rgb),.4)', whiteSpace: 'nowrap' }}>{fmtDate(p.createdAt)}</Td>
         <Td style={{ fontSize: 12 }}>{p.usuario}<div style={{ fontSize: 10, color: 'rgba(var(--adm-fg-rgb),.4)' }}>{p.cedula}</div></Td>
-        <Td style={{ fontSize: 12, textTransform: 'uppercase' }}>{p.metodo}</Td>
+        <Td style={{ fontSize: 12, textTransform: 'uppercase' }}>{p.metodo === 'breb' ? 'Bre-B' : p.metodo}</Td>
         <Td style={{ fontWeight: 700 }}>{fmt(p.monto)}</Td>
         <Td><StatusBadge status={p.estado} /></Td>
         <Td style={{ fontFamily: 'monospace', fontSize: 11, color: 'rgba(var(--adm-fg-rgb),.4)' }}>{p.ticketNumber || '—'}</Td>
@@ -119,10 +127,18 @@ export default function PagosKushkiPage() {
       <Panel style={{ marginTop: 16 }}>
         <PanelHeader title="Métodos de consignación habilitados en Kushki" icon={<CreditCard size={16} />}
           actions={
-            <Btn variant="primary" disabled={configQ.isPending} onClick={() => configQ.mutate()}
-              title="Consulta a Kushki qué procesadores de transferencia tiene activos tu comercio (PSE, Bre-B)">
-              {configQ.isPending ? 'Consultando...' : 'Consultar a Kushki'}
-            </Btn>
+            <>
+              {hayBreB && (
+                <Btn variant="ghost" disabled={tokenBreB.isPending} onClick={() => tokenBreB.mutate()}
+                  title="Pide un token Bre-B de prueba a Kushki. No cobra ni acredita nada">
+                  {tokenBreB.isPending ? 'Probando...' : 'Probar token Bre-B'}
+                </Btn>
+              )}
+              <Btn variant="primary" disabled={configQ.isPending} onClick={() => configQ.mutate()}
+                title="Consulta a Kushki qué procesadores de transferencia tiene activos tu comercio (PSE, Bre-B)">
+                {configQ.isPending ? 'Consultando...' : 'Consultar a Kushki'}
+              </Btn>
+            </>
           } />
         <div style={{ padding: '12px 16px', fontSize: 12, color: 'rgba(var(--adm-fg-rgb),.6)', lineHeight: 1.6 }}>
           {configQ.data ? (

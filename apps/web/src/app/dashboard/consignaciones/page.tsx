@@ -9,7 +9,7 @@ import { EmptyState, StatusPill, ThemeButton, UserModal, fmtCOP } from '@/compon
 
 interface Consignacion {
   id: string;
-  metodo: 'tarjeta' | 'pse';
+  metodo: 'tarjeta' | 'pse' | 'breb';
   estado: 'pendiente' | 'completado' | 'rechazado';
   monto: number;
   createdAt: string;
@@ -52,7 +52,7 @@ export default function ConsignacionesPage() {
   const consignaciones = data || [];
 
   return (
-    <UserModal title="Mis consignaciones" subtitle="Pagos con tarjeta y PSE" size="lg">
+    <UserModal title="Mis consignaciones" subtitle="Pagos con tarjeta, PSE y Bre-B" size="lg">
       <div className="tp-modal-content">
         {isLoading && <p>Cargando...</p>}
         {!isLoading && consignaciones.length === 0 && <EmptyState title="Aún no tienes consignaciones" />}
@@ -62,7 +62,7 @@ export default function ConsignacionesPage() {
           return (
             <div key={c.id} className="tp-info-dest" style={{ justifyContent: 'space-between' }}>
               <div>
-                <strong>{fmtCOP(c.monto)} · {c.metodo === 'pse' ? 'PSE' : 'Tarjeta'}</strong>
+                <strong>{fmtCOP(c.monto)} · {({ pse: 'PSE', breb: 'Bre-B', tarjeta: 'Tarjeta' } as const)[c.metodo] ?? c.metodo}</strong>
                 <p>{new Date(c.createdAt).toLocaleString('es-CO')}</p>
               </div>
               <div style={{ display: 'grid', gap: 8, justifyItems: 'end' }}>

@@ -110,6 +110,8 @@ export const kushkiApi = {
   iniciarPSE: (data: { token: string; monto: number; documentType: string; documentNumber: string; email: string; nombreCompleto: string; telefono?: string }) =>
     api.post('/kushki/consignar/pse/iniciar', data),
   confirmarPSE: (token: string) => api.post('/kushki/consignar/pse/confirmar', { token }),
+  metodos: () => api.get('/kushki/metodos'),
+  iniciarBreB: (monto: number) => api.post('/kushki/consignar/breb/iniciar', { monto }),
   consignaciones: () => api.get('/kushki/consignaciones'),
 };
 
@@ -156,6 +158,7 @@ export const adminApi = {
   kushkiWebhooks:  () => api.get('/admin/kushki/webhooks'),
   seguridadEstado: () => api.get('/admin/seguridad/estado'),
   kushkiConfigTransferencias: () => api.get('/admin/kushki/config-transferencias'),
+  kushkiProbarTokenBreB: (monto?: number) => api.post('/admin/kushki/bre-b/probar-token', monto ? { monto } : {}),
   kushkiProbarWebhook: () => api.post('/admin/kushki/webhooks/probar'),
   kushkiLimpiarWebhooks: () => api.delete('/admin/kushki/webhooks'),
 };

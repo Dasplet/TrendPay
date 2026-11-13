@@ -4,9 +4,9 @@ import { limpiarBaseDeDatos, crearUsuarioDePrueba, tokenPara } from '../tests/te
 
 jest.mock('../utils/kushki', () => {
   const actual = jest.requireActual('../utils/kushki');
-  return { ...actual, chargeCardToken: jest.fn(), initTransfer: jest.fn(), getTransferStatus: jest.fn() };
+  return { ...actual, chargeCardToken: jest.fn(), initTransfer: jest.fn(), getTransferStatus: jest.fn(), iniciarPagoBreB: jest.fn(), brebHabilitado: jest.fn() };
 });
-import { chargeCardToken, initTransfer, getTransferStatus, KushkiError } from '../utils/kushki';
+import { chargeCardToken, initTransfer, getTransferStatus, iniciarPagoBreB, brebHabilitado, KushkiError } from '../utils/kushki';
 import { conciliarPagosPendientes, resolverPagoPse } from '../utils/kushkiPayments';
 
 describe('Kushki routes', () => {
@@ -340,6 +340,80 @@ describe('Kushki routes', () => {
     it('exige autenticación', async () => {
       const res = await request(app).get('/api/kushki/consignaciones');
       expect(res.status).toBe(401);
+    });
+  });
+
+  describe('Bre-B (pago por QR)', () => {
+    const QR = 'data:image/png;base64,iVBORw0KGgo=';
+
+    it('GET /metodos dice si Bre-B está activo en el comercio', async () => {
+      const user = await crearUsuarioDePrueba();
+      (brebHabilitado as jest.Mock).mockResolvedValue(true);
+      const si = await request(app).get('/api/kushki/metodos').set('Authorization', `Bearer ${tokenPara(user)}`);
+      expect(si.body).toEqual({ ok: true, breb: true });
+      (brebHabilitado as jest.Mock).mockResolvedValue(false);
+      const no = await request(app).get('/api/kushki/metodos').set('Authorization', `Bearer ${tokenPara(user)}`);
+      expect(no.body.breb).toBe(false);
+      expect((await request(app).get('/api/kushki/metodos')).status).toBe(401);
+    });
+
+    it('abre el pago, devuelve el QR y no acredita saldo todavía (se cobra monto + 3%)', async () => {
+      const user = await crearUsuarioDePrueba({ saldo: 0 });
+      (iniciarPagoBreB as jest.Mock).mockResolvedValue({ token: 'tok_breb_1234567890', qr: QR, ticketNumber: 'T1' });
+
+      const res = await request(app).post('/api/kushki/consignar/breb/iniciar').set('Authorization', `Bearer ${tokenPara(user)}`).send({ monto: 30000 });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true, qr: QR, token: 'tok_breb_1234567890', expiraEnSegundos: 600 });
+      expect(iniciarPagoBreB).toHaveBeenCalledWith(30900);
+      const wallet = await prisma.wallet.findUnique({ where: { userId: user.id } });
+      expect(Number(wallet!.saldo)).toBe(0);
+      const pago = await prisma.kushkiPayment.findUnique({ where: { reference: 'tok_breb_1234567890' } });
+      expect(pago).toMatchObject({ metodo: 'breb', estado: 'pendiente', userId: user.id });
+      expect(Number(pago!.monto)).toBe(30000);
+    });
+
+    it('si el comercio no tiene Bre-B devuelve el motivo y no deja un pago pendiente', async () => {
+      const user = await crearUsuarioDePrueba();
+      (iniciarPagoBreB as jest.Mock).mockRejectedValue(new KushkiError('Tu comercio no tiene Bre-B (canal QR) habilitado en Kushki', 422));
+      const res = await request(app).post('/api/kushki/consignar/breb/iniciar').set('Authorization', `Bearer ${tokenPara(user)}`).send({ monto: 30000 });
+      expect(res.status).toBe(422);
+      expect(res.body.mensaje).toContain('Bre-B');
+      expect(await prisma.kushkiPayment.count({ where: { userId: user.id } })).toBe(0);
+    });
+
+    it('rechaza montos menores al mínimo y exige sesión', async () => {
+      const user = await crearUsuarioDePrueba();
+      const corto = await request(app).post('/api/kushki/consignar/breb/iniciar').set('Authorization', `Bearer ${tokenPara(user)}`).send({ monto: 500 });
+      expect(corto.status).toBe(400);
+      expect(iniciarPagoBreB).not.toHaveBeenCalled();
+      expect((await request(app).post('/api/kushki/consignar/breb/iniciar').send({ monto: 30000 })).status).toBe(401);
+    });
+
+    it('al aprobarse en Kushki se acredita una sola vez, con descripción Bre-B (confirmar y conciliación)', async () => {
+      const user = await crearUsuarioDePrueba({ saldo: 0 });
+      await prisma.kushkiPayment.create({ data: { userId: user.id, reference: 'tok_breb_aprobado_1', metodo: 'breb', monto: 20000, estado: 'pendiente' } });
+      (getTransferStatus as jest.Mock).mockResolvedValue({ estado: 'aprobada', ticketNumber: 'BREB-1' });
+
+      const res = await request(app).post('/api/kushki/consignar/pse/confirmar').set('Authorization', `Bearer ${tokenPara(user)}`).send({ token: 'tok_breb_aprobado_1' });
+      expect(res.body).toMatchObject({ ok: true, estado: 'completado', saldo: 20000 });
+      const tx = await prisma.transaction.findFirst({ where: { userId: user.id, categoria: 'consigna' } });
+      expect(tx!.descripcion).toBe('Consignación Bre-B vía Kushki');
+
+      const otra = await request(app).post('/api/kushki/consignar/pse/confirmar').set('Authorization', `Bearer ${tokenPara(user)}`).send({ token: 'tok_breb_aprobado_1' });
+      expect(otra.body.estado).toBe('completado');
+      const wallet = await prisma.wallet.findUnique({ where: { userId: user.id } });
+      expect(Number(wallet!.saldo)).toBe(20000);
+    });
+
+    it('la conciliación automática también revisa los pagos Bre-B pendientes', async () => {
+      const user = await crearUsuarioDePrueba({ saldo: 0 });
+      const pago = await prisma.kushkiPayment.create({ data: { userId: user.id, reference: 'tok_breb_concilia_1', metodo: 'breb', monto: 10000, estado: 'pendiente' } });
+      await prisma.$executeRaw`UPDATE kushki_payments SET created_at = NOW() - INTERVAL '10 minutes' WHERE id = ${pago.id}`;
+      (getTransferStatus as jest.Mock).mockResolvedValue({ estado: 'rechazada' });
+      const resumen = await conciliarPagosPendientes();
+      expect(resumen).toMatchObject({ revisados: 1, rechazados: 1 });
+      expect((await prisma.kushkiPayment.findUnique({ where: { id: pago.id } }))!.estado).toBe('rechazado');
     });
   });
 

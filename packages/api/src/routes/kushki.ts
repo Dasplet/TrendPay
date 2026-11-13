@@ -5,7 +5,7 @@ import { authenticate } from '../middleware/auth';
 import { walletLimiter, webhookLimiter } from '../middleware/rateLimiter';
 import { registrarWebhook } from '../utils/kushkiWebhookLog';
 import { genCodigo } from '../utils/security';
-import { chargeCardToken, initTransfer, KushkiError } from '../utils/kushki';
+import { chargeCardToken, initTransfer, iniciarPagoBreB, brebHabilitado, KushkiError } from '../utils/kushki';
 import { resolverPagoPse } from '../utils/kushkiPayments';
 import { anexarRespuesta, resolverRetiroEnProceso } from '../utils/retiros';
 import { firmaKushkiValida, sanitizarWebhook, TICKET_PRUEBA_WEBHOOK } from '../utils/kushkiWebhook';
@@ -245,6 +245,46 @@ router.post('/consignar/pse/confirmar', authenticate, walletLimiter, conCuenta('
   }
 });
 
+// ══ GET /api/kushki/metodos ══
+// Qué métodos de consignación se pueden ofrecer hoy. Bre-B solo aparece si Kushki lo tiene activo en el comercio.
+router.get('/metodos', authenticate, async (_req: Request, res: Response) => {
+  res.json({ ok: true, breb: await brebHabilitado() });
+});
+
+// ══ POST /api/kushki/consignar/breb/iniciar ══
+// Pago por QR (Bre-B). El token se pide aquí, en el servidor (Kushki.js todavía no lo soporta), y no cobra nada
+// hasta que el cliente escanea el QR con su app bancaria. Igual que PSE: se cobra monto+comisión y solo `monto`
+// se acredita cuando Kushki confirma el pago (/consignar/pse/confirmar o la conciliación automática).
+const brebIniciarSchema = z.object({ monto: z.number().int().positive().min(1000) });
+
+router.post('/consignar/breb/iniciar', authenticate, walletLimiter, conCuenta('recargar'), async (req: Request, res: Response) => {
+  const parse = brebIniciarSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Datos de pago inválidos' });
+
+  const { monto } = parse.data;
+  const totalACobrar = monto + Math.ceil(monto * 0.03);
+
+  try {
+    const wallet = await prisma.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
+    if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
+
+    const pago = await iniciarPagoBreB(totalACobrar);
+    await prisma.kushkiPayment.create({
+      data: { userId: req.user!.id, reference: pago.token, metodo: 'breb', monto, estado: 'pendiente' },
+    });
+
+    logger.info('Bre-B iniciado', { transactionReference: pago.transactionReference, userId: req.user!.id });
+    res.json({ ok: true, qr: pago.qr, token: pago.token, expiraEnSegundos: 600 });
+  } catch (err: any) {
+    if (err instanceof KushkiError) {
+      logger.warn('No se pudo iniciar Bre-B', { status: err.status, mensaje: err.message, userId: req.user?.id });
+      return res.status(err.status === 422 ? 422 : 402).json({ ok: false, mensaje: err.message });
+    }
+    logger.error('Error iniciando Bre-B', { err: err.message, userId: req.user?.id });
+    res.status(500).json({ ok: false, mensaje: 'Error iniciando el pago' });
+  }
+});
+
 // ══ GET /api/kushki/consignaciones ══
 // Historial de consignaciones de la billetera (incluye las de las subcuentas
 // que la comparten). Para un PSE pendiente se devuelve el token solo a quien
@@ -266,7 +306,7 @@ router.get('/consignaciones', authenticate, conCuenta(), async (req: Request, re
         estado: p.estado,
         monto: Number(p.monto),
         createdAt: p.createdAt,
-        token: p.metodo === 'pse' && p.estado === 'pendiente' && p.userId === req.user!.id ? p.reference : undefined,
+        token: (p.metodo === 'pse' || p.metodo === 'breb') && p.estado === 'pendiente' && p.userId === req.user!.id ? p.reference : undefined,
       })),
     });
   } catch (err: any) {
