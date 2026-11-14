@@ -371,36 +371,42 @@ router.get('/kushki/comercios', authenticate, requireAdmin, async (req: Request,
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     const page = Math.max(1, Number.parseInt(req.query.page as string) || 1);
     const limit = Math.min(200, Math.max(1, Number.parseInt(req.query.limit as string) || 50));
+    // todos=1 incluye también a los administradores (la pantalla de Usuarios muestra a todos); sin eso, solo clientes
+    const incluirAdmins = req.query.todos === '1';
     const where = {
-      rol: 'usuario', cuentaPadreId: null,
+      ...(incluirAdmins ? {} : { rol: 'usuario' }),
+      cuentaPadreId: null,
       // La búsqueda también encuentra una sede (subcuenta): se muestra su empresa
       ...(q ? { OR: [
         ...coincide(q),
         { subcuentas: { some: { OR: coincide(q) } } },
       ] } : {}),
     };
+    const datosUsuario = { id: true, nombre: true, cedula: true, correo: true, celular: true, ciudad: true, rol: true, subRol: true, kycNivel: true, kycVerificado: true, bloqueado: true, ultimoLogin: true } as const;
     const [total, configurados, cuentas] = await Promise.all([
       prisma.user.count({ where }),
       prisma.comercioKushki.count({ where: { user: where } }),
       prisma.user.findMany({
         where, orderBy: { nombre: 'asc' }, skip: (page - 1) * limit, take: limit,
         select: {
-          id: true, nombre: true, cedula: true, correo: true, comercioKushki: true,
-          // Las sedes de la empresa: operan con el Branch de la cuenta padre
-          subcuentas: { orderBy: { nombre: 'asc' }, select: { id: true, nombre: true, cedula: true, correo: true, bloqueado: true, permisoRecargar: true } },
+          ...datosUsuario, comercioKushki: true, wallet: { select: { saldo: true } },
+          // Las sedes de la empresa: operan con el Branch y la billetera de la cuenta padre
+          subcuentas: { orderBy: { nombre: 'asc' }, select: { ...datosUsuario, permisoRecargar: true } },
         },
       }),
     ]);
+    const basico = (u: { id: string } & Record<string, unknown>) => ({ ...u, userId: u.id });
     res.json({
       ok: true, total, configurados, page, limit,
-      cuentas: cuentas.map((c) => ({
-        userId: c.id, nombre: c.nombre, cedula: c.cedula, correo: c.correo,
-        subcuentas: c.subcuentas.map((s) => ({ userId: s.id, nombre: s.nombre, cedula: s.cedula, correo: s.correo, bloqueada: s.bloqueado, puedeRecargar: s.permisoRecargar })),
-        comercio: c.comercioKushki ? {
-          activo: c.comercioKushki.activo,
-          ambiente: c.comercioKushki.ambiente,
-          publicTermina: terminaEn(c.comercioKushki.publicMerchantId),
-          actualizado: c.comercioKushki.updatedAt,
+      cuentas: cuentas.map(({ comercioKushki, wallet, subcuentas, ...c }) => ({
+        ...basico(c),
+        saldo: Number.parseFloat(wallet?.saldo.toString() || '0'),
+        subcuentas: subcuentas.map(({ permisoRecargar, ...s }) => ({ ...basico(s), bloqueada: s.bloqueado, puedeRecargar: permisoRecargar })),
+        comercio: comercioKushki ? {
+          activo: comercioKushki.activo,
+          ambiente: comercioKushki.ambiente,
+          publicTermina: terminaEn(comercioKushki.publicMerchantId),
+          actualizado: comercioKushki.updatedAt,
         } : null,
       })),
     });

@@ -158,7 +158,7 @@ export const adminApi = {
   kushkiConciliar: () => api.post('/admin/kushki/conciliar'),
   kushkiWebhooks:  () => api.get('/admin/kushki/webhooks'),
   seguridadEstado: () => api.get('/admin/seguridad/estado'),
-  kushkiComercios: (params?: { q?: string; page?: number; limit?: number }) => api.get('/admin/kushki/comercios', { params }),
+  kushkiComercios: (params?: { q?: string; page?: number; limit?: number; todos?: number }) => api.get('/admin/kushki/comercios', { params }),
   kushkiGuardarComercio: (userId: string, data: { publicMerchantId: string; privateMerchantId: string; ambiente: string; activo: boolean }) =>
     api.put(`/admin/kushki/comercios/${userId}`, data),
   kushkiVerificarComercio: (userId: string) => api.post(`/admin/kushki/comercios/${userId}/verificar`),

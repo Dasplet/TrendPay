@@ -149,6 +149,24 @@ describe('Admin · Branches de Kushki por cliente', () => {
       expect(porSede.body.cuentas[0]).toMatchObject({ userId: empresa.id, nombre: 'Cool Company SAS' });
     });
 
+    it('con todos=1 (pantalla de Usuarios) incluye admins y los datos de cada cuenta y sede', async () => {
+      const a = await admin();
+      const empresa = await crearUsuarioDePrueba({ nombre: 'Cool Company SAS', saldo: 150000 });
+      const sede = await crearSubcuentaDePrueba(empresa.id);
+
+      const soloClientes = await request(app).get('/api/admin/kushki/comercios').set(auth(a));
+      expect(soloClientes.body.cuentas.map((c: any) => c.userId)).toEqual([empresa.id]);
+
+      const todos = await request(app).get('/api/admin/kushki/comercios?todos=1').set(auth(a));
+      expect(todos.body.total).toBe(2);
+      expect(todos.body.cuentas.map((c: any) => c.userId).sort()).toEqual([a.id, empresa.id].sort());
+      const fila = todos.body.cuentas.find((c: any) => c.userId === empresa.id);
+      // los mismos datos que usan las acciones de Usuarios (ver, editar, bloquear, eliminar)
+      expect(fila).toMatchObject({ id: empresa.id, saldo: 150000, rol: 'usuario', bloqueado: false, kycNivel: 1 });
+      expect(fila.subcuentas[0]).toMatchObject({ id: sede.id, userId: sede.id, rol: 'usuario', bloqueada: false });
+      expect(JSON.stringify(todos.body)).not.toContain('pinHash');
+    });
+
     it('pagina para manejar más de 100 cuentas', async () => {
       const a = await admin();
       await prisma.user.createMany({ data: Array.from({ length: 120 }, (_, i) => ({

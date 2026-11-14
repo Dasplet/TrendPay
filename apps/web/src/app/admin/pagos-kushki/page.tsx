@@ -158,7 +158,7 @@ export default function PagosKushkiPage() {
                   ))}
                 </div>
               )
-          ) : 'Pulsa el botón para ver qué tiene activo el comercio de TrendPay (el de las llaves del servidor). Los QR de Bre-B de cada cliente se administran en "Branches Kushki".'}
+          ) : 'Pulsa el botón para ver qué tiene activo el comercio de TrendPay (el de las llaves del servidor). Los QR de Bre-B de cada cliente se administran en "Usuarios" (cada empresa tiene su Branch).'}
           {configQ.data?.data?.entorno && (
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(var(--adm-fg-rgb),.08)', fontSize: 11, lineHeight: 1.7 }}>
               <div>Consultado en: <strong style={{ fontFamily: 'monospace' }}>{configQ.data.data.entorno.urlBase}</strong></div>
