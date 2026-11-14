@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   LayoutDashboard, Users, GitBranch, ArrowLeftRight,
   Landmark, Percent, Building2, AlertTriangle, FileText,
-  Settings, ClipboardList, UserCheck, LogOut, Search, CreditCard, FolderCheck
+  Settings, ClipboardList, UserCheck, LogOut, Search, CreditCard, FolderCheck, QrCode
 } from 'lucide-react';
 import { NotificationBell } from '@/components/admin/NotificationBell';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -24,6 +24,7 @@ const NAV = [
     { href: '/admin/bancos',        icon: Building2,       label: 'Bancos'             },
     { href: '/admin/pagos-kushki',  icon: CreditCard,      label: 'Pagos Kushki'       },
     { href: '/admin/vinculaciones', icon: FolderCheck,     label: 'Vinculaciones'      },
+    { href: '/admin/comercios-kushki', icon: QrCode,       label: 'Branches Kushki'    },
   ]},
   { section: 'SEGURIDAD', items: [
     { href: '/admin/alertas',       icon: AlertTriangle,   label: 'Alertas'            },
@@ -46,6 +47,7 @@ const PAGE_TITLES: Record<string, { title: string; sub: string }> = {
   '/admin/bancos':             { title: 'Bancos',              sub: 'Bancos habilitados para retiro'           },
   '/admin/pagos-kushki':       { title: 'Pagos Kushki',        sub: 'Consignaciones con tarjeta y PSE'         },
   '/admin/vinculaciones':      { title: 'Vinculaciones',       sub: 'Documentos de clientes empresariales'    },
+  '/admin/comercios-kushki':   { title: 'Branches Kushki',     sub: 'Un Branch de Kushki por cada cliente (QR Bre-B)' },
   '/admin/alertas':            { title: 'Alertas de riesgo',   sub: 'Deteccion de operaciones inusuales'      },
   '/admin/reportes':           { title: 'Reportes',            sub: 'Exportacion y reportes regulatorios'     },
   '/admin/configuracion':      { title: 'Configuracion',       sub: 'Parametros del sistema'                  },

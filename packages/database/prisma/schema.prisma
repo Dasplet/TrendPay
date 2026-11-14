@@ -59,6 +59,7 @@ model User {
   kushkiPayments  KushkiPayment[]
   transactions    Transaction[]
   vinculaciones   Vinculacion[]
+  comercioKushki  ComercioKushki?
 
   @@index([cuentaPadreId])
   @@map("users")
@@ -365,12 +366,35 @@ model KushkiPayment {
   ticketNumber  String?  @unique @map("ticket_number")
   monto         Decimal  @db.Decimal(18, 2)
   estado        String   @default("pendiente")
+  // Branch de Kushki con el que se creó el pago (null = el comercio de TrendPay). Para consultar o cancelar el
+  // pago hay que usar las mismas llaves con las que se generó.
+  comercioId    String?  @map("comercio_id")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id])
+  user     User            @relation(fields: [userId], references: [id])
+  comercio ComercioKushki? @relation(fields: [comercioId], references: [id])
 
+  @@index([comercioId])
   @@map("kushki_payments")
+}
+
+// Branch de Kushki propio de cada cliente (cuenta padre). Los QR de Bre-B se generan con SUS llaves, así el
+// pago entra al Branch del cliente y no al comercio de TrendPay. La llave privada se guarda cifrada.
+model ComercioKushki {
+  id                   String   @id @default(uuid())
+  userId               String   @unique @map("user_id")
+  publicMerchantId     String   @map("public_merchant_id")
+  privateMerchantIdCif String   @map("private_merchant_id_cifrado")
+  ambiente             String   @default("produccion") // produccion | pruebas
+  activo               Boolean  @default(true)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  user  User            @relation(fields: [userId], references: [id])
+  pagos KushkiPayment[]
+
+  @@map("comercios_kushki")
 }
 
 // ══════════════════════════════════════

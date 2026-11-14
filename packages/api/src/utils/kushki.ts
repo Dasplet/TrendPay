@@ -4,6 +4,24 @@ const BASE_URL            = process.env.KUSHKI_BASE_URL || 'https://api-uat.kush
 const PRIVATE_MERCHANT_ID = process.env.KUSHKI_PRIVATE_MERCHANT_ID || '';
 const PUBLIC_MERCHANT_ID  = process.env.KUSHKI_PUBLIC_MERCHANT_ID || '';
 
+// Con qué llaves y en qué ambiente se habla con Kushki. Por defecto son las del comercio de TrendPay (variables
+// de entorno); los QR de Bre-B usan las del Branch de cada cliente (ver comerciosKushki.ts).
+export interface CredencialesKushki {
+  publicId: string;
+  privateId: string;
+  baseUrl: string;
+}
+
+export function credencialesGlobales(): CredencialesKushki {
+  return { publicId: PUBLIC_MERCHANT_ID, privateId: PRIVATE_MERCHANT_ID, baseUrl: BASE_URL };
+}
+
+export const AMBIENTES_KUSHKI = {
+  produccion: process.env.KUSHKI_PROD_BASE_URL || 'https://api.kushkipagos.com',
+  pruebas: 'https://api-uat.kushkipagos.com',
+} as const;
+export type AmbienteKushki = keyof typeof AMBIENTES_KUSHKI;
+
 export class KushkiError extends Error {
   status: number;
   codigo?: string;
@@ -105,10 +123,10 @@ export interface KushkiTransferStatus {
 const ESTADOS_APROBADOS = ['OK', 'APPROVED', 'AUTHORIZED', 'SUCCESS', 'APROBAD'];
 const ESTADOS_RECHAZADOS = ['NOT_AUTHORIZED', 'DECLINED', 'FAILED', 'REJECTED', 'RECHAZAD', 'FALLID', 'EXPIRED', 'CANCELLED'];
 
-export async function getTransferStatus(token: string): Promise<KushkiTransferStatus> {
+export async function getTransferStatus(token: string, cred: CredencialesKushki = credencialesGlobales()): Promise<KushkiTransferStatus> {
   try {
-    const { data } = await axios.get(`${BASE_URL}/transfer/v1/status/${token}`, {
-      headers: { 'Private-Merchant-Id': PRIVATE_MERCHANT_ID },
+    const { data } = await axios.get(`${cred.baseUrl}/transfer/v1/status/${token}`, {
+      headers: { 'Private-Merchant-Id': cred.privateId },
     });
     const raw = String(data.processorState || data.status || '').toUpperCase();
     let estado: KushkiTransferState = 'pendiente';
@@ -152,11 +170,11 @@ function tipoDeProcesador(nombre: string, flujos: unknown): ProcesadorTransferen
   return Array.isArray(flujos) && flujos.length > 0 ? 'apm' : 'tradicional';
 }
 
-export async function getConfigTransferencias(): Promise<ConfigTransferencias> {
+export async function getConfigTransferencias(cred: CredencialesKushki = credencialesGlobales()): Promise<ConfigTransferencias> {
   try {
-    const { data } = await axios.get(`${BASE_URL}/transfer/v1/config`, {
+    const { data } = await axios.get(`${cred.baseUrl}/transfer/v1/config`, {
       params: { paymentType: 'PAYMENT' },
-      headers: { 'Public-Merchant-Id': PUBLIC_MERCHANT_ID },
+      headers: { 'Public-Merchant-Id': cred.publicId },
     });
     const lista: { name?: unknown; currency?: unknown; supportedFlows?: unknown }[] = Array.isArray(data?.processors) ? data.processors : [];
     const procesadores = lista
@@ -184,8 +202,8 @@ export interface TokenBreB {
   respuesta: unknown;
 }
 
-export async function solicitarTokenBreB(montoCop: number): Promise<TokenBreB> {
-  const config = await getConfigTransferencias();
+export async function solicitarTokenBreB(montoCop: number, cred: CredencialesKushki = credencialesGlobales()): Promise<TokenBreB> {
+  const config = await getConfigTransferencias(cred);
   const breb = config.procesadores.find((p) => p.tipo === 'bre-b' && p.canales.includes('QR'));
   if (!breb) {
     throw new KushkiError('Tu comercio no tiene Bre-B (canal QR) habilitado en Kushki; pídele a tu ejecutivo que lo active', 422, { respuesta: { etapa: 'config', procesadores: config.procesadores } });
@@ -193,9 +211,9 @@ export async function solicitarTokenBreB(montoCop: number): Promise<TokenBreB> {
   const procesador = { name: breb.name, channel: 'QR' };
   try {
     const { data } = await axios.post(
-      `${BASE_URL}/transfer/v1/tokens`,
+      `${cred.baseUrl}/transfer/v1/tokens`,
       { amount: { subtotalIva: 0, subtotalIva0: montoCop, iva: 0 }, currency: 'COP', processor: procesador },
-      { headers: { 'Public-Merchant-Id': PUBLIC_MERCHANT_ID, 'Content-Type': 'application/json' } },
+      { headers: { 'Public-Merchant-Id': cred.publicId, 'Content-Type': 'application/json' } },
     );
     return { token: typeof data?.token === 'string' ? data.token : null, procesador, respuesta: data };
   } catch (err: any) {
@@ -216,14 +234,14 @@ export interface PagoBreB {
 
 const QR_VALIDO = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
 
-export async function iniciarPagoBreB(montoCop: number): Promise<PagoBreB> {
-  const t = await solicitarTokenBreB(montoCop);
+export async function iniciarPagoBreB(montoCop: number, cred: CredencialesKushki = credencialesGlobales()): Promise<PagoBreB> {
+  const t = await solicitarTokenBreB(montoCop, cred);
   if (!t.token) throw new KushkiError('Kushki no entregó el token de Bre-B', 502, { respuesta: { etapa: 'token-bre-b', data: t.respuesta } });
   try {
     const { data } = await axios.post(
-      `${BASE_URL}/transfer/v1/init`,
+      `${cred.baseUrl}/transfer/v1/init`,
       { token: t.token, amount: { subtotalIva: 0, subtotalIva0: montoCop, iva: 0 } },
-      { headers: { 'Private-Merchant-Id': PRIVATE_MERCHANT_ID, 'Content-Type': 'application/json' } },
+      { headers: { 'Private-Merchant-Id': cred.privateId, 'Content-Type': 'application/json' } },
     );
     // Solo se acepta una imagen en data URI: el valor termina en el atributo src del navegador del cliente
     if (typeof data?.qr !== 'string' || !QR_VALIDO.test(data.qr)) {
@@ -239,10 +257,10 @@ export async function iniciarPagoBreB(montoCop: number): Promise<PagoBreB> {
 // Anula un QR Bre-B antes de que llegue a un estado final (PATCH /transfer/v1/cancel/{token}, Private-Merchant-Id).
 // 204 sin cuerpo = cancelado y el QR queda inválido. Si la transacción ya terminó Kushki responde 400 T023: en
 // ese caso devuelve false (no se pudo cancelar porque ya se resolvió) y quien llama debe consultar el estado real.
-export async function cancelarPagoBreB(token: string): Promise<boolean> {
+export async function cancelarPagoBreB(token: string, cred: CredencialesKushki = credencialesGlobales()): Promise<boolean> {
   try {
-    await axios.patch(`${BASE_URL}/transfer/v1/cancel/${encodeURIComponent(token)}`, undefined, {
-      headers: { 'Private-Merchant-Id': PRIVATE_MERCHANT_ID },
+    await axios.patch(`${cred.baseUrl}/transfer/v1/cancel/${encodeURIComponent(token)}`, undefined, {
+      headers: { 'Private-Merchant-Id': cred.privateId },
     });
     return true;
   } catch (err: any) {
@@ -253,14 +271,16 @@ export async function cancelarPagoBreB(token: string): Promise<boolean> {
 
 // ¿Tiene el comercio Bre-B (QR) activo? Se consulta a Kushki y se recuerda 5 minutos. Si Kushki no responde
 // se considera apagado (la opción simplemente no se muestra), sin guardar ese resultado.
-let cacheBreB: { hasta: number; activo: boolean } | null = null;
+const cacheBreB = new Map<string, { hasta: number; activo: boolean }>();
 
-export async function brebHabilitado(): Promise<boolean> {
-  if (cacheBreB && cacheBreB.hasta > Date.now()) return cacheBreB.activo;
+export async function brebHabilitado(cred: CredencialesKushki = credencialesGlobales()): Promise<boolean> {
+  const clave = `${cred.baseUrl}|${cred.publicId}`;
+  const guardado = cacheBreB.get(clave);
+  if (guardado && guardado.hasta > Date.now()) return guardado.activo;
   try {
-    const { procesadores } = await getConfigTransferencias();
+    const { procesadores } = await getConfigTransferencias(cred);
     const activo = procesadores.some((p) => p.tipo === 'bre-b' && p.canales.includes('QR'));
-    cacheBreB = { hasta: Date.now() + 5 * 60_000, activo };
+    cacheBreB.set(clave, { hasta: Date.now() + 5 * 60_000, activo });
     return activo;
   } catch {
     return false;
@@ -268,7 +288,7 @@ export async function brebHabilitado(): Promise<boolean> {
 }
 
 export function olvidarCacheBreB(): void {
-  cacheBreB = null;
+  cacheBreB.clear();
 }
 
 // ── Dispersión (retiros a cuenta bancaria vía ACH) ──

@@ -7,6 +7,7 @@ import { registrarWebhook } from '../utils/kushkiWebhookLog';
 import { genCodigo } from '../utils/security';
 import { chargeCardToken, initTransfer, iniciarPagoBreB, cancelarPagoBreB, brebHabilitado, KushkiError } from '../utils/kushki';
 import { resolverPagoPse } from '../utils/kushkiPayments';
+import { comercioDeTitular, credencialesDePago } from '../utils/comerciosKushki';
 import { anexarRespuesta, resolverRetiroEnProceso } from '../utils/retiros';
 import { firmaKushkiValida, sanitizarWebhook, TICKET_PRUEBA_WEBHOOK } from '../utils/kushkiWebhook';
 import { logger } from '../utils/logger';
@@ -246,9 +247,11 @@ router.post('/consignar/pse/confirmar', authenticate, walletLimiter, conCuenta('
 });
 
 // ══ GET /api/kushki/metodos ══
-// Qué métodos de consignación se pueden ofrecer hoy. Bre-B solo aparece si Kushki lo tiene activo en el comercio.
-router.get('/metodos', authenticate, async (_req: Request, res: Response) => {
-  res.json({ ok: true, breb: await brebHabilitado() });
+// Qué métodos de consignación se pueden ofrecer hoy. Bre-B solo aparece si la cuenta (padre) tiene su propio
+// Branch de Kushki asignado y Kushki tiene Bre-B activo en él.
+router.get('/metodos', authenticate, conCuenta(), async (req: Request, res: Response) => {
+  const comercio = await comercioDeTitular(req.cuenta!.titularId);
+  res.json({ ok: true, breb: comercio ? await brebHabilitado(comercio.cred) : false });
 });
 
 // ══ POST /api/kushki/consignar/breb/iniciar ══
@@ -268,9 +271,15 @@ router.post('/consignar/breb/iniciar', authenticate, walletLimiter, conCuenta('r
     const wallet = await prisma.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
     if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
 
-    const pago = await iniciarPagoBreB(totalACobrar);
+    // El QR se genera con el Branch del cliente (cuenta padre), nunca con el comercio de TrendPay
+    const comercio = await comercioDeTitular(req.cuenta!.titularId);
+    if (!comercio) {
+      return res.status(422).json({ ok: false, mensaje: 'Tu cuenta aún no tiene un Branch de Kushki asignado. Contacta a TrendPay para activarlo' });
+    }
+
+    const pago = await iniciarPagoBreB(totalACobrar, comercio.cred);
     await prisma.kushkiPayment.create({
-      data: { userId: req.user!.id, reference: pago.token, metodo: 'breb', monto, estado: 'pendiente' },
+      data: { userId: req.user!.id, reference: pago.token, metodo: 'breb', monto, estado: 'pendiente', comercioId: comercio.comercioId },
     });
 
     logger.info('Bre-B iniciado', { transactionReference: pago.transactionReference, userId: req.user!.id });
@@ -300,7 +309,7 @@ router.post('/consignar/breb/cancelar', authenticate, walletLimiter, conCuenta('
     if (pago?.userId !== req.user!.id || pago.metodo !== 'breb') return res.status(404).json({ ok: false, mensaje: 'Pago no encontrado' });
     if (pago.estado !== 'pendiente') return res.json({ ok: true, estado: pago.estado });
 
-    const cancelado = await cancelarPagoBreB(pago.reference);
+    const cancelado = await cancelarPagoBreB(pago.reference, await credencialesDePago(pago));
     if (!cancelado) {
       const resultado = await resolverPagoPse(pago);
       return res.json({ ok: true, ...resultado, saldo: resultado.saldo === undefined ? undefined : saldoVisible(req.cuenta, resultado.saldo) });

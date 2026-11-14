@@ -2,6 +2,7 @@ import type { KushkiPayment } from '@prisma/client';
 import { prisma } from '../index';
 import { genCodigo } from './security';
 import { getTransferStatus } from './kushki';
+import { credencialesDePago } from './comerciosKushki';
 import { logger } from './logger';
 import { conciliarRetirosEnProceso } from './retiros';
 
@@ -19,7 +20,8 @@ export interface ResultadoPago {
 // misma transacción que mueve el saldo, de modo que dos ejecuciones a la vez
 // nunca acreditan dos veces.
 export async function resolverPagoPse(pago: KushkiPayment): Promise<ResultadoPago> {
-  const status = await getTransferStatus(pago.reference);
+  // Un pago Bre-B de un cliente se consulta con las llaves de SU Branch; el resto, con las de TrendPay
+  const status = await getTransferStatus(pago.reference, await credencialesDePago(pago));
 
   if (status.estado === 'pendiente') return { estado: 'pendiente' };
 

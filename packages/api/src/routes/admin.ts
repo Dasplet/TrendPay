@@ -7,7 +7,8 @@ import { authenticate, requireAdmin } from '../middleware/auth';
 import { conciliarPagosPendientes } from '../utils/kushkiPayments';
 import { TICKET_PRUEBA_WEBHOOK, firmarAvisoDePrueba } from '../utils/kushkiWebhook';
 import { cifradoV2Activo } from '../utils/security';
-import { getConfigTransferencias, solicitarTokenBreB, KushkiError } from '../utils/kushki';
+import { getConfigTransferencias, solicitarTokenBreB, olvidarCacheBreB, AMBIENTES_KUSHKI, KushkiError } from '../utils/kushki';
+import { cifrarLlavePrivada, credencialesDeComercio, terminaEn } from '../utils/comerciosKushki';
 import { modoAlmacenamiento, cifradoDelBucket } from '../utils/storage';
 
 const router = Router();
@@ -343,6 +344,127 @@ router.get('/kushki/config-transferencias', authenticate, requireAdmin, async (_
     const status = e instanceof KushkiError ? e.status : 500;
     res.status(status).json({ ok: false, mensaje: e.message || 'No se pudo consultar la configuración de Kushki', respuesta: e instanceof KushkiError ? e.respuesta : undefined });
   }
+});
+
+// ══ Branches de Kushki por cliente ══
+// Cada cuenta padre tiene su propio Branch (llaves propias) para los QR de Bre-B. El admin solo los administra
+// y los ve todos; la llave privada se guarda cifrada y jamás se devuelve.
+const comercioSchema = z.object({
+  publicMerchantId: z.string().trim().regex(/^[A-Za-z0-9]{20,64}$/, 'La Public Key no tiene el formato esperado'),
+  privateMerchantId: z.string().trim().regex(/^[A-Za-z0-9]{20,64}$/, 'La Private Key no tiene el formato esperado'),
+  ambiente: z.enum(['produccion', 'pruebas']).default('produccion'),
+  activo: z.boolean().default(true),
+});
+
+async function cuentaPadreOrNull(userId: string) {
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, nombre: true, rol: true, cuentaPadreId: true } });
+  return u && u.rol === 'usuario' && u.cuentaPadreId === null ? u : null;
+}
+
+// GET /api/admin/kushki/comercios?q=&page=&limit=  → todas las cuentas padre con el estado de su Branch
+router.get('/kushki/comercios', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const page = Math.max(1, Number.parseInt(req.query.page as string) || 1);
+    const limit = Math.min(200, Math.max(1, Number.parseInt(req.query.limit as string) || 50));
+    const where = {
+      rol: 'usuario', cuentaPadreId: null,
+      ...(q ? { OR: [
+        { nombre: { contains: q, mode: 'insensitive' as const } },
+        { cedula: { contains: q } },
+        { correo: { contains: q, mode: 'insensitive' as const } },
+      ] } : {}),
+    };
+    const [total, configurados, cuentas] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.comercioKushki.count({ where: { user: where } }),
+      prisma.user.findMany({
+        where, orderBy: { nombre: 'asc' }, skip: (page - 1) * limit, take: limit,
+        select: { id: true, nombre: true, cedula: true, correo: true, comercioKushki: true },
+      }),
+    ]);
+    res.json({
+      ok: true, total, configurados, page, limit,
+      cuentas: cuentas.map((c) => ({
+        userId: c.id, nombre: c.nombre, cedula: c.cedula, correo: c.correo,
+        comercio: c.comercioKushki ? {
+          activo: c.comercioKushki.activo,
+          ambiente: c.comercioKushki.ambiente,
+          publicTermina: terminaEn(c.comercioKushki.publicMerchantId),
+          actualizado: c.comercioKushki.updatedAt,
+        } : null,
+      })),
+    });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// PUT /api/admin/kushki/comercios/:userId  → guarda (o reemplaza) las llaves del Branch del cliente
+router.put('/kushki/comercios/:userId', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  const parse = comercioSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ ok: false, mensaje: parse.error.issues[0].message });
+  try {
+    const cuenta = await cuentaPadreOrNull(req.params.userId);
+    if (!cuenta) return res.status(404).json({ ok: false, mensaje: 'Cuenta no encontrada (solo las cuentas padre tienen Branch de Kushki)' });
+
+    const { publicMerchantId, privateMerchantId, ambiente, activo } = parse.data;
+    // Se prueba la Public Key contra Kushki antes de guardar. La privada no se puede comprobar sin hacer un cobro.
+    const cred = { publicId: publicMerchantId, privateId: privateMerchantId, baseUrl: AMBIENTES_KUSHKI[ambiente] };
+    let verificado = false;
+    let breb = false;
+    try {
+      const config = await getConfigTransferencias(cred);
+      verificado = true;
+      breb = config.procesadores.some((p) => p.tipo === 'bre-b' && p.canales.includes('QR'));
+    } catch (e: any) {
+      if (e instanceof KushkiError && (e.status === 401 || e.status === 403)) {
+        return res.status(400).json({ ok: false, mensaje: `Kushki rechazó esa Public Key en ${ambiente}. Revisa que sea la del Branch y que el ambiente sea el correcto` });
+      }
+      // Kushki caído o con error: se guarda igual y se avisa que no quedó verificado
+    }
+
+    const datos = { publicMerchantId, privateMerchantIdCif: cifrarLlavePrivada(privateMerchantId), ambiente, activo };
+    await prisma.comercioKushki.upsert({ where: { userId: cuenta.id }, create: { userId: cuenta.id, ...datos }, update: datos });
+    olvidarCacheBreB();
+    await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'GUARDAR_COMERCIO_KUSHKI', tabla: 'comercios_kushki', registroId: cuenta.id, ip: req.ip, datos: { ambiente, activo, publicTermina: terminaEn(publicMerchantId), verificado, breb } } }).catch(() => {});
+    res.json({ ok: true, verificado, brebHabilitado: breb });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+// POST /api/admin/kushki/comercios/:userId/verificar  → qué procesadores tiene activos el Branch del cliente
+router.post('/kushki/comercios/:userId/verificar', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const comercio = await prisma.comercioKushki.findUnique({ where: { userId: req.params.userId } });
+    if (!comercio) return res.status(404).json({ ok: false, mensaje: 'Este cliente aún no tiene un Branch configurado' });
+    const cred = credencialesDeComercio(comercio);
+    if (!cred) return res.status(500).json({ ok: false, mensaje: 'No se pudo leer la llave guardada (cambió la llave de cifrado). Vuelve a pegar las llaves' });
+
+    olvidarCacheBreB();
+    const config = await getConfigTransferencias(cred);
+    res.json({
+      ok: true,
+      procesadores: config.procesadores,
+      respuesta: config.respuesta,
+      brebHabilitado: config.procesadores.some((p) => p.tipo === 'bre-b' && p.canales.includes('QR')),
+      entorno: { urlBase: cred.baseUrl, llavePublicaTermina: terminaEn(cred.publicId) },
+    });
+  } catch (e: any) {
+    const status = e instanceof KushkiError ? e.status : 500;
+    res.status(status).json({ ok: false, mensaje: e.message || 'No se pudo consultar a Kushki', respuesta: e instanceof KushkiError ? e.respuesta : undefined });
+  }
+});
+
+// DELETE /api/admin/kushki/comercios/:userId  → quita el Branch (no si hay QR pendientes, que necesitan esas llaves)
+router.delete('/kushki/comercios/:userId', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const comercio = await prisma.comercioKushki.findUnique({ where: { userId: req.params.userId } });
+    if (!comercio) return res.status(404).json({ ok: false, mensaje: 'Este cliente no tiene un Branch configurado' });
+    const pendientes = await prisma.kushkiPayment.count({ where: { comercioId: comercio.id, estado: 'pendiente' } });
+    if (pendientes > 0) return res.status(409).json({ ok: false, mensaje: `Hay ${pendientes} pago(s) pendientes con este Branch. Desactívalo en lugar de quitarlo, o espera a que se resuelvan` });
+    await prisma.comercioKushki.delete({ where: { id: comercio.id } });
+    olvidarCacheBreB();
+    await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'QUITAR_COMERCIO_KUSHKI', tabla: 'comercios_kushki', registroId: req.params.userId, ip: req.ip } }).catch(() => {});
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 
 // ══ POST /api/admin/kushki/bre-b/probar-token ══

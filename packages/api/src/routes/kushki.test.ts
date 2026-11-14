@@ -1,6 +1,6 @@
 import request from 'supertest';
 import app, { prisma } from '../index';
-import { limpiarBaseDeDatos, crearUsuarioDePrueba, tokenPara } from '../tests/testUtils';
+import { limpiarBaseDeDatos, crearUsuarioDePrueba, crearSubcuentaDePrueba, tokenPara } from '../tests/testUtils';
 
 jest.mock('../utils/kushki', () => {
   const actual = jest.requireActual('../utils/kushki');
@@ -8,6 +8,7 @@ jest.mock('../utils/kushki', () => {
 });
 import { chargeCardToken, initTransfer, getTransferStatus, iniciarPagoBreB, cancelarPagoBreB, brebHabilitado, KushkiError } from '../utils/kushki';
 import { conciliarPagosPendientes, resolverPagoPse } from '../utils/kushkiPayments';
+import { encrypt } from '../utils/security';
 
 describe('Kushki routes', () => {
   afterAll(async () => {
@@ -346,35 +347,80 @@ describe('Kushki routes', () => {
   describe('Bre-B (pago por QR)', () => {
     const QR = 'data:image/png;base64,iVBORw0KGgo=';
 
-    it('GET /metodos dice si Bre-B está activo en el comercio', async () => {
+    // Branch de Kushki del cliente: la llave privada se guarda cifrada, como lo hace el panel admin
+    const crearBranch = (userId: string, extra: Partial<{ publicMerchantId: string; ambiente: string; activo: boolean }> = {}) =>
+      prisma.comercioKushki.create({ data: {
+        userId, publicMerchantId: 'PUBLICAKEY1234567890ab', privateMerchantIdCif: encrypt('PRIVADAKEY1234567890cd'),
+        ambiente: 'produccion', activo: true, ...extra,
+      } });
+    const CRED_BRANCH = { publicId: 'PUBLICAKEY1234567890ab', privateId: 'PRIVADAKEY1234567890cd', baseUrl: 'https://api.kushkipagos.com' };
+
+    it('GET /metodos: Bre-B solo se ofrece si la cuenta tiene su Branch y Kushki lo tiene activo ahí', async () => {
       const user = await crearUsuarioDePrueba();
+      const auth = { Authorization: `Bearer ${tokenPara(user)}` };
       (brebHabilitado as jest.Mock).mockResolvedValue(true);
-      const si = await request(app).get('/api/kushki/metodos').set('Authorization', `Bearer ${tokenPara(user)}`);
-      expect(si.body).toEqual({ ok: true, breb: true });
+
+      // sin Branch: nunca, aunque el comercio de TrendPay lo tuviera
+      expect((await request(app).get('/api/kushki/metodos').set(auth)).body).toEqual({ ok: true, breb: false });
+      expect(brebHabilitado).not.toHaveBeenCalled();
+
+      await crearBranch(user.id);
+      expect((await request(app).get('/api/kushki/metodos').set(auth)).body).toEqual({ ok: true, breb: true });
+      expect(brebHabilitado).toHaveBeenCalledWith(CRED_BRANCH);
+
       (brebHabilitado as jest.Mock).mockResolvedValue(false);
-      const no = await request(app).get('/api/kushki/metodos').set('Authorization', `Bearer ${tokenPara(user)}`);
-      expect(no.body.breb).toBe(false);
+      expect((await request(app).get('/api/kushki/metodos').set(auth)).body.breb).toBe(false);
       expect((await request(app).get('/api/kushki/metodos')).status).toBe(401);
     });
 
-    it('abre el pago, devuelve el QR y no acredita saldo todavía (se cobra monto + 3%)', async () => {
+    it('un Branch desactivado no ofrece Bre-B', async () => {
+      const user = await crearUsuarioDePrueba();
+      await crearBranch(user.id, { activo: false });
+      (brebHabilitado as jest.Mock).mockResolvedValue(true);
+      const res = await request(app).get('/api/kushki/metodos').set('Authorization', `Bearer ${tokenPara(user)}`);
+      expect(res.body.breb).toBe(false);
+    });
+
+    it('abre el pago con el Branch del cliente, devuelve el QR y no acredita saldo todavía (monto + 3%)', async () => {
       const user = await crearUsuarioDePrueba({ saldo: 0 });
+      const branch = await crearBranch(user.id);
       (iniciarPagoBreB as jest.Mock).mockResolvedValue({ token: 'tok_breb_1234567890', qr: QR, ticketNumber: 'T1' });
 
       const res = await request(app).post('/api/kushki/consignar/breb/iniciar').set('Authorization', `Bearer ${tokenPara(user)}`).send({ monto: 30000 });
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true, qr: QR, token: 'tok_breb_1234567890', expiraEnSegundos: 600 });
-      expect(iniciarPagoBreB).toHaveBeenCalledWith(30900);
+      expect(iniciarPagoBreB).toHaveBeenCalledWith(30900, CRED_BRANCH);
       const wallet = await prisma.wallet.findUnique({ where: { userId: user.id } });
       expect(Number(wallet!.saldo)).toBe(0);
       const pago = await prisma.kushkiPayment.findUnique({ where: { reference: 'tok_breb_1234567890' } });
-      expect(pago).toMatchObject({ metodo: 'breb', estado: 'pendiente', userId: user.id });
+      expect(pago).toMatchObject({ metodo: 'breb', estado: 'pendiente', userId: user.id, comercioId: branch.id });
       expect(Number(pago!.monto)).toBe(30000);
     });
 
-    it('si el comercio no tiene Bre-B devuelve el motivo y no deja un pago pendiente', async () => {
+    it('una subcuenta genera el QR con el Branch de su cuenta padre', async () => {
+      const padre = await crearUsuarioDePrueba();
+      const hija = await crearSubcuentaDePrueba(padre.id);
+      const branch = await crearBranch(padre.id);
+      (iniciarPagoBreB as jest.Mock).mockResolvedValue({ token: 'tok_breb_subcuenta_1', qr: QR });
+      const res = await request(app).post('/api/kushki/consignar/breb/iniciar').set('Authorization', `Bearer ${tokenPara(hija)}`).send({ monto: 10000 });
+      expect(res.status).toBe(200);
+      expect(iniciarPagoBreB).toHaveBeenCalledWith(10300, CRED_BRANCH);
+      expect((await prisma.kushkiPayment.findUnique({ where: { reference: 'tok_breb_subcuenta_1' } }))!.comercioId).toBe(branch.id);
+    });
+
+    it('sin Branch asignado no genera QR (nunca cae al comercio de TrendPay)', async () => {
       const user = await crearUsuarioDePrueba();
+      const res = await request(app).post('/api/kushki/consignar/breb/iniciar').set('Authorization', `Bearer ${tokenPara(user)}`).send({ monto: 30000 });
+      expect(res.status).toBe(422);
+      expect(res.body.mensaje).toContain('Branch');
+      expect(iniciarPagoBreB).not.toHaveBeenCalled();
+      expect(await prisma.kushkiPayment.count({ where: { userId: user.id } })).toBe(0);
+    });
+
+    it('si el Branch no tiene Bre-B devuelve el motivo y no deja un pago pendiente', async () => {
+      const user = await crearUsuarioDePrueba();
+      await crearBranch(user.id);
       (iniciarPagoBreB as jest.Mock).mockRejectedValue(new KushkiError('Tu comercio no tiene Bre-B (canal QR) habilitado en Kushki', 422));
       const res = await request(app).post('/api/kushki/consignar/breb/iniciar').set('Authorization', `Bearer ${tokenPara(user)}`).send({ monto: 30000 });
       expect(res.status).toBe(422);
@@ -384,6 +430,7 @@ describe('Kushki routes', () => {
 
     it('rechaza montos menores al mínimo y exige sesión', async () => {
       const user = await crearUsuarioDePrueba();
+      await crearBranch(user.id);
       const corto = await request(app).post('/api/kushki/consignar/breb/iniciar').set('Authorization', `Bearer ${tokenPara(user)}`).send({ monto: 500 });
       expect(corto.status).toBe(400);
       expect(iniciarPagoBreB).not.toHaveBeenCalled();
@@ -417,9 +464,21 @@ describe('Kushki routes', () => {
         (cancelarPagoBreB as jest.Mock).mockResolvedValue(true);
         const res = await cancelar(user, 'tok_breb_cancelar_1');
         expect(res.body).toEqual({ ok: true, estado: 'cancelado' });
-        expect(cancelarPagoBreB).toHaveBeenCalledWith('tok_breb_cancelar_1');
+        expect(cancelarPagoBreB).toHaveBeenCalledWith('tok_breb_cancelar_1', undefined);
         expect((await prisma.kushkiPayment.findUnique({ where: { reference: 'tok_breb_cancelar_1' } }))!.estado).toBe('rechazado');
         expect(Number((await prisma.wallet.findUnique({ where: { userId: user.id } }))!.saldo)).toBe(0);
+      });
+
+      it('un pago de un Branch se cancela y se consulta con las llaves de ese Branch', async () => {
+        const user = await crearUsuarioDePrueba({ saldo: 0 });
+        const branch = await crearBranch(user.id);
+        await prisma.kushkiPayment.create({ data: { userId: user.id, reference: 'tok_breb_branch_001', metodo: 'breb', monto: 20000, estado: 'pendiente', comercioId: branch.id } });
+        (cancelarPagoBreB as jest.Mock).mockResolvedValue(false);
+        (getTransferStatus as jest.Mock).mockResolvedValue({ estado: 'aprobada', ticketNumber: 'BREB-B1' });
+        const res = await cancelar(user, 'tok_breb_branch_001');
+        expect(cancelarPagoBreB).toHaveBeenCalledWith('tok_breb_branch_001', CRED_BRANCH);
+        expect(getTransferStatus).toHaveBeenCalledWith('tok_breb_branch_001', CRED_BRANCH);
+        expect(res.body).toMatchObject({ ok: true, estado: 'completado', saldo: 20000 });
       });
 
       it('si Kushki dice que ya terminó (T023) consulta el estado real y acredita si estaba aprobado', async () => {
