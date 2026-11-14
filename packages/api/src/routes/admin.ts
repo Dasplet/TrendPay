@@ -327,7 +327,18 @@ router.get('/kushki/webhooks', authenticate, requireAdmin, async (_req: Request,
 router.get('/kushki/config-transferencias', authenticate, requireAdmin, async (_req: Request, res: Response) => {
   try {
     const config = await getConfigTransferencias();
-    res.json({ ok: true, ...config });
+    // Con qué comercio se hizo la consulta (la llave pública no es secreta, pero se muestra solo el final):
+    // sirve para compararla con la de la consola de Kushki si la respuesta no es la esperada.
+    const publica = process.env.KUSHKI_PUBLIC_MERCHANT_ID || '';
+    res.json({
+      ok: true,
+      ...config,
+      entorno: {
+        urlBase: process.env.KUSHKI_BASE_URL || 'https://api-uat.kushkipagos.com',
+        llavePublicaTermina: publica ? `…${publica.slice(-4)}` : null,
+        llavePublicaConfigurada: !!publica,
+      },
+    });
   } catch (e: any) {
     const status = e instanceof KushkiError ? e.status : 500;
     res.status(status).json({ ok: false, mensaje: e.message || 'No se pudo consultar la configuración de Kushki', respuesta: e instanceof KushkiError ? e.respuesta : undefined });

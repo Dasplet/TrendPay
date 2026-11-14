@@ -159,6 +159,23 @@ export default function PagosKushkiPage() {
                 </div>
               )
           ) : 'Pulsa el botón para ver si el comercio ya tiene PSE y Bre-B (QR) activos.'}
+          {configQ.data?.data?.entorno && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(var(--adm-fg-rgb),.08)', fontSize: 11, lineHeight: 1.7 }}>
+              <div>Consultado en: <strong style={{ fontFamily: 'monospace' }}>{configQ.data.data.entorno.urlBase}</strong></div>
+              <div>
+                Llave pública del servidor: {configQ.data.data.entorno.llavePublicaConfigurada
+                  ? <strong style={{ fontFamily: 'monospace' }}>{configQ.data.data.entorno.llavePublicaTermina}</strong>
+                  : <strong style={{ color: '#C0392B' }}>no configurada</strong>}
+                {' '}(compara con la "Public Key" de tu comercio en la consola de Kushki)
+              </div>
+              <details style={{ marginTop: 6 }}>
+                <summary style={{ cursor: 'pointer' }}>Ver respuesta completa de Kushki</summary>
+                <pre style={{ margin: '6px 0 0', padding: 10, borderRadius: 8, background: 'rgba(var(--adm-card-rgb),.6)', overflowX: 'auto', fontSize: 11 }}>
+                  {JSON.stringify(configQ.data.data.respuesta, null, 2)}
+                </pre>
+              </details>
+            </div>
+          )}
         </div>
       </Panel>
 
