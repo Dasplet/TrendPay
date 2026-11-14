@@ -47,7 +47,7 @@ router.get('/users', authenticate, requireAdmin, async (req: Request, res: Respo
     res.json({
       ok: true,
       // Las subcuentas empresariales no tienen billetera propia: se muestra la de su padre.
-      usuarios: users.map(u => { const saldo = Number.parseFloat((u.wallet ?? u.cuentaPadre?.wallet)?.saldo.toString() || '0'); return { id: u.id, cedula: u.cedula, nombre: u.nombre, correo: u.correo, celular: u.celular, ciudad: u.ciudad, rol: u.rol, subRol: u.subRol, kycNivel: u.kycNivel, kycVerificado: u.kycVerificado, bloqueado: u.bloqueado, codigoReferido: u.codigoReferido, saldo, cuentaPadre: u.cuentaPadre?.nombre ?? null, ultimoLogin: u.ultimoLogin, createdAt: u.createdAt }; }),
+      usuarios: users.map(u => { const saldo = Number.parseFloat((u.wallet ?? u.cuentaPadre?.wallet)?.saldo.toString() || '0'); return { id: u.id, cedula: u.cedula, nombre: u.nombre, correo: u.correo, celular: u.celular, ciudad: u.ciudad, rol: u.rol, subRol: u.subRol, kycNivel: u.kycNivel, kycVerificado: u.kycVerificado, bloqueado: u.bloqueado, saldo, cuentaPadre: u.cuentaPadre?.nombre ?? null, ultimoLogin: u.ultimoLogin, createdAt: u.createdAt }; }),
     });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
@@ -76,7 +76,6 @@ router.post('/users', authenticate, requireAdmin, async (req: Request, res: Resp
     }
 
     const pinHash      = await bcrypt.hash(pin, Number.parseInt(process.env.BCRYPT_ROUNDS || '12'));
-    const codigoPropio = 'REF-' + cedula.slice(-6).padStart(6, '0');
 
     const user = await prisma.user.create({
       data: {
@@ -86,7 +85,6 @@ router.post('/users', authenticate, requireAdmin, async (req: Request, res: Resp
         ciudad: ciudad || null,
         pinHash,
         rol: rol || 'usuario',
-        codigoReferido: codigoPropio,
         wallet: { create: { saldo: 0 } },
       },
       include: { wallet: true },

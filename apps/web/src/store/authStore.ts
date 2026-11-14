@@ -12,7 +12,6 @@ export interface User {
   ciudad?: string;
   rol: string;
   subRol?: string;
-  codigoReferido?: string;
   saldo: number | null; // null cuando la subcuenta no tiene permiso para ver el saldo
   walletId?: string;
   permisos?: Permisos;

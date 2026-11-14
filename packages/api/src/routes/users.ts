@@ -29,7 +29,7 @@ router.get('/profile', authenticate, async (req: Request, res: Response) => {
 
     if (!user) return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado' });
 
-    res.json({ ok: true, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, kycNivel: user.kycNivel, codigoReferido: user.codigoReferido, ...datosBilletera(user) } });
+    res.json({ ok: true, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, kycNivel: user.kycNivel, ...datosBilletera(user) } });
   } catch (err: any) {
     logger.error('Error consultando perfil', { err: err.message, userId: req.user?.id });
     res.status(500).json({ ok: false, mensaje: 'Error consultando perfil' });
@@ -75,7 +75,7 @@ router.put('/profile', authenticate, async (req: Request, res: Response) => {
       },
     }).catch(() => {});
 
-    res.json({ ok: true, mensaje: 'Perfil actualizado', usuario: { id: updated.id, cedula: updated.cedula, nombre: updated.nombre, correo: updated.correo, celular: updated.celular, ciudad: updated.ciudad, rol: updated.rol, subRol: updated.subRol, kycVerificado: updated.kycVerificado, kycNivel: updated.kycNivel, codigoReferido: updated.codigoReferido, ...datosBilletera(updated) } });
+    res.json({ ok: true, mensaje: 'Perfil actualizado', usuario: { id: updated.id, cedula: updated.cedula, nombre: updated.nombre, correo: updated.correo, celular: updated.celular, ciudad: updated.ciudad, rol: updated.rol, subRol: updated.subRol, kycVerificado: updated.kycVerificado, kycNivel: updated.kycNivel, ...datosBilletera(updated) } });
   } catch (err: any) {
     logger.error('Error actualizando perfil', { err: err.message, userId: req.user?.id });
     res.status(500).json({ ok: false, mensaje: 'Error actualizando perfil' });

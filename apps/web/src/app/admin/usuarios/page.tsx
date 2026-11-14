@@ -127,7 +127,7 @@ export default function UsuariosPage() {
                 <div style={{ fontSize:11, color:'var(--adm-muted)', marginTop:2 }}>CC {selected.cedula}</div>
               </div>
             </div>
-            {[['Celular', selected.celular||'—'],['Ciudad', selected.ciudad||'—'],['Saldo', fmt(selected.saldo||0)],['Código referido', selected.codigoReferido||selected.codigo_referido||'—'],['Último login', fmtDate(selected.ultimoLogin||selected.ultimo_login)]].map(([l,v]) => (
+            {[['Celular', selected.celular||'—'],['Ciudad', selected.ciudad||'—'],['Saldo', fmt(selected.saldo||0)],['Último login', fmtDate(selected.ultimoLogin||selected.ultimo_login)]].map(([l,v]) => (
               <div key={l} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid rgba(var(--adm-fg-rgb),.06)', fontSize:13 }}>
                 <span style={{ color:'var(--adm-muted)' }}>{l}</span>
                 <span style={{ color:'var(--adm-text)', fontWeight:600 }}>{v}</span>

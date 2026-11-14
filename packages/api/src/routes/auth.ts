@@ -63,7 +63,7 @@ async function completeLogin(req: Request, res: Response, user: any) {
 
   logger.info('Login exitoso', { userId: user.id, cedula: user.cedula });
 
-  res.json({ ok: true, accessToken, refreshToken /* también en body para móvil */, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, codigoReferido: user.codigoReferido, ...datosBilletera(user) } });
+  res.json({ ok: true, accessToken, refreshToken /* también en body para móvil */, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, ...datosBilletera(user) } });
 }
 
 // ── 2FA de login (paso extra por correo para cuentas marcadas como sensibles) ──
@@ -201,7 +201,6 @@ const registerSchema = z.object({
   pin:             z.string().length(4).regex(/^\d{4}$/),
   celular:         z.string().optional(),
   ciudad:          z.string().optional(),
-  codigo_referido: z.string().optional(),
 });
 
 router.post('/register', authLimiter, async (req: Request, res: Response) => {
@@ -209,7 +208,7 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
   if (!parse.success) {
     return res.status(400).json({ ok: false, mensaje: parse.error.errors[0].message });
   }
-  const { cedula, nombre, correo, pin, celular, ciudad, codigo_referido } = parse.data;
+  const { cedula, nombre, correo, pin, celular, ciudad } = parse.data;
 
   try {
     // Check duplicates
@@ -221,16 +220,8 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
       return res.status(400).json({ ok: false, mensaje: `Esta ${campo} ya está registrada` });
     }
 
-    // Resolve referrer
-    let referidorId: string | null = null;
-    if (codigo_referido) {
-      const referidor = await prisma.user.findUnique({ where: { codigoReferido: codigo_referido.toUpperCase() } });
-      if (referidor) referidorId = referidor.id;
-    }
-
-    const pinHash      = await bcrypt.hash(pin, Number.parseInt(process.env.BCRYPT_ROUNDS || '12'));
-    const codigoPropio = 'REF-' + cedula.slice(-6).padStart(6, '0');
-    const userId       = randomUUID();
+    const pinHash = await bcrypt.hash(pin, Number.parseInt(process.env.BCRYPT_ROUNDS || '12'));
+    const userId  = randomUUID();
 
     const user = await prisma.user.create({
       data: {
@@ -241,19 +232,10 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
         celular: celular || null,
         ciudad: ciudad || null,
         pinHash,
-        codigoReferido: codigoPropio,
-        referidoPorId: referidorId,
         wallet: { create: { saldo: 0 } },
       },
       include: { wallet: true },
     });
-
-    // Create referral relationship
-    if (referidorId) {
-      await prisma.referral.create({
-        data: { referidorId, referidoId: userId },
-      }).catch(() => {});
-    }
 
     // Welcome notification
     await prisma.notification.create({
@@ -261,7 +243,7 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
         userId: user.id,
         tipo: 'ok',
         titulo: '¡Bienvenido a TrendPay!',
-        mensaje: `Hola ${nombre.split(' ')[0]}, tu billetera virtual está lista.${referidorId ? ' Tu referido fue vinculado correctamente.' : ''}`,
+        mensaje: `Hola ${nombre.split(' ')[0]}, tu billetera virtual está lista.`,
       },
     });
 
@@ -285,7 +267,6 @@ router.post('/register', authLimiter, async (req: Request, res: Response) => {
         celular: user.celular,
         ciudad: user.ciudad,
         rol: user.rol,
-        codigoReferido: user.codigoReferido,
         saldo: 0,
         walletId: user.wallet?.id,
       },
@@ -467,7 +448,7 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
       include: INCLUDE_BILLETERA,
     });
     if (!user) return res.status(404).json({ ok: false });
-    res.json({ ok: true, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, codigoReferido: user.codigoReferido, ...datosBilletera(user) } });
+    res.json({ ok: true, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, ...datosBilletera(user) } });
   } catch {
     res.status(500).json({ ok: false });
   }

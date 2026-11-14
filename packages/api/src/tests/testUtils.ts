@@ -18,7 +18,6 @@ export async function limpiarBaseDeDatos() {
   await prisma.notification.deleteMany();
   await prisma.userAuditLog.deleteMany();
   await prisma.auditLog.deleteMany();
-  await prisma.referral.deleteMany();
   await prisma.session.deleteMany();
   await prisma.wallet.deleteMany();
   await prisma.user.deleteMany();

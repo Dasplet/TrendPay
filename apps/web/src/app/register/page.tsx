@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   User, CreditCard, Mail, Phone, MapPin, Lock,
   ArrowRight, ArrowLeft, X, CheckCircle, AlertCircle,
-  RefreshCw, Gift, Shield
+  RefreshCw, Shield
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 const CIUDADES = ['Medellín','Bogotá','Cali','Barranquilla','Cartagena','Bucaramanga','Pereira','Manizales','Santa Marta','Cúcuta'];
 const INPUT: React.CSSProperties = { width:'100%', background:'rgba(30,12,65,.7)', border:'1.5px solid rgba(133,46,199,.25)', borderRadius:12, padding:'13px 16px', fontSize:14, color:'#fff', outline:'none', boxSizing:'border-box', fontFamily:'inherit', transition:'border-color .2s' };
 
-type RegisterForm = { nombre: string; cedula: string; correo: string; celular: string; ciudad: string; codigo_referido: string };
+type RegisterForm = { nombre: string; cedula: string; correo: string; celular: string; ciudad: string };
 
 function Step1Identidad({ form, setField }: Readonly<{ form: RegisterForm; setField: (field: string, value: string) => void }>) {
   return (
@@ -204,11 +204,6 @@ function Step4Resumen({ form, setField }: Readonly<{ form: RegisterForm; setFiel
           <span style={{ color:'#fff', fontWeight:600, fontSize:13, flex:1, textAlign:'right' }}>••••</span>
         </div>
       </div>
-      <div style={{ background:'rgba(133,46,199,.08)', border:'1px solid rgba(133,46,199,.18)', borderRadius:14, padding:'14px 18px', marginBottom:16 }}>
-        <label htmlFor="reg-codigo-referido" style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, fontWeight:600, color:'rgba(174,147,170,.8)', textTransform:'uppercase', letterSpacing:'.8px', marginBottom:8 }}><Gift size={11}/> Código de referido (opcional)</label>
-        <input id="reg-codigo-referido" value={form.codigo_referido} onChange={e=>setField('codigo_referido',e.target.value.toUpperCase())} placeholder="REF-XXXXXX" style={{ ...INPUT, fontFamily:'monospace', letterSpacing:'2px', textTransform:'uppercase' }} onFocus={e=>e.currentTarget.style.borderColor='#852EC7'} onBlur={e=>e.currentTarget.style.borderColor='rgba(133,46,199,.25)'}/>
-        <div style={{ fontSize:11, color:'rgba(174,147,170,.5)', marginTop:8, display:'flex', alignItems:'center', gap:5 }}><Gift size={11} color="#6CC998"/> Tú y quien te refirió ganan $1.000 en tu primera transacción</div>
-      </div>
     </>
   );
 }
@@ -245,7 +240,7 @@ export default function RegisterPage() {
   const [verifyingOtp, setVerifyingOtp] = useState(false);
   const [otpDebug, setOtpDebug]     = useState('');
 
-  const [form, setForm] = useState<RegisterForm>({ nombre:'', cedula:'', correo:'', celular:'', ciudad:'', codigo_referido:'' });
+  const [form, setForm] = useState<RegisterForm>({ nombre:'', cedula:'', correo:'', celular:'', ciudad:'' });
 
   function setField(field: string, value: string) {
     setForm(f => ({ ...f, [field]: value }));

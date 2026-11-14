@@ -4,7 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Link from 'next/link';
 import {
-  LayoutDashboard, Users, GitBranch, ArrowLeftRight,
+  LayoutDashboard, Users, ArrowLeftRight,
   Landmark, Percent, Building2, AlertTriangle, FileText,
   Settings, ClipboardList, UserCheck, LogOut, Search, CreditCard, FolderCheck, QrCode
 } from 'lucide-react';
@@ -15,7 +15,6 @@ const NAV = [
   { section: 'GENERAL', items: [
     { href: '/admin',               icon: LayoutDashboard, label: 'Dashboard'          },
     { href: '/admin/usuarios',      icon: Users,           label: 'Usuarios'           },
-    { href: '/admin/referidos',     icon: GitBranch,       label: 'Referidos'          },
     { href: '/admin/transacciones', icon: ArrowLeftRight,  label: 'Transacciones'      },
   ]},
   { section: 'OPERACIONES', items: [
@@ -40,7 +39,6 @@ const NAV = [
 const PAGE_TITLES: Record<string, { title: string; sub: string }> = {
   '/admin':                    { title: 'Dashboard',           sub: 'Resumen general de la plataforma'        },
   '/admin/usuarios':           { title: 'Usuarios',            sub: 'Gestion de usuarios registrados'         },
-  '/admin/referidos':          { title: 'Referidos',           sub: 'Programa de referidos'                   },
   '/admin/transacciones':      { title: 'Transacciones',       sub: 'Historial global de movimientos'         },
   '/admin/retiros':            { title: 'Retiros pendientes',  sub: 'Cola de aprobacion de retiros'           },
   '/admin/comisiones':         { title: 'Comisiones',          sub: 'Ingresos por comisiones del 3%'          },

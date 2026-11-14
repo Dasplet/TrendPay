@@ -374,7 +374,6 @@ export const userMenu: { section: string; items: { href: string; label: string; 
   ]},
   { section: 'Cuenta', items: [
     { href: '/dashboard/perfil', label: 'Mi perfil', icon: <UserIcon /> },
-    { href: '/dashboard/referidos', label: 'Mis referidos', icon: <Users size={19} /> },
     { href: '/dashboard/seguridad', label: 'Seguridad', icon: <Lock size={19} /> },
     { href: '/dashboard/bancos', label: 'Mis bancos', icon: <CreditCard size={19} /> },
   ]},

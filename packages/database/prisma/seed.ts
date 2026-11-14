@@ -34,7 +34,6 @@ async function main() {
   // Default config
   const configs = [
     { clave: 'comision_pct',       valor: '3'    },
-    { clave: 'comision_referido',  valor: '1000' },
     { clave: 'limite_diario',      valor: '3000000' },
     { clave: 'limite_mensual',     valor: '20000000' },
     { clave: 'monto_minimo_retiro', valor: '10000' },
@@ -52,7 +51,6 @@ async function main() {
   // Admin user
   const adminPin  = await bcrypt.hash('0000', 12);
   const adminId   = randomUUID();
-  const adminCode = 'REF-000001';
 
   const admin = await prisma.user.upsert({
     where: { cedula: '1000000001' },
@@ -68,7 +66,6 @@ async function main() {
       rol: 'admin',
       subRol: 'super_admin',
       kycVerificado: true,
-      codigoReferido: adminCode,
       wallet: {
         create: { saldo: 5000000 },
       },
@@ -79,7 +76,6 @@ async function main() {
   // Demo user
   const userPin  = await bcrypt.hash('1234', 12);
   const userId   = randomUUID();
-  const userCode = 'REF-456789';
 
   const user = await prisma.user.upsert({
     where: { cedula: '1023456789' },
@@ -94,7 +90,6 @@ async function main() {
       pinHash: userPin,
       rol: 'usuario',
       kycVerificado: true,
-      codigoReferido: userCode,
       wallet: {
         create: { saldo: 285400 },
       },
@@ -115,17 +110,16 @@ async function main() {
       ciudad: 'Medellín',
       pinHash: empresaPin,
       kycVerificado: true,
-      codigoReferido: 'REF-100200',
       wallet: { create: { saldo: 1000000 } },
     },
   });
 
   const hijos = [
     // Hijo 1: solo recarga, no ve el saldo
-    { cedula: '900100201', nombre: 'Empresa Hijo 1', correo: 'empresa.hijo1@trendpay.co', codigoReferido: 'REF-100201',
+    { cedula: '900100201', nombre: 'Empresa Hijo 1', correo: 'empresa.hijo1@trendpay.co',
       permisoVerSaldo: false, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false },
     // Hijo 2: ve el saldo y solo retira
-    { cedula: '900100202', nombre: 'Empresa Hijo 2', correo: 'empresa.hijo2@trendpay.co', codigoReferido: 'REF-100202',
+    { cedula: '900100202', nombre: 'Empresa Hijo 2', correo: 'empresa.hijo2@trendpay.co',
       permisoVerSaldo: true, permisoRecargar: false, permisoEnviar: false, permisoRetirar: true },
   ];
   for (const hijo of hijos) {

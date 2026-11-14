@@ -5,7 +5,7 @@ import { adminApi, api } from '@/lib/api';
 import { downloadCsv } from '@/lib/exportCsv';
 import { Panel, PanelHeader, Btn, fmtDate } from '@/components/admin/ui';
 import {
-  ArrowLeftRight, Users, CircleDollarSign, Share2, Banknote,
+  ArrowLeftRight, Users, CircleDollarSign, Banknote,
   FileWarning, FileText, Activity, Wallet, FileDown, ShieldCheck, FileSpreadsheet,
   type LucideIcon,
 } from 'lucide-react';
@@ -16,7 +16,6 @@ const EXPORTS: { icon: LucideIcon; label: string; desc: string; period: string }
   { icon:ArrowLeftRight, label:'Transacciones — 12 meses',    desc:'Historial del último año',              period:'12m'    },
   { icon:Users,          label:'Lista de usuarios',            desc:'Datos, saldos y KYC de todos',          period:'users'  },
   { icon:CircleDollarSign, label:'Reporte de comisiones',      desc:'Comisiones generadas por período',      period:'com'    },
-  { icon:Share2,         label:'Referidos',                    desc:'Relaciones de referido y comisiones',   period:'ref'    },
   { icon:Banknote,       label:'Cola de retiros',              desc:'Retiros pendientes y procesados',       period:'wd'     },
 ];
 
@@ -75,15 +74,6 @@ async function fetchComisionesReport(): Promise<ReportData> {
   return { headers: ['Categoría', 'Comisión total'], rows: Object.entries(bycat).map(([cat, val]) => [cat, val]) };
 }
 
-async function fetchReferidosReport(): Promise<ReportData> {
-  const { data } = await api.get('/referrals/admin?limit=1000');
-  const referidos: any[] = data?.referidos || [];
-  return {
-    headers: ['Referidor', 'Cédula referidor', 'Referido', 'Cédula referido', 'Comisión', 'Estado', 'Fecha'],
-    rows: referidos.map((r: any) => [r.referidor_nombre || '', r.referidor_cedula || '', r.referido_nombre || '', r.referido_cedula || '', r.comision_valor || 1000, r.status || '', fmtDate(r.created_at)]),
-  };
-}
-
 async function fetchRetirosReport(): Promise<ReportData> {
   const { data } = await adminApi.withdrawalsAll();
   const retiros: any[] = data?.retiros || [];
@@ -100,7 +90,6 @@ const REPORT_FETCHERS: Record<string, () => Promise<ReportData>> = {
   users:   fetchUsuariosReport,
   saldos:  fetchSaldosReport,
   com:     fetchComisionesReport,
-  ref:     fetchReferidosReport,
   wd:      fetchRetirosReport,
 };
 

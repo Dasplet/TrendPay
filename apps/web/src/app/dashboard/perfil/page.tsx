@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Building2, Camera, ChevronRight, Lock, MessageCircle, Pencil, ShieldCheck, SlidersHorizontal, Trash2, Users } from 'lucide-react';
+import { Building2, Camera, ChevronRight, Lock, MessageCircle, Pencil, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/authStore';
@@ -35,7 +35,6 @@ export default function PerfilPage() {
   const options = [
     { icon: <Lock size={22} />, title: 'Seguridad y PIN', desc: 'Cambiar PIN · sesiones activas', tone: 'purple', href: '/dashboard/seguridad' },
     { icon: <Building2 size={22} />, title: 'Bancos para retiro', desc: 'Vincular cuentas bancarias', tone: 'green', href: '/dashboard/bancos' },
-    { icon: <Users size={22} />, title: 'Mis referidos', desc: 'Gana $1.000 por cada amigo', tone: 'purple', href: '/dashboard/referidos' },
     { icon: <SlidersHorizontal size={22} />, title: 'Límites de transacción', desc: 'Diario $3M · Mensual $20M', tone: 'pink' },
     { icon: <MessageCircle size={22} />, title: 'Soporte 24/7', desc: 'Próximamente', tone: 'purple' },
   ];
