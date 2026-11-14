@@ -356,6 +356,12 @@ const comercioSchema = z.object({
   activo: z.boolean().default(true),
 });
 
+const coincide = (q: string) => [
+  { nombre: { contains: q, mode: 'insensitive' as const } },
+  { cedula: { contains: q } },
+  { correo: { contains: q, mode: 'insensitive' as const } },
+];
+
 async function cuentaPadreOrNull(userId: string) {
   const u = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, nombre: true, rol: true, cuentaPadreId: true } });
   return u && u.rol === 'usuario' && u.cuentaPadreId === null ? u : null;
@@ -369,10 +375,10 @@ router.get('/kushki/comercios', authenticate, requireAdmin, async (req: Request,
     const limit = Math.min(200, Math.max(1, Number.parseInt(req.query.limit as string) || 50));
     const where = {
       rol: 'usuario', cuentaPadreId: null,
+      // La búsqueda también encuentra una sede (subcuenta): se muestra su empresa
       ...(q ? { OR: [
-        { nombre: { contains: q, mode: 'insensitive' as const } },
-        { cedula: { contains: q } },
-        { correo: { contains: q, mode: 'insensitive' as const } },
+        ...coincide(q),
+        { subcuentas: { some: { OR: coincide(q) } } },
       ] } : {}),
     };
     const [total, configurados, cuentas] = await Promise.all([
@@ -380,13 +386,18 @@ router.get('/kushki/comercios', authenticate, requireAdmin, async (req: Request,
       prisma.comercioKushki.count({ where: { user: where } }),
       prisma.user.findMany({
         where, orderBy: { nombre: 'asc' }, skip: (page - 1) * limit, take: limit,
-        select: { id: true, nombre: true, cedula: true, correo: true, comercioKushki: true },
+        select: {
+          id: true, nombre: true, cedula: true, correo: true, comercioKushki: true,
+          // Las sedes de la empresa: operan con el Branch de la cuenta padre
+          subcuentas: { orderBy: { nombre: 'asc' }, select: { id: true, nombre: true, cedula: true, correo: true, bloqueado: true, permisoRecargar: true } },
+        },
       }),
     ]);
     res.json({
       ok: true, total, configurados, page, limit,
       cuentas: cuentas.map((c) => ({
         userId: c.id, nombre: c.nombre, cedula: c.cedula, correo: c.correo,
+        subcuentas: c.subcuentas.map((s) => ({ userId: s.id, nombre: s.nombre, cedula: s.cedula, correo: s.correo, bloqueada: s.bloqueado, puedeRecargar: s.permisoRecargar })),
         comercio: c.comercioKushki ? {
           activo: c.comercioKushki.activo,
           ambiente: c.comercioKushki.ambiente,

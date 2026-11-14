@@ -125,6 +125,30 @@ describe('Admin · Branches de Kushki por cliente', () => {
       expect(busqueda.body.cuentas[0].nombre).toBe('Cool Company SAS');
     });
 
+    it('cada empresa trae sus sedes (subcuentas) debajo, y buscar una sede muestra su empresa', async () => {
+      const a = await admin();
+      const empresa = await crearUsuarioDePrueba({ nombre: 'Cool Company SAS' });
+      const sedeNorte = await crearSubcuentaDePrueba(empresa.id, { permisoRecargar: false });
+      await prisma.user.update({ where: { id: sedeNorte.id }, data: { nombre: 'Sede Norte' } });
+      const sedeSur = await crearSubcuentaDePrueba(empresa.id);
+      await prisma.user.update({ where: { id: sedeSur.id }, data: { nombre: 'Sede Sur' } });
+      await crearUsuarioDePrueba({ nombre: 'Otra Empresa SAS' });
+
+      const res = await request(app).get('/api/admin/kushki/comercios').set(auth(a));
+      // las sedes NO aparecen como filas propias: solo debajo de su empresa
+      expect(res.body.total).toBe(2);
+      const fila = res.body.cuentas.find((c: any) => c.userId === empresa.id);
+      expect(fila.subcuentas.map((s: any) => s.nombre)).toEqual(['Sede Norte', 'Sede Sur']);
+      expect(fila.subcuentas[0]).toMatchObject({ userId: sedeNorte.id, puedeRecargar: false, bloqueada: false });
+      expect(fila.subcuentas[1].puedeRecargar).toBe(true);
+      expect(res.body.cuentas.find((c: any) => c.userId !== empresa.id).subcuentas).toEqual([]);
+      expect(JSON.stringify(res.body)).not.toContain('pinHash');
+
+      const porSede = await request(app).get('/api/admin/kushki/comercios?q=sede%20sur').set(auth(a));
+      expect(porSede.body.total).toBe(1);
+      expect(porSede.body.cuentas[0]).toMatchObject({ userId: empresa.id, nombre: 'Cool Company SAS' });
+    });
+
     it('pagina para manejar más de 100 cuentas', async () => {
       const a = await admin();
       await prisma.user.createMany({ data: Array.from({ length: 120 }, (_, i) => ({

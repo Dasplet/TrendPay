@@ -2,15 +2,25 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { QrCode, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, QrCode, Search } from 'lucide-react';
 import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, Tr, Td, Btn, Modal, Input, Select, fmtDate } from '@/components/admin/ui';
+
+interface Sede {
+  userId: string;
+  nombre: string;
+  cedula: string;
+  correo: string;
+  bloqueada: boolean;
+  puedeRecargar: boolean;
+}
 
 interface Cuenta {
   userId: string;
   nombre: string;
   cedula: string;
   correo: string;
+  subcuentas: Sede[];
   comercio: { activo: boolean; ambiente: string; publicTermina: string; actualizado: string } | null;
 }
 
@@ -29,6 +39,9 @@ export default function ComerciosKushkiPage() {
   const [page, setPage] = useState(1);
   const [editando, setEditando] = useState<Cuenta | null>(null);
   const [form, setForm] = useState(vacio);
+  // Empresas con las sedes desplegadas
+  const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
+  const alternar = (id: string) => setAbiertas((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   // Resultado de "Verificar" por cliente (no se guarda: solo para mostrarlo en la fila)
   const [verificados, setVerificados] = useState<Record<string, { breb: boolean; url: string }>>({});
 
@@ -86,13 +99,25 @@ export default function ComerciosKushkiPage() {
   if (isLoading) filas = <Tr><Td colSpan={5} style={{ textAlign: 'center', padding: 32, color: 'rgba(var(--adm-fg-rgb),.3)' }}>Cargando...</Td></Tr>;
   else if (cuentas.length === 0) filas = <Tr><Td colSpan={5} style={{ textAlign: 'center', padding: 32, color: 'rgba(var(--adm-fg-rgb),.3)' }}>No hay cuentas con ese criterio</Td></Tr>;
   else {
-    filas = cuentas.map((c) => {
+    filas = cuentas.flatMap((c) => {
       const v = verificados[c.userId];
-      return (
+      const abierta = abiertas.has(c.userId) || (q !== '' && c.subcuentas.length > 0);
+      const fila = (
         <Tr key={c.userId}>
           <Td style={{ fontSize: 12 }}>
-            <strong>{c.nombre}</strong>
-            <div style={{ fontSize: 10, color: 'rgba(var(--adm-fg-rgb),.4)' }}>CC {c.cedula} · {c.correo}</div>
+            <button type="button" onClick={() => alternar(c.userId)} aria-expanded={abierta}
+              title={c.subcuentas.length ? (abierta ? 'Ocultar sedes' : 'Ver sedes') : 'Sin sedes'}
+              style={{ all: 'unset', cursor: c.subcuentas.length ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 14, color: '#c088f0', opacity: c.subcuentas.length ? 1 : .25 }}>
+                {abierta ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </span>
+              <span>
+                <strong>{c.nombre}</strong>
+                <div style={{ fontSize: 10, color: 'rgba(var(--adm-fg-rgb),.4)' }}>
+                  NIT/CC {c.cedula} · {c.correo} · {c.subcuentas.length === 0 ? 'sin sedes' : `${c.subcuentas.length} ${c.subcuentas.length === 1 ? 'sede' : 'sedes'}`}
+                </div>
+              </span>
+            </button>
           </Td>
           <Td>
             {c.comercio
@@ -120,6 +145,24 @@ export default function ComerciosKushkiPage() {
           </Td>
         </Tr>
       );
+      if (!abierta) return [fila];
+      return [fila, ...c.subcuentas.map((s) => (
+        <Tr key={s.userId}>
+          <Td style={{ fontSize: 12, paddingLeft: 44, background: 'rgba(133,46,199,.04)' }}>
+            <span style={{ color: 'rgba(var(--adm-fg-rgb),.35)', marginRight: 6 }}>↳</span>
+            <strong style={{ fontWeight: 600 }}>{s.nombre}</strong>
+            <div style={{ fontSize: 10, color: 'rgba(var(--adm-fg-rgb),.4)', paddingLeft: 16 }}>Sede · CC {s.cedula} · {s.correo}</div>
+          </Td>
+          <Td style={{ background: 'rgba(133,46,199,.04)' }}>
+            {s.bloqueada ? <Etiqueta color="amarillo">Bloqueada</Etiqueta> : <Etiqueta color="gris">Usa el Branch de {c.nombre}</Etiqueta>}
+          </Td>
+          <Td style={{ background: 'rgba(133,46,199,.04)' }} colSpan={3}>
+            {s.puedeRecargar
+              ? <span style={{ fontSize: 11, color: 'rgba(var(--adm-fg-rgb),.5)' }}>Puede generar QR{c.comercio?.activo ? '' : ' cuando la empresa tenga Branch'}</span>
+              : <Etiqueta color="amarillo">Sin permiso de recargar</Etiqueta>}
+          </Td>
+        </Tr>
+      ))];
     });
   }
 
@@ -128,7 +171,8 @@ export default function ComerciosKushkiPage() {
       <Panel>
         <PanelHeader title={`Cuentas y su Branch de Kushki${data ? ` · ${data.configurados} de ${data.total} configurados` : ''}`} icon={<QrCode size={16} />} />
         <div style={{ padding: '12px 16px', fontSize: 12, color: 'rgba(var(--adm-fg-rgb),.6)', lineHeight: 1.6, borderBottom: '1px solid rgba(133,46,199,.12)' }}>
-          Cada cliente (cuenta padre) cobra sus QR de Bre-B con su propio Branch de Kushki: el pago entra a su comercio, no al de TrendPay.
+          Cada empresa (cuenta padre) cobra sus QR de Bre-B con su propio Branch de Kushki: el pago entra a su comercio, no al de TrendPay.
+          Pulsa el nombre de una empresa para ver sus sedes; todas las sedes usan el Branch de la empresa.
           Aquí pegas la Public Key y la Private Key de cada Branch (se guardan cifradas y no se vuelven a mostrar). Sin Branch asignado, el cliente no ve la opción Bre-B.
         </div>
         <div style={{ position: 'relative', padding: '12px 16px' }}>
