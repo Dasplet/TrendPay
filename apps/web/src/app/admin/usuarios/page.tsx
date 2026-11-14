@@ -191,7 +191,7 @@ export default function UsuariosPage() {
   }
 
   function abrirBranch(c: Cuenta) {
-    setLlaves({ ...SIN_LLAVES, ambiente: c.comercio?.ambiente ?? 'produccion', activo: c.comercio?.activo ?? true });
+    setLlaves({ ...SIN_LLAVES, activo: c.comercio?.activo ?? true });
     setBranchDe(c);
   }
 
@@ -217,7 +217,7 @@ export default function UsuariosPage() {
         </div>
         {c.comercio && (
           <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'rgba(var(--adm-fg-rgb),.45)' }}>
-            {c.comercio.ambiente === 'pruebas' ? 'Pruebas' : 'Producción'} · {c.comercio.publicTermina}
+            Public Key {c.comercio.publicTermina}
           </span>
         )}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -451,10 +451,6 @@ export default function UsuariosPage() {
           onChange={(e) => setLlaves((f) => ({ ...f, publicMerchantId: e.target.value }))} />
         <Input label="Private Key" type="password" value={llaves.privateMerchantId} autoComplete="new-password" spellCheck={false}
           onChange={(e) => setLlaves((f) => ({ ...f, privateMerchantId: e.target.value }))} />
-        <Select label="Ambiente del Branch" value={llaves.ambiente} onChange={(e) => setLlaves((f) => ({ ...f, ambiente: e.target.value }))}>
-          <option value="produccion">Producción (console.kushkipagos.com)</option>
-          <option value="pruebas">Pruebas (UAT)</option>
-        </Select>
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, marginBottom: 16, cursor: 'pointer' }}>
           <input type="checkbox" checked={llaves.activo} onChange={(e) => setLlaves((f) => ({ ...f, activo: e.target.checked }))} />
           Activo (la empresa y sus sedes pueden generar QR)
