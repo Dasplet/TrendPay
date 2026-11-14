@@ -14,6 +14,113 @@ const PRIVADA = 'PRIVADAKEY1234567890cd';
 const BREB = { procesadores: [{ name: 'Bre-B Credibanco Processor', currency: 'COP', tipo: 'bre-b', canales: ['QR'] }], respuesta: {} };
 const SIN_PROCESADORES = { procesadores: [], respuesta: { processors: [] } };
 
+describe('Admin · crear usuarios y sedes, y mover una sede de empresa', () => {
+  afterAll(async () => { await limpiarBaseDeDatos(); await prisma.$disconnect(); });
+  beforeEach(async () => { await limpiarBaseDeDatos(); jest.clearAllMocks(); });
+
+  const auth = (u: any) => ({ Authorization: `Bearer ${tokenPara(u)}` });
+  const nuevo = (extra: object = {}) => ({ cedula: '9000111222', nombre: 'Sede Norte', correo: 'sede.norte@trendpay.test', pin: '4321', ...extra });
+  const crear = (a: any, cuerpo: object) => request(app).post('/api/admin/users').set(auth(a)).send(cuerpo);
+
+  it('ya no se pueden crear cuentas de administrador', async () => {
+    const a = await crearUsuarioDePrueba({ rol: 'admin' });
+    const res = await crear(a, nuevo({ rol: 'admin' }));
+    expect(res.status).toBe(400);
+    expect(res.body.mensaje).toContain('administrador');
+    expect(await prisma.user.count({ where: { cedula: '9000111222' } })).toBe(0);
+    // sin rol, o con rol "usuario", se crea un cliente normal
+    expect((await crear(a, nuevo({ rol: 'usuario' }))).body.usuario.rol).toBe('usuario');
+  });
+
+  it('crea una sede dentro de una empresa: sin billetera propia, con sus permisos y auditada', async () => {
+    const a = await crearUsuarioDePrueba({ rol: 'admin' });
+    const empresa = await crearUsuarioDePrueba({ nombre: 'Cool Company SAS', saldo: 50000 });
+    const res = await crear(a, nuevo({ cuentaPadreId: empresa.id, permisoVerSaldo: true, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false }));
+    expect(res.status).toBe(201);
+    expect(res.body.mensaje).toBe('Sede creada');
+    expect(res.body.usuario).toMatchObject({ rol: 'usuario', cuentaPadreId: empresa.id });
+
+    const sede = await prisma.user.findUnique({ where: { id: res.body.usuario.id }, include: { wallet: true } });
+    expect(sede).toMatchObject({ cuentaPadreId: empresa.id, permisoVerSaldo: true, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false });
+    expect(sede!.wallet).toBeNull();
+    // el saldo de la empresa no cambia
+    expect(Number((await prisma.wallet.findUnique({ where: { userId: empresa.id } }))!.saldo)).toBe(50000);
+    const auditoria = await prisma.auditLog.findFirst({ where: { accion: 'CREAR_USUARIO', registroId: sede!.id } });
+    expect(JSON.stringify(auditoria)).toContain(empresa.id);
+    expect(JSON.stringify(auditoria)).not.toContain('4321');
+  });
+
+  it('sin cuentaPadreId crea una cuenta padre con su billetera en cero', async () => {
+    const a = await crearUsuarioDePrueba({ rol: 'admin' });
+    const res = await crear(a, nuevo());
+    const u = await prisma.user.findUnique({ where: { id: res.body.usuario.id }, include: { wallet: true } });
+    expect(u).toMatchObject({ cuentaPadreId: null, rol: 'usuario' });
+    expect(Number(u!.wallet!.saldo)).toBe(0);
+  });
+
+  it('una sede solo cuelga de una empresa: no de otra sede, ni de un admin, ni de algo que no existe', async () => {
+    const a = await crearUsuarioDePrueba({ rol: 'admin' });
+    const empresa = await crearUsuarioDePrueba();
+    const sede = await crearSubcuentaDePrueba(empresa.id);
+    for (const padre of [sede.id, a.id, '00000000-0000-0000-0000-000000000000']) {
+      const res = await crear(a, nuevo({ cuentaPadreId: padre }));
+      expect(res.status).toBe(400);
+      expect(res.body.mensaje).toContain('empresa');
+    }
+    expect((await crear(a, nuevo({ cuentaPadreId: 'no-es-un-uuid' }))).status).toBe(400);
+    expect(await prisma.user.count({ where: { cedula: '9000111222' } })).toBe(0);
+  });
+
+  it('un usuario normal no puede crear', async () => {
+    const u = await crearUsuarioDePrueba();
+    expect((await crear(u, nuevo())).status).toBe(403);
+  });
+
+  describe('mover una sede a otra empresa', () => {
+    const mover = (a: any, id: string, cuentaPadreId: any) => request(app).put(`/api/admin/users/${id}`).set(auth(a)).send({ cuentaPadreId });
+
+    it('cambia la sede de empresa y queda auditado (antes y después)', async () => {
+      const a = await crearUsuarioDePrueba({ rol: 'admin' });
+      const e1 = await crearUsuarioDePrueba();
+      const e2 = await crearUsuarioDePrueba();
+      const sede = await crearSubcuentaDePrueba(e1.id);
+      const res = await mover(a, sede.id, e2.id);
+      expect(res.status).toBe(200);
+      expect((await prisma.user.findUnique({ where: { id: sede.id } }))!.cuentaPadreId).toBe(e2.id);
+      const aud = await prisma.auditLog.findFirst({ where: { accion: 'EDITAR_USUARIO', registroId: sede.id } });
+      expect(aud!.datos).toMatchObject({ antes: { cuentaPadreId: e1.id }, despues: { cuentaPadreId: e2.id } });
+    });
+
+    it('no convierte en sede una cuenta con billetera propia, ni usa como empresa a una sede o a ella misma', async () => {
+      const a = await crearUsuarioDePrueba({ rol: 'admin' });
+      const e1 = await crearUsuarioDePrueba({ saldo: 90000 });
+      const e2 = await crearUsuarioDePrueba();
+      const sede = await crearSubcuentaDePrueba(e1.id);
+      expect((await mover(a, e2.id, e1.id)).status).toBe(400);
+      expect((await mover(a, sede.id, sede.id)).status).toBe(400);
+      const otraSede = await crearSubcuentaDePrueba(e2.id);
+      expect((await mover(a, sede.id, otraSede.id)).status).toBe(400);
+      expect((await mover(a, sede.id, null)).status).toBe(400);
+      expect((await prisma.user.findUnique({ where: { id: sede.id } }))!.cuentaPadreId).toBe(e1.id);
+      expect(Number((await prisma.wallet.findUnique({ where: { userId: e2.id } }))!.saldo)).toBe(0);
+    });
+
+    it('no la mueve mientras tenga pagos o retiros en curso', async () => {
+      const a = await crearUsuarioDePrueba({ rol: 'admin' });
+      const e1 = await crearUsuarioDePrueba();
+      const e2 = await crearUsuarioDePrueba();
+      const sede = await crearSubcuentaDePrueba(e1.id);
+      await prisma.kushkiPayment.create({ data: { userId: sede.id, reference: 'tok_sede_pendiente_1', metodo: 'breb', monto: 1000, estado: 'pendiente' } });
+      const res = await mover(a, sede.id, e2.id);
+      expect(res.status).toBe(409);
+      expect((await prisma.user.findUnique({ where: { id: sede.id } }))!.cuentaPadreId).toBe(e1.id);
+
+      await prisma.kushkiPayment.updateMany({ data: { estado: 'completado' } });
+      expect((await mover(a, sede.id, e2.id)).status).toBe(200);
+    });
+  });
+});
+
 describe('Admin · Branches de Kushki por cliente', () => {
   afterAll(async () => { await limpiarBaseDeDatos(); await prisma.$disconnect(); });
   beforeEach(async () => { await limpiarBaseDeDatos(); jest.clearAllMocks(); });

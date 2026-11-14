@@ -19,13 +19,56 @@ interface Cuenta extends Omit<Sede, 'puedeRecargar'> {
 }
 
 const LIMITE = 50;
-const NUEVO = { nombre:'', cedula:'', correo:'', celular:'', ciudad:'', pin:'', rol:'usuario' };
+const NUEVO = { nombre:'', cedula:'', correo:'', celular:'', ciudad:'', pin:'' };
+// Permisos con los que nace una sede: ve el saldo y recarga; enviar y retirar se activan a propósito
+const PERMISOS_SEDE = { permisoVerSaldo: true, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false };
+const ETIQUETAS_PERMISOS: [keyof typeof PERMISOS_SEDE, string][] = [['permisoVerSaldo','Ver el saldo'],['permisoRecargar','Recargar'],['permisoEnviar','Enviar'],['permisoRetirar','Retirar']];
+type Empresa = { id: string; nombre: string };
 const SIN_LLAVES = { publicMerchantId: '', privateMerchantId: '', ambiente: 'produccion', activo: true };
 const LLAVE = /^[A-Za-z0-9]{20,64}$/;
 
 function Etiqueta({ children, color }: Readonly<{ children: React.ReactNode; color: 'verde' | 'gris' | 'amarillo' }>) {
   const c = { verde: ['rgba(108,201,152,.15)', '#6CC998'], gris: ['rgba(var(--adm-fg-rgb),.08)', 'rgba(var(--adm-fg-rgb),.5)'], amarillo: ['rgba(212,160,23,.15)', '#d4a017'] }[color];
   return <span style={{ background: c[0], color: c[1], padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{children}</span>;
+}
+
+// Busca empresas (cuentas padre de clientes) por nombre, cédula o correo y deja elegir una
+function SelectorEmpresa({ value, onChange, excluir }: Readonly<{ value: Empresa | null; onChange: (e: Empresa | null) => void; excluir?: string }>) {
+  const [texto, setTexto] = useState('');
+  const [q, setQ] = useState('');
+  useEffect(() => { const t = setTimeout(() => setQ(texto.trim()), 300); return () => clearTimeout(t); }, [texto]);
+  const { data, isFetching } = useQuery({
+    queryKey: ['empresas-selector', q],
+    queryFn: () => adminApi.kushkiComercios({ q: q || undefined, page: 1, limit: 8 }),
+    select: (d) => (d.data.cuentas as Cuenta[]).filter((c) => c.userId !== excluir),
+    enabled: !value,
+  });
+
+  if (value) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '10px 12px', borderRadius: 10, border: '1.5px solid rgba(133,46,199,.4)', background: 'rgba(133,46,199,.08)', fontSize: 13 }}>
+        <strong>{value.nombre}</strong>
+        <Btn variant="ghost" onClick={() => onChange(null)} style={{ padding: '3px 10px' }}>Cambiar</Btn>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <input value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Buscar empresa por nombre, NIT o correo"
+        style={{ width: '100%', background: 'rgba(var(--adm-card-rgb),.7)', border: '1.5px solid rgba(133,46,199,.25)', borderRadius: 10, padding: '10px 12px', fontSize: 13, color: 'var(--adm-text)', outline: 'none', boxSizing: 'border-box' }} />
+      <div style={{ maxHeight: 170, overflowY: 'auto', marginTop: 6, borderRadius: 10, border: '1px solid rgba(var(--adm-fg-rgb),.08)' }}>
+        {isFetching && !data && <div style={{ padding: 10, fontSize: 12, color: 'var(--adm-muted)' }}>Buscando...</div>}
+        {data?.length === 0 && <div style={{ padding: 10, fontSize: 12, color: 'var(--adm-muted)' }}>No hay empresas con ese criterio</div>}
+        {(data ?? []).map((c) => (
+          <button key={c.userId} type="button" onClick={() => onChange({ id: c.userId, nombre: c.nombre })}
+            style={{ all: 'unset', cursor: 'pointer', display: 'block', width: '100%', boxSizing: 'border-box', padding: '8px 12px', fontSize: 13, borderBottom: '1px solid rgba(var(--adm-fg-rgb),.05)' }}>
+            <strong>{c.nombre}</strong>
+            <div style={{ fontSize: 11, color: 'var(--adm-muted)' }}>CC {c.cedula} · {c.correo}</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function UsuariosPage() {
@@ -37,6 +80,10 @@ export default function UsuariosPage() {
   const [selected, setSelected] = useState<any>(null);
   const [showNew, setShowNew]   = useState(false);
   const [newUser, setNewUser]   = useState(NUEVO);
+  const [esSedeNueva, setEsSedeNueva] = useState(false);
+  const [empresaNueva, setEmpresaNueva] = useState<Empresa | null>(null);
+  const [permisos, setPermisos] = useState(PERMISOS_SEDE);
+  const [empresaEdit, setEmpresaEdit] = useState<Empresa | null>(null);
   const [showEdit, setShowEdit] = useState<any>(null);
   const [showDel, setShowDel]   = useState<any>(null);
   const [branchDe, setBranchDe] = useState<Cuenta | null>(null);
@@ -75,7 +122,7 @@ export default function UsuariosPage() {
 
   const createMut = useMutation({
     mutationFn: (d: any) => adminApi.createUser(d),
-    onSuccess: () => { refrescar(); toast.success('Usuario creado'); setShowNew(false); setNewUser(NUEVO); },
+    onSuccess: ({ data: r }) => { refrescar(); toast.success(r.mensaje || 'Usuario creado'); cerrarNuevo(); },
     onError: (e:any) => toast.error(e.response?.data?.mensaje || 'Error creando el usuario'),
   });
 
@@ -122,12 +169,20 @@ export default function UsuariosPage() {
     } catch { toast.error('No se pudo exportar'); }
   }
 
+  function abrirNuevo(empresa?: Empresa) {
+    setNewUser(NUEVO); setPermisos(PERMISOS_SEDE);
+    setEsSedeNueva(!!empresa); setEmpresaNueva(empresa ?? null);
+    setShowNew(true);
+  }
+  function cerrarNuevo() { setShowNew(false); setNewUser(NUEVO); setEsSedeNueva(false); setEmpresaNueva(null); setPermisos(PERMISOS_SEDE); }
+
   function submitNewUser() {
     if (!newUser.nombre.trim() || newUser.cedula.length < 6 || !newUser.correo.trim() || !/^\d{4}$/.test(newUser.pin)) {
       toast.error('Completa nombre, cédula, correo y un PIN de 4 dígitos');
       return;
     }
-    createMut.mutate(newUser);
+    if (esSedeNueva && !empresaNueva) { toast.error('Elige la empresa a la que pertenece la sede'); return; }
+    createMut.mutate(esSedeNueva ? { ...newUser, cuentaPadreId: empresaNueva!.id, ...permisos } : newUser);
   }
 
   function abrirBranch(c: Cuenta) {
@@ -135,10 +190,10 @@ export default function UsuariosPage() {
     setBranchDe(c);
   }
 
-  const acciones = (u: Cuenta | Sede) => (
+  const acciones = (u: Cuenta | Sede, empresa?: Cuenta) => (
     <div style={{ display:'flex', gap:6 }}>
       <Btn variant="ghost" title="Ver detalle" onClick={() => setSelected(u)} style={{ padding:'5px 8px' }}><Eye size={14} /></Btn>
-      <Btn variant="ghost" title="Editar" onClick={() => setShowEdit({...u})} style={{ padding:'5px 8px' }}><Pencil size={14} /></Btn>
+      <Btn variant="ghost" title="Editar" onClick={() => { setShowEdit({...u, esSede: !!empresa}); setEmpresaEdit(empresa ? { id: empresa.id, nombre: empresa.nombre } : null); }} style={{ padding:'5px 8px' }}><Pencil size={14} /></Btn>
       <Btn variant="ghost" title={u.bloqueado ? 'Desbloquear' : 'Bloquear'} onClick={() => updateMut.mutate({ id:u.id, data:{ bloqueado: !u.bloqueado } })} style={{ padding:'5px 8px' }}><Lock size={14} /></Btn>
       <Btn variant="danger" title="Eliminar" onClick={() => setShowDel(u)} style={{ padding:'5px 8px' }}><Trash2 size={14} /></Btn>
     </div>
@@ -207,7 +262,12 @@ export default function UsuariosPage() {
           <Td><KycBadge nivel={c.kycNivel||1} /></Td>
           <Td><StatusBadge status={c.bloqueado?'bloqueado':'activo'} /></Td>
           <Td>{celdaKushki(c)}</Td>
-          <Td>{acciones(c)}</Td>
+          <Td>
+            <div style={{ display:'grid', gap:6 }}>
+              {acciones(c)}
+              {c.rol !== 'admin' && <Btn variant="default" onClick={() => abrirNuevo({ id: c.userId, nombre: c.nombre })} style={{ padding:'4px 10px', justifyContent:'center' }} title={`Crear una sede dentro de ${c.nombre}`}>+ Sede</Btn>}
+            </div>
+          </Td>
         </Tr>
       );
       if (!abierta) return [fila];
@@ -233,7 +293,7 @@ export default function UsuariosPage() {
               ? <span style={{ fontSize: 11, color: 'rgba(var(--adm-fg-rgb),.5)' }}>Usa el Branch de {c.nombre}</span>
               : <Etiqueta color="amarillo">Sin permiso de recargar</Etiqueta>}
           </Td>
-          <Td style={fondo}>{acciones(s)}</Td>
+          <Td style={fondo}>{acciones(s, c)}</Td>
         </Tr>
       ))];
     });
@@ -253,7 +313,7 @@ export default function UsuariosPage() {
                   style={{ background:'rgba(var(--adm-card-rgb),.6)', border:'1px solid rgba(133,46,199,.2)', borderRadius:8, padding:'6px 12px 6px 30px', fontSize:12, color:'var(--adm-text)', outline:'none', width:230 }} />
               </div>
               <Btn variant="ghost" onClick={exportarCsv}><Download size={13} /> Exportar CSV</Btn>
-              <Btn variant="primary" onClick={() => setShowNew(true)}>+ Nuevo usuario</Btn>
+              <Btn variant="primary" onClick={() => abrirNuevo()}>+ Nuevo usuario</Btn>
             </>
           }
         />
@@ -295,7 +355,7 @@ export default function UsuariosPage() {
       </Modal>
 
       {/* New user modal */}
-      <Modal open={showNew} onClose={() => setShowNew(false)} title="Nuevo usuario">
+      <Modal open={showNew} onClose={cerrarNuevo} title={esSedeNueva ? 'Nueva sede' : 'Nuevo usuario'}>
         <div>
           <Input label="Nombre completo" value={newUser.nombre} onChange={e => setNewUser(p => ({...p, nombre:e.target.value}))} />
           <Input label="Cédula" value={newUser.cedula} onChange={e => setNewUser(p => ({...p, cedula:e.target.value.replaceAll(/\D/g,'')}))} />
@@ -303,12 +363,27 @@ export default function UsuariosPage() {
           <Input label="Celular (opcional)" value={newUser.celular} onChange={e => setNewUser(p => ({...p, celular:e.target.value.replaceAll(/\D/g,'')}))} />
           <Input label="Ciudad (opcional)" value={newUser.ciudad} onChange={e => setNewUser(p => ({...p, ciudad:e.target.value}))} />
           <Input label="PIN de 4 dígitos" type="password" maxLength={4} value={newUser.pin} onChange={e => setNewUser(p => ({...p, pin:e.target.value.replaceAll(/\D/g,'').slice(0,4)}))} />
-          <Select label="Rol" value={newUser.rol} onChange={e => setNewUser(p => ({...p, rol:e.target.value}))}>
-            <option value="usuario">Usuario</option>
-            <option value="admin">Admin</option>
+          <Select label="Tipo de cuenta" value={esSedeNueva ? 'sede' : 'cuenta'} onChange={e => { setEsSedeNueva(e.target.value === 'sede'); if (e.target.value !== 'sede') setEmpresaNueva(null); }}>
+            <option value="cuenta">Empresa o usuario (cuenta principal, con su propia billetera)</option>
+            <option value="sede">Sede de una empresa (usa la billetera de la empresa)</option>
           </Select>
+          {esSedeNueva && (
+            <>
+              <div style={{ fontSize:11, fontWeight:600, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>Empresa a la que pertenece</div>
+              <div style={{ marginBottom:14 }}><SelectorEmpresa value={empresaNueva} onChange={setEmpresaNueva} /></div>
+              <div style={{ fontSize:11, fontWeight:600, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>Qué puede hacer la sede con el dinero de la empresa</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
+                {ETIQUETAS_PERMISOS.map(([clave, etiqueta]) => (
+                  <label key={clave} style={{ display:'flex', alignItems:'center', gap:8, fontSize:12 }}>
+                    <input type="checkbox" checked={permisos[clave]} onChange={e => setPermisos(p => ({ ...p, [clave]: e.target.checked }))} />
+                    {etiqueta}
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
           <Btn variant="primary" style={{ width:'100%', justifyContent:'center', marginTop:8 }} disabled={createMut.isPending} onClick={submitNewUser}>
-            {createMut.isPending ? 'Creando...' : 'Crear usuario'}
+            {createMut.isPending ? 'Creando...' : esSedeNueva ? 'Crear sede' : 'Crear usuario'}
           </Btn>
         </div>
       </Modal>
@@ -322,8 +397,14 @@ export default function UsuariosPage() {
             <Input label="Celular" value={showEdit.celular||''} onChange={e => setShowEdit((p:any) => ({...p, celular:e.target.value}))} />
             <Input label="Ciudad" value={showEdit.ciudad||''} onChange={e => setShowEdit((p:any) => ({...p, ciudad:e.target.value}))} />
             <Input label="Nuevo PIN (dejar vacío para no cambiar)" type="password" maxLength={4} placeholder="4 dígitos" onChange={e => setShowEdit((p:any) => ({...p, nuevo_pin:e.target.value}))} />
+            {showEdit.esSede && (
+              <>
+                <div style={{ fontSize:11, fontWeight:600, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>Empresa a la que pertenece esta sede</div>
+                <div style={{ marginBottom:14 }}><SelectorEmpresa value={empresaEdit} onChange={setEmpresaEdit} excluir={showEdit.id} /></div>
+              </>
+            )}
             <Btn variant="primary" style={{ width:'100%', justifyContent:'center', marginTop:8 }}
-              onClick={() => updateMut.mutate({ id:showEdit.id, data:{ nombre:showEdit.nombre, correo:showEdit.correo, celular:showEdit.celular, ciudad:showEdit.ciudad, ...(showEdit.nuevo_pin?{nuevo_pin:showEdit.nuevo_pin}:{}) }})}>
+              onClick={() => updateMut.mutate({ id:showEdit.id, data:{ nombre:showEdit.nombre, correo:showEdit.correo, celular:showEdit.celular, ciudad:showEdit.ciudad, ...(showEdit.nuevo_pin?{nuevo_pin:showEdit.nuevo_pin}:{}), ...(showEdit.esSede && empresaEdit ? { cuentaPadreId: empresaEdit.id } : {}) }})}>
               Guardar cambios
             </Btn>
           </div>

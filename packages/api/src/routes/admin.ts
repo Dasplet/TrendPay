@@ -60,13 +60,20 @@ const createUserSchema = z.object({
   pin:     z.string().length(4).regex(/^\d{4}$/),
   celular: z.string().optional(),
   ciudad:  z.string().optional(),
-  rol:     z.enum(['usuario', 'admin']).optional(),
+  // Ya no se crean administradores desde aquí: solo clientes (empresas, usuarios y sedes)
+  rol:     z.literal('usuario', { errorMap: () => ({ message: 'No se pueden crear cuentas de administrador' }) }).optional(),
+  // Si viene, la cuenta es una sede (subcuenta) de esa empresa: no tiene billetera propia y opera sobre la de su padre
+  cuentaPadreId:   z.string().uuid().optional(),
+  permisoVerSaldo: z.boolean().optional(),
+  permisoRecargar: z.boolean().optional(),
+  permisoEnviar:   z.boolean().optional(),
+  permisoRetirar:  z.boolean().optional(),
 });
 
 router.post('/users', authenticate, requireAdmin, async (req: Request, res: Response) => {
   const parse = createUserSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: parse.error.errors[0].message });
-  const { cedula, nombre, correo, pin, celular, ciudad, rol } = parse.data;
+  const { cedula, nombre, correo, pin, celular, ciudad, cuentaPadreId, permisoVerSaldo, permisoRecargar, permisoEnviar, permisoRetirar } = parse.data;
 
   try {
     const exists = await prisma.user.findFirst({ where: { OR: [{ cedula }, { correo }] } });
@@ -75,7 +82,12 @@ router.post('/users', authenticate, requireAdmin, async (req: Request, res: Resp
       return res.status(400).json({ ok: false, mensaje: `Esta ${campo} ya está registrada` });
     }
 
-    const pinHash      = await bcrypt.hash(pin, Number.parseInt(process.env.BCRYPT_ROUNDS || '12'));
+    // Una sede solo puede colgar de una empresa (cuenta padre de un cliente), nunca de otra sede ni de un admin
+    if (cuentaPadreId && !(await cuentaPadreOrNull(cuentaPadreId))) {
+      return res.status(400).json({ ok: false, mensaje: 'La empresa elegida no existe o no puede tener sedes' });
+    }
+
+    const pinHash = await bcrypt.hash(pin, Number.parseInt(process.env.BCRYPT_ROUNDS || '12'));
 
     const user = await prisma.user.create({
       data: {
@@ -84,20 +96,22 @@ router.post('/users', authenticate, requireAdmin, async (req: Request, res: Resp
         celular: celular || null,
         ciudad: ciudad || null,
         pinHash,
-        rol: rol || 'usuario',
-        wallet: { create: { saldo: 0 } },
+        rol: 'usuario',
+        ...(cuentaPadreId
+          ? { cuentaPadreId, permisoVerSaldo, permisoRecargar, permisoEnviar, permisoRetirar }
+          : { wallet: { create: { saldo: 0 } } }),
       },
       include: { wallet: true },
     });
 
     await prisma.auditLog.create({
       data: { userId: req.user!.id, accion: 'CREAR_USUARIO', tabla: 'users', registroId: user.id, ip: req.ip,
-        datos: { despues: { nombre: user.nombre, correo: user.correo, cedula: user.cedula, rol: user.rol } } },
+        datos: { despues: { nombre: user.nombre, correo: user.correo, cedula: user.cedula, rol: user.rol, cuentaPadreId: user.cuentaPadreId } } },
     }).catch(() => {});
 
     res.status(201).json({
-      ok: true, mensaje: 'Usuario creado',
-      usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, saldo: 0 },
+      ok: true, mensaje: cuentaPadreId ? 'Sede creada' : 'Usuario creado',
+      usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, cuentaPadreId: user.cuentaPadreId, saldo: 0 },
     });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
@@ -108,10 +122,30 @@ router.put('/users/:id', authenticate, requireAdmin, async (req: Request, res: R
     const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado' });
 
-    const { nombre, correo, celular, ciudad, bloqueado, kycNivel, nuevo_pin } = req.body;
+    const { nombre, correo, celular, ciudad, bloqueado, kycNivel, nuevo_pin, cuentaPadreId } = req.body;
     const data: any = {};
     const antes: any = {};
     const despues: any = {};
+
+    // Pasar una sede a otra empresa. Solo las cuentas que YA son sede: convertir una cuenta con billetera propia
+    // en sede haría perder su saldo. Y no mientras tenga operaciones en curso, porque se acreditarían a la
+    // empresa equivocada (o con las llaves de Kushki de la anterior).
+    if (cuentaPadreId !== undefined && cuentaPadreId !== existing.cuentaPadreId) {
+      if (existing.cuentaPadreId === null) {
+        return res.status(400).json({ ok: false, mensaje: 'Solo se puede cambiar de empresa a una cuenta que ya es sede' });
+      }
+      if (typeof cuentaPadreId !== 'string' || cuentaPadreId === existing.id || !(await cuentaPadreOrNull(cuentaPadreId))) {
+        return res.status(400).json({ ok: false, mensaje: 'La empresa elegida no existe o no puede tener sedes' });
+      }
+      const [pagos, retiros] = await Promise.all([
+        prisma.kushkiPayment.count({ where: { userId: existing.id, estado: 'pendiente' } }),
+        prisma.withdrawal.count({ where: { userId: existing.id, status: { in: ['pendiente', 'en_proceso'] } } }),
+      ]);
+      if (pagos + retiros > 0) {
+        return res.status(409).json({ ok: false, mensaje: `Esta sede tiene ${pagos + retiros} operación(es) en curso. Espera a que terminen para cambiarla de empresa` });
+      }
+      data.cuentaPadreId = cuentaPadreId; antes.cuentaPadreId = existing.cuentaPadreId; despues.cuentaPadreId = cuentaPadreId;
+    }
     if (nombre    !== undefined && nombre    !== existing.nombre)    { data.nombre    = nombre;    antes.nombre = existing.nombre;       despues.nombre = nombre; }
     if (correo    !== undefined && correo    !== existing.correo)    { data.correo    = correo;    antes.correo = existing.correo;       despues.correo = correo; }
     if (celular   !== undefined && celular   !== existing.celular)   { data.celular   = celular;   antes.celular = existing.celular;     despues.celular = celular; }
