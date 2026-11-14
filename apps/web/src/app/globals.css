@@ -107,6 +107,11 @@ input, select, textarea {
   transition: border-color .2s;
   font-family: inherit;
 }
+/* Casillas y opciones: no deben heredar el ancho ni el relleno de los campos de texto */
+input[type="checkbox"], input[type="radio"] {
+  width: 18px; height: 18px; padding: 0; flex: none; margin: 0;
+  accent-color: #852EC7; cursor: pointer; border-radius: 5px;
+}
 input:focus, select:focus { border-color: #852EC7; }
 input::placeholder { color: rgba(174,147,170,.5); }
 

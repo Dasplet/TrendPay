@@ -22,7 +22,12 @@ const LIMITE = 50;
 const NUEVO = { nombre:'', cedula:'', correo:'', celular:'', ciudad:'', pin:'' };
 // Permisos con los que nace una sede: ve el saldo y recarga; enviar y retirar se activan a propósito
 const PERMISOS_SEDE = { permisoVerSaldo: true, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false };
-const ETIQUETAS_PERMISOS: [keyof typeof PERMISOS_SEDE, string][] = [['permisoVerSaldo','Ver el saldo'],['permisoRecargar','Recargar'],['permisoEnviar','Enviar'],['permisoRetirar','Retirar']];
+const ETIQUETAS_PERMISOS: [keyof typeof PERMISOS_SEDE, string, string][] = [
+  ['permisoVerSaldo', 'Ver el saldo', 'Consulta el saldo de la empresa'],
+  ['permisoRecargar', 'Recargar', 'Consigna y genera QR de cobro'],
+  ['permisoEnviar',   'Enviar',     'Envía dinero a otras cuentas'],
+  ['permisoRetirar',  'Retirar',    'Retira dinero a un banco'],
+];
 type Empresa = { id: string; nombre: string };
 const SIN_LLAVES = { publicMerchantId: '', privateMerchantId: '', ambiente: 'produccion', activo: true };
 const LLAVE = /^[A-Za-z0-9]{20,64}$/;
@@ -372,13 +377,21 @@ export default function UsuariosPage() {
               <div style={{ fontSize:11, fontWeight:600, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>Empresa a la que pertenece</div>
               <div style={{ marginBottom:14 }}><SelectorEmpresa value={empresaNueva} onChange={setEmpresaNueva} /></div>
               <div style={{ fontSize:11, fontWeight:600, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>Qué puede hacer la sede con el dinero de la empresa</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:14 }}>
-                {ETIQUETAS_PERMISOS.map(([clave, etiqueta]) => (
-                  <label key={clave} style={{ display:'flex', alignItems:'center', gap:8, fontSize:12 }}>
-                    <input type="checkbox" checked={permisos[clave]} onChange={e => setPermisos(p => ({ ...p, [clave]: e.target.checked }))} />
-                    {etiqueta}
-                  </label>
-                ))}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(190px, 1fr))', gap:10, marginBottom:16 }}>
+                {ETIQUETAS_PERMISOS.map(([clave, etiqueta, ayuda]) => {
+                  const activo = permisos[clave];
+                  return (
+                    <label key={clave} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', borderRadius:12, cursor:'pointer', userSelect:'none',
+                      border: activo ? '1.5px solid #852EC7' : '1.5px solid rgba(var(--adm-fg-rgb),.12)',
+                      background: activo ? 'rgba(133,46,199,.14)' : 'rgba(var(--adm-card-rgb),.45)', transition:'all .15s' }}>
+                      <input type="checkbox" checked={activo} onChange={e => setPermisos(p => ({ ...p, [clave]: e.target.checked }))} />
+                      <span style={{ display:'block', minWidth:0 }}>
+                        <span style={{ display:'block', fontSize:13, fontWeight:700, color:'var(--adm-text)' }}>{etiqueta}</span>
+                        <span style={{ display:'block', fontSize:11, color:'var(--adm-muted)', marginTop:2 }}>{ayuda}</span>
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
             </>
           )}
@@ -442,7 +455,7 @@ export default function UsuariosPage() {
           <option value="produccion">Producción (console.kushkipagos.com)</option>
           <option value="pruebas">Pruebas (UAT)</option>
         </Select>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 16 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, marginBottom: 16, cursor: 'pointer' }}>
           <input type="checkbox" checked={llaves.activo} onChange={(e) => setLlaves((f) => ({ ...f, activo: e.target.checked }))} />
           Activo (la empresa y sus sedes pueden generar QR)
         </label>
