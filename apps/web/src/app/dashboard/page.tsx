@@ -10,21 +10,15 @@ import { EmptyState, StatusPill, UserAvatar, compactCOP, firstName, fmtCOP } fro
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { puede, type Permiso } from '@/lib/permisos';
 
-const CHART_MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
-
-function monthlyPath(values: number[]) {
+// Puntos de la gráfica (coordenadas del viewBox 100×52). La línea, el área y los puntos usan los mismos.
+function chartPoints(values: number[]) {
   const max = Math.max(...values, 1);
   const min = Math.min(...values, 0);
-  const width = 100;
-  const height = 44;
-  const step = width / (values.length - 1);
-  return values
-    .map((value, index) => {
-      const x = index * step;
-      const y = height - ((value - min) / Math.max(max - min, 1)) * 34 - 5;
-      return `${index === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
+  const step = values.length > 1 ? 100 / (values.length - 1) : 0;
+  return values.map((value, index) => ({
+    x: index * step,
+    y: 39 - ((value - min) / Math.max(max - min, 1)) * 34,
+  }));
 }
 
 export default function DashboardPage() {
@@ -32,6 +26,17 @@ export default function DashboardPage() {
   const [showBalance, setShowBalance] = useState(true);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const queryClient = useQueryClient();
+  const verSaldo = puede(user, 'verSaldo');
+
+  const { data: mensual } = useQuery({
+    queryKey: ['wallet-saldo-mensual', user?.id],
+    queryFn: () => walletApi.saldoMensual(6),
+    select: (res) => res.data,
+    enabled: !!user && verSaldo,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    retry: false,
+  });
 
   const { data: history } = useQuery({
     queryKey: ['wallet-history-home'],
@@ -69,11 +74,17 @@ export default function DashboardPage() {
   });
 
   const txs = history?.transacciones || [];
-  const received = txs.filter((t: any) => Number(t.monto_neto) > 0).reduce((s: number, t: any) => s + Number(t.monto_neto || 0), 0);
-  const withdrawn = txs.filter((t: any) => Number(t.monto_neto) < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.monto_neto || 0)), 0);
 
-  const chart = useMemo(() => [120000, 180000, 95000, 310000, 210000, 285400], []);
-  const path = monthlyPath(chart);
+  // Totales y gráfica reales del mes (se refrescan solos cada 30 s y al volver a la pestaña).
+  const mesActual = mensual?.mesActual;
+  const received = Number(mesActual?.recibido ?? 0);
+  const withdrawn = Number(mesActual?.retirado ?? 0);
+
+  const meses: { clave: string; etiqueta: string; saldo: number }[] = mensual?.meses || [];
+  const chart = useMemo(() => meses.map((m) => Number(m.saldo)), [meses]);
+  const points = useMemo(() => chartPoints(chart), [chart]);
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const variacion: number | null = typeof mensual?.variacionPct === 'number' ? mensual.variacionPct : null;
 
   const allActions: { label: string; icon: React.ReactNode; href: string; tone: string; permiso: Permiso }[] = [
     { label: 'Consignar', icon: <QrCode size={30} />, href: '/dashboard/consignar', tone: 'purple', permiso: 'recargar' },
@@ -83,7 +94,6 @@ export default function DashboardPage() {
     { label: 'Retirar', icon: <Building2 size={30} />, href: '/dashboard/retirar-banco', tone: 'red', permiso: 'retirar' },
   ];
   const actions = allActions.filter((a) => puede(user, a.permiso));
-  const verSaldo = puede(user, 'verSaldo');
 
   return (
     <div className="tp-user-page">
@@ -166,7 +176,9 @@ export default function DashboardPage() {
         {!verSaldo && <small>Tu subcuenta no tiene permiso para ver el saldo</small>}
         <div className="tp-balance-footer">
           <StatusPill tone="success">Verificada</StatusPill>
-          <span><TrendingUp size={16} /> +18% mes</span>
+          {verSaldo && variacion !== null && (
+            <span><TrendingUp size={16} /> {variacion > 0 ? '+' : ''}{variacion.toLocaleString('es-CO')}% mes</span>
+          )}
         </div>
       </section>
 
@@ -181,14 +193,14 @@ export default function DashboardPage() {
 
       <section className="tp-stat-row">
         <article className="tp-stat-card">
-          <span>Recibido</span>
-          <strong className="tp-success">{fmtCOP(received)}</strong>
-          <small>{txs.filter((t: any) => Number(t.monto_neto) > 0).length} movimientos</small>
+          <span>Recibido este mes</span>
+          <strong className="tp-success">{verSaldo ? fmtCOP(received) : '••••••'}</strong>
+          <small>{verSaldo ? `${mesActual?.movimientos ?? 0} movimientos en el mes` : 'Sin permiso para ver saldos'}</small>
         </article>
         <article className="tp-stat-card">
-          <span>Retirado a bancos</span>
-          <strong className="tp-danger">{fmtCOP(withdrawn)}</strong>
-          <small>{txs.filter((t: any) => String(t.tipo || '').includes('RETIRO')).length} retiros</small>
+          <span>Retirado este mes</span>
+          <strong className="tp-danger">{verSaldo ? fmtCOP(withdrawn) : '••••••'}</strong>
+          <small>{verSaldo ? 'Retiros a bancos' : 'Sin permiso para ver saldos'}</small>
         </article>
       </section>
 
@@ -198,26 +210,39 @@ export default function DashboardPage() {
           <button><Download size={18} /></button>
         </div>
         <div className="tp-chart-card">
-          <svg viewBox="0 0 100 52" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="tpArea" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#852EC7" stopOpacity="0.45" />
-                <stop offset="100%" stopColor="#852EC7" stopOpacity="0.02" />
-              </linearGradient>
-            </defs>
-            <path d={`${path} L100,52 L0,52 Z`} fill="url(#tpArea)" />
-            <path d={path} fill="none" stroke="#9b35e7" strokeWidth="1.3" vectorEffect="non-scaling-stroke" />
-            {chart.map((value, index) => {
-              const max = Math.max(...chart, 1);
-              const min = Math.min(...chart, 0);
-              const x = index * (100 / (chart.length - 1));
-              const y = 44 - ((value - min) / Math.max(max - min, 1)) * 34 + 3;
-              return <circle key={CHART_MONTHS[index]} cx={x} cy={y} r="1.1" fill="#9b35e7" />;
-            })}
-          </svg>
-          <div className="tp-chart-labels">
-            {CHART_MONTHS.map((month) => <span key={month}>{month}</span>)}
-          </div>
+          {!verSaldo ? (
+            <p style={{ padding: '32px 16px', textAlign: 'center', opacity: 0.7 }}>Tu subcuenta no tiene permiso para ver el saldo</p>
+          ) : meses.length === 0 ? (
+            <p style={{ padding: '32px 16px', textAlign: 'center', opacity: 0.7 }}>Cargando…</p>
+          ) : (
+            <>
+              <svg viewBox="0 0 100 52" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+                <defs>
+                  <linearGradient id="tpArea" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#852EC7" stopOpacity="0.45" />
+                    <stop offset="100%" stopColor="#852EC7" stopOpacity="0.02" />
+                  </linearGradient>
+                </defs>
+                <path d={`${path} L100,52 L0,52 Z`} fill="url(#tpArea)" />
+                <path d={path} fill="none" stroke="#9b35e7" strokeWidth="1.3" vectorEffect="non-scaling-stroke" />
+                {points.map((p, index) => (
+                  <path
+                    key={meses[index].clave}
+                    d={`M${p.x.toFixed(1)},${p.y.toFixed(1)} h0.001`}
+                    stroke="#9b35e7"
+                    strokeWidth="7"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                  >
+                    <title>{`${meses[index].etiqueta}: ${fmtCOP(meses[index].saldo)}`}</title>
+                  </path>
+                ))}
+              </svg>
+              <div className="tp-chart-labels">
+                {meses.map((m) => <span key={m.clave}>{m.etiqueta}</span>)}
+              </div>
+            </>
+          )}
         </div>
       </section>
 

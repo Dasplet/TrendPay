@@ -88,6 +88,7 @@ export const bankAccountsApi = {
 
 export const walletApi = {
   balance:    () => api.get('/wallet/balance'),
+  saldoMensual: (meses = 6) => api.get('/wallet/saldo-mensual', { params: { meses } }),
   history:    (params?: any) => api.get('/wallet/history', { params }),
   send:       (data: any) => api.post('/wallet/enviar', data),
   qrGenerar:  (data: any) => api.post('/wallet/qr/generar', data),

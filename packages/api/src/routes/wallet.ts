@@ -61,6 +61,73 @@ router.get('/history', authenticate, conCuenta(), async (req: Request, res: Resp
   }
 });
 
+// ══ GET /api/wallet/saldo-mensual ══
+// Saldo real al cierre de cada mes (hora de Colombia, UTC-5 sin horario de verano) a partir de las
+// transacciones de la billetera. El mes en curso usa el saldo actual. Devuelve además lo recibido y
+// retirado en el mes en curso y la variación contra el cierre del mes anterior.
+const MESES_ES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const DESFASE_COLOMBIA_MS = 5 * 60 * 60 * 1000;
+
+function indiceMes(fecha: Date): number {
+  const local = new Date(fecha.getTime() - DESFASE_COLOMBIA_MS);
+  return local.getUTCFullYear() * 12 + local.getUTCMonth();
+}
+
+function inicioDeMes(indice: number): Date {
+  return new Date(Date.UTC(Math.floor(indice / 12), indice % 12, 1) + DESFASE_COLOMBIA_MS);
+}
+
+router.get('/saldo-mensual', authenticate, conCuenta('verSaldo'), async (req: Request, res: Response) => {
+  try {
+    const cantidad = Math.min(Math.max(Number(req.query.meses) || 6, 2), 12);
+    const wallet = await prisma.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
+    if (!wallet) return res.status(404).json({ ok: false, mensaje: 'Billetera no encontrada' });
+
+    const actual = indiceMes(new Date());
+    const primero = actual - cantidad + 1;
+    const desde = inicioDeMes(primero);
+
+    const [previa, movimientos] = await Promise.all([
+      prisma.transaction.findFirst({ where: { walletId: wallet.id, createdAt: { lt: desde } }, orderBy: { createdAt: 'desc' }, select: { saldoDespues: true } }),
+      prisma.transaction.findMany({
+        where: { walletId: wallet.id, createdAt: { gte: desde } },
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true, saldoDespues: true, montoNeto: true, categoria: true, status: true },
+      }),
+    ]);
+
+    const cierre = new Map<number, number>();
+    let recibido = 0;
+    let retirado = 0;
+    for (const t of movimientos) {
+      const i = indiceMes(t.createdAt);
+      cierre.set(i, Number.parseFloat(t.saldoDespues.toString()));
+      if (i !== actual) continue;
+      const neto = Number.parseFloat(t.montoNeto.toString());
+      if (t.status === 'rechazada') continue;
+      if (t.categoria === 'retiro') retirado += Math.abs(neto);
+      else if (neto > 0) recibido += neto;
+    }
+
+    const saldoActual = Number.parseFloat(wallet.saldo.toString());
+    let arrastre = previa ? Number.parseFloat(previa.saldoDespues.toString()) : 0;
+    const meses = [] as { clave: string; etiqueta: string; saldo: number }[];
+    for (let i = primero; i <= actual; i++) {
+      if (cierre.has(i)) arrastre = cierre.get(i)!;
+      const saldo = i === actual ? saldoActual : arrastre;
+      meses.push({ clave: `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`, etiqueta: MESES_ES[i % 12], saldo });
+    }
+
+    const anterior = meses[meses.length - 2]?.saldo ?? 0;
+    const variacionPct = anterior > 0 ? Math.round(((saldoActual - anterior) / anterior) * 1000) / 10 : null;
+
+    res.json({ ok: true, meses, mesActual: { recibido, retirado, movimientos: movimientos.filter((t) => indiceMes(t.createdAt) === actual).length }, variacionPct });
+  } catch (err: any) {
+    logger.error('Error consultando saldo mensual', { err: err.message, userId: req.user?.id });
+    res.status(500).json({ ok: false, mensaje: 'Error consultando el saldo mensual' });
+  }
+});
+
 // ══ POST /api/wallet/enviar ══
 const enviarSchema = z.object({
   destino: z.string().min(3).max(120),

@@ -196,4 +196,56 @@ describe('Wallet API', () => {
       expect(res.body.transacciones[0].monto_bruto).toBe(2000); // el más reciente primero
     });
   });
+
+  describe('GET /api/wallet/saldo-mensual', () => {
+    // Mediodía de Colombia (17:00 UTC) del día 15 de hace `atras` meses.
+    function quinceDeHace(atras: number) {
+      const local = new Date(Date.now() - 5 * 60 * 60 * 1000);
+      return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth() - atras, 15, 17));
+    }
+
+    async function crearTx(u: any, codigo: string, categoria: string, neto: number, antes: number, despues: number, createdAt?: Date) {
+      await prisma.transaction.create({
+        data: {
+          walletId: u.wallet.id, userId: u.id, codigo, categoria, descripcion: codigo,
+          montoBruto: Math.abs(neto), montoNeto: neto, saldoAntes: antes, saldoDespues: despues, createdAt,
+        },
+      });
+    }
+
+    it('devuelve el saldo real al cierre de cada mes, el mes en curso con el saldo actual', async () => {
+      const u = await crearUsuarioDePrueba({ saldo: 40000 });
+      await crearTx(u, 'SM-1', 'consigna', 30000, 0, 30000, quinceDeHace(2));
+      await crearTx(u, 'SM-2', 'consigna', 20000, 30000, 50000, quinceDeHace(1));
+      await crearTx(u, 'SM-3', 'retiro', -10000, 50000, 40000);
+
+      const res = await request(app).get('/api/wallet/saldo-mensual').set('Authorization', `Bearer ${tokenPara(u)}`);
+      expect(res.status).toBe(200);
+      const saldos = res.body.meses.map((m: any) => m.saldo);
+      expect(saldos).toEqual([0, 0, 0, 30000, 50000, 40000]);
+      expect(res.body.mesActual).toEqual({ recibido: 0, retirado: 10000, movimientos: 1 });
+      expect(res.body.variacionPct).toBe(-20);
+    });
+
+    it('sin movimientos devuelve ceros y sin variación', async () => {
+      const u = await crearUsuarioDePrueba({ saldo: 0 });
+      const res = await request(app).get('/api/wallet/saldo-mensual?meses=3').set('Authorization', `Bearer ${tokenPara(u)}`);
+      expect(res.status).toBe(200);
+      expect(res.body.meses).toHaveLength(3);
+      expect(res.body.meses.every((m: any) => m.saldo === 0)).toBe(true);
+      expect(res.body.variacionPct).toBeNull();
+    });
+
+    it('arrastra el saldo de meses sin movimientos y excluye lo rechazado de lo recibido', async () => {
+      const u = await crearUsuarioDePrueba({ saldo: 5000 });
+      await crearTx(u, 'SM-4', 'consigna', 5000, 0, 5000, quinceDeHace(4));
+      await crearTx(u, 'SM-5', 'consigna', 9000, 5000, 5000, undefined); // rechazada: no cuenta
+      await prisma.transaction.update({ where: { codigo: 'SM-5' }, data: { status: 'rechazada' } });
+
+      const res = await request(app).get('/api/wallet/saldo-mensual').set('Authorization', `Bearer ${tokenPara(u)}`);
+      expect(res.body.meses.map((m: any) => m.saldo)).toEqual([0, 5000, 5000, 5000, 5000, 5000]);
+      expect(res.body.mesActual.recibido).toBe(0);
+      expect(res.body.variacionPct).toBe(0);
+    });
+  });
 });

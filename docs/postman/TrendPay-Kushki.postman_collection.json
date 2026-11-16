@@ -121,7 +121,7 @@
             "description": "Token de un solo uso (vence en 30 min). Si el comercio es multiprocesador, agrega `processor: { \"name\": \"Pse Processor\" }`.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"bankId\": \"{{bank_id}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": \"{{monto}}\",\n    \"iva\": 0\n  },\n  \"callbackUrl\": \"{{frontend_url}}/dashboard/consignar/pse-resultado\",\n  \"userType\": \"0\",\n  \"documentType\": \"CC\",\n  \"documentNumber\": \"{{documento}}\",\n  \"paymentDescription\": \"Consignación TrendPay\",\n  \"email\": \"{{correo}}\",\n  \"currency\": \"COP\"\n}",
+              "raw": "{\n  \"bankId\": \"{{bank_id}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0,\n    \"extraTaxes\": {\n      \"tasaAeroportuaria\": 0,\n      \"agenciaDeViajes\": 0,\n      \"iac\": 0\n    }\n  },\n  \"callbackUrl\": \"{{frontend_url}}/dashboard/consignar/pse-resultado\",\n  \"userType\": \"0\",\n  \"documentType\": \"CC\",\n  \"documentNumber\": \"{{documento}}\",\n  \"paymentDescription\": \"Consignación TrendPay\",\n  \"email\": \"{{correo}}\",\n  \"currency\": \"COP\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -172,7 +172,7 @@
             "description": "El nombre del procesador se copia de la respuesta del paso 1. No lleva bankId. Va desde el backend: Kushki.js no soporta `processor`.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": \"{{monto}}\",\n    \"iva\": 0\n  },\n  \"currency\": \"COP\",\n  \"processor\": {\n    \"name\": \"{{breb_processor}}\",\n    \"channel\": \"QR\"\n  }\n}",
+              "raw": "{\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  },\n  \"currency\": \"COP\",\n  \"processor\": {\n    \"name\": \"{{breb_processor}}\",\n    \"channel\": \"QR\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -223,7 +223,7 @@
             "description": "PSE devuelve `redirectUrl`; Bre-B devuelve `qr` (PNG en base64 como data URI, vence en 10 min). El monto debe ser el mismo del token.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"token\": \"{{token}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": \"{{monto}}\",\n    \"iva\": 0\n  }\n}",
+              "raw": "{\n  \"token\": \"{{token}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
