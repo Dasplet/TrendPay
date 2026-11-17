@@ -74,6 +74,75 @@ describe('Bre-B: token, init y disponibilidad', () => {
     expect(Object.keys(opciones.headers)).toContain('Private-Merchant-Id');
   });
 
+  describe('webhooks en el init', () => {
+    const URL_PAYOUT = 'https://api.trendpay.test/api/kushki/webhooks/payout';
+    const URL_TI = 'https://api.trendpay.test/api/kushki/webhooks/transfer-in';
+    const respuestaInit = (url: string) => String(url).endsWith('/tokens') ? { data: { token: 'tok_breb' } } : { data: { qr: QR, ticketNumber: 'T1' } };
+    afterEach(() => {
+      delete process.env.KUSHKI_WEBHOOK_URL;
+      delete process.env.KUSHKI_WEBHOOK_URL_TRANSFER_IN;
+      delete process.env.KUSHKI_WEBHOOK_TRANSFER_IN;
+    });
+
+    it('sin URL configurada el init va sin webhooks', async () => {
+      http.get.mockResolvedValue(CONFIG);
+      http.post.mockImplementation(async (url: string) => respuestaInit(url));
+      await iniciarPagoBreB(10000);
+      expect(posts()[1][1]).not.toHaveProperty('webhooks');
+    });
+
+    it('deriva la URL de consignaciones de la de retiros y la manda en el init', async () => {
+      process.env.KUSHKI_WEBHOOK_URL = URL_PAYOUT;
+      http.get.mockResolvedValue(CONFIG);
+      http.post.mockImplementation(async (url: string) => respuestaInit(url));
+      await iniciarPagoBreB(10000);
+      expect(posts()[1][1].webhooks).toEqual([{ events: ['approvedTransaction', 'declinedTransaction'], urls: [URL_TI] }]);
+    });
+
+    it('la variable propia manda sobre la derivada, y KUSHKI_WEBHOOK_TRANSFER_IN=false lo apaga', async () => {
+      process.env.KUSHKI_WEBHOOK_URL = URL_PAYOUT;
+      process.env.KUSHKI_WEBHOOK_URL_TRANSFER_IN = 'https://otro.trendpay.test/hook';
+      http.get.mockResolvedValue(CONFIG);
+      http.post.mockImplementation(async (url: string) => respuestaInit(url));
+      await iniciarPagoBreB(10000);
+      expect(posts()[1][1].webhooks[0].urls).toEqual(['https://otro.trendpay.test/hook']);
+
+      http.post.mockClear();
+      process.env.KUSHKI_WEBHOOK_TRANSFER_IN = 'false';
+      await iniciarPagoBreB(10000);
+      expect(posts()[1][1]).not.toHaveProperty('webhooks');
+    });
+
+    it('si Kushki rechaza el campo con T001 repite el init sin webhooks y entrega el QR', async () => {
+      process.env.KUSHKI_WEBHOOK_URL = URL_PAYOUT;
+      http.get.mockResolvedValue(CONFIG);
+      let intentos = 0;
+      http.post.mockImplementation(async (url: string) => {
+        if (String(url).endsWith('/tokens')) return { data: { token: 'tok_breb' } };
+        intentos += 1;
+        if (intentos === 1) throw { message: 'x', response: { status: 400, data: { code: 'T001', message: 'Cuerpo de la petición inválido.' } } };
+        return { data: { qr: QR } };
+      });
+      const r = await iniciarPagoBreB(10000);
+      expect(r.qr).toBe(QR);
+      const inits = posts().filter(([u]) => String(u).endsWith('/init'));
+      expect(inits).toHaveLength(2);
+      expect(inits[0][1]).toHaveProperty('webhooks');
+      expect(inits[1][1]).not.toHaveProperty('webhooks');
+    });
+
+    it('otros errores del init no se reintentan', async () => {
+      process.env.KUSHKI_WEBHOOK_URL = URL_PAYOUT;
+      http.get.mockResolvedValue(CONFIG);
+      http.post.mockImplementation(async (url: string) => {
+        if (String(url).endsWith('/tokens')) return { data: { token: 'tok_breb' } };
+        throw { message: 'x', response: { status: 400, data: { code: 'T324', message: 'El procesador indicado no está habilitado para el comercio' } } };
+      });
+      await expect(iniciarPagoBreB(10000)).rejects.toMatchObject({ status: 400, codigo: 'T324' });
+      expect(posts().filter(([u]) => String(u).endsWith('/init'))).toHaveLength(1);
+    });
+  });
+
   it('rechaza un "qr" que no sea una imagen en data URI (va a un atributo src)', async () => {
     http.get.mockResolvedValue(CONFIG);
     http.post.mockImplementation(async (url: string) => String(url).endsWith('/tokens')

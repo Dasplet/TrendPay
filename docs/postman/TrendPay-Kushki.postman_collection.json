@@ -223,7 +223,7 @@
             "description": "PSE devuelve `redirectUrl`; Bre-B devuelve `qr` (PNG en base64 como data URI, vence en 10 min). El monto debe ser el mismo del token.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"token\": \"{{token}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  }\n}",
+              "raw": "{\n  \"token\": \"{{token}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  },\n  \"webhooks\": [\n    {\n      \"events\": [\n        \"approvedTransaction\",\n        \"declinedTransaction\"\n      ],\n      \"urls\": [\n        \"{{webhook_url_transfer_in}}\"\n      ]\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -724,6 +724,10 @@
     {
       "key": "webhook_url",
       "value": "https://trendpay-api-production.up.railway.app/api/kushki/webhooks/payout"
+    },
+    {
+      "key": "webhook_url_transfer_in",
+      "value": "https://trendpay-api-production.up.railway.app/api/kushki/webhooks/transfer-in"
     },
     {
       "key": "trendpay_api",

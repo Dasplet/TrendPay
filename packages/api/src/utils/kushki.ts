@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { logger } from './logger';
 
 const BASE_URL            = process.env.KUSHKI_BASE_URL || 'https://api-uat.kushkipagos.com';
 const PRIVATE_MERCHANT_ID = process.env.KUSHKI_PRIVATE_MERCHANT_ID || '';
@@ -234,15 +235,37 @@ export interface PagoBreB {
 
 const QR_VALIDO = /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/;
 
+// Webhook por API de las consignaciones (Bre-B / PSE): se envía en el init para que Kushki avise a TrendPay cuando
+// el pago cambia de estado. La URL es KUSHKI_WEBHOOK_URL_TRANSFER_IN o, si no existe, la de retiros
+// (KUSHKI_WEBHOOK_URL, que termina en /webhooks/payout) cambiando el final por /webhooks/transfer-in.
+// KUSHKI_WEBHOOK_TRANSFER_IN=false lo apaga. Si Kushki rechaza el campo (T001) el init se repite sin él, así un
+// ambiente que no lo admita nunca deja a un cliente sin QR.
+export function webhooksTransferIn(): { webhooks?: { events: string[]; urls: string[] }[] } {
+  if (process.env.KUSHKI_WEBHOOK_TRANSFER_IN === 'false') return {};
+  const limpia = (v?: string) => v?.trim().replace(/^["']|["']$/g, '');
+  const explicita = limpia(process.env.KUSHKI_WEBHOOK_URL_TRANSFER_IN);
+  const derivada = limpia(process.env.KUSHKI_WEBHOOK_URL)?.replace(/\/webhooks\/payout\/?$/, '/webhooks/transfer-in');
+  const url = explicita || (derivada && /\/webhooks\/transfer-in$/.test(derivada) ? derivada : undefined);
+  if (!url || !/^https?:\/\//i.test(url)) return {};
+  return { webhooks: [{ events: EVENTOS_WEBHOOK_DISPERSION, urls: [url] }] };
+}
+
 export async function iniciarPagoBreB(montoCop: number, cred: CredencialesKushki = credencialesGlobales()): Promise<PagoBreB> {
   const t = await solicitarTokenBreB(montoCop, cred);
   if (!t.token) throw new KushkiError('Kushki no entregó el token de Bre-B', 502, { respuesta: { etapa: 'token-bre-b', data: t.respuesta } });
+  const cuerpoBase = { token: t.token, amount: { subtotalIva: 0, subtotalIva0: montoCop, iva: 0 } };
+  const opciones = { headers: { 'Private-Merchant-Id': cred.privateId, 'Content-Type': 'application/json' } };
+  const hooks = webhooksTransferIn();
   try {
-    const { data } = await axios.post(
-      `${cred.baseUrl}/transfer/v1/init`,
-      { token: t.token, amount: { subtotalIva: 0, subtotalIva0: montoCop, iva: 0 } },
-      { headers: { 'Private-Merchant-Id': cred.privateId, 'Content-Type': 'application/json' } },
-    );
+    let data: any;
+    try {
+      ({ data } = await axios.post(`${cred.baseUrl}/transfer/v1/init`, { ...cuerpoBase, ...hooks }, opciones));
+    } catch (err: any) {
+      // El token no se consume cuando Kushki rechaza el cuerpo (T001), por eso se puede reintentar sin webhooks
+      if (!hooks.webhooks || err?.response?.status !== 400 || err?.response?.data?.code !== 'T001') throw err;
+      logger.warn('Kushki rechazó el campo webhooks en el init de Bre-B; se reintenta sin él', { respuesta: err.response?.data });
+      ({ data } = await axios.post(`${cred.baseUrl}/transfer/v1/init`, cuerpoBase, opciones));
+    }
     // Solo se acepta una imagen en data URI: el valor termina en el atributo src del navegador del cliente
     if (typeof data?.qr !== 'string' || !QR_VALIDO.test(data.qr)) {
       throw new KushkiError('Kushki no devolvió el código QR', 502, { respuesta: { etapa: 'init-bre-b', httpStatus: 201, campos: Object.keys(data ?? {}) } });
