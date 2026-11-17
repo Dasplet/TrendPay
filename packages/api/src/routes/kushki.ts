@@ -82,6 +82,62 @@ router.post('/webhooks/payout', webhookLimiter, async (req: Request, res: Respon
   }
 });
 
+// ══ POST /api/kushki/webhooks/transfer-in ══
+// Aviso de Kushki cuando una consignación por transferencia (Bre-B por QR o PSE) cambia de estado. Misma firma
+// HMAC que el de retiros. El aviso solo identifica el pago (por su token o ticket): el resultado se confirma
+// siempre consultando la API de Kushki con las llaves con las que se creó el pago, así que un aviso falso o con
+// un formato distinto no puede acreditar nada. Si no coincide con ningún pago se responde 200 (p. ej. la prueba
+// de validación de Kushki); si falla el procesamiento se responde 500 para que Kushki reintente, y mientras tanto
+// la conciliación periódica y la consulta de la pantalla también cierran el pago.
+router.post('/webhooks/transfer-in', webhookLimiter, async (req: Request, res: Response) => {
+  const secreto = process.env.KUSHKI_WEBHOOK_SECRET;
+  if (!secreto) {
+    logger.error('Webhook de Kushki (transfer-in) recibido sin KUSHKI_WEBHOOK_SECRET configurado');
+    await registrarWebhook(req, { firmaValida: false, estadoHttp: 503, detalle: 'Sin KUSHKI_WEBHOOK_SECRET en el servidor' });
+    return res.status(503).json({ ok: false });
+  }
+
+  const cuerpoCrudo = (req as Request & { rawBody?: Buffer }).rawBody;
+  const firmaOk = !!cuerpoCrudo && firmaKushkiValida(
+    cuerpoCrudo,
+    { id: req.get('x-kushki-id'), firma: req.get('x-kushki-signature'), firmaSimple: req.get('x-kushki-simplesignature') },
+    secreto
+  );
+  const cuerpo: Record<string, any> = req.body && typeof req.body === 'object' ? req.body : {};
+  const ticket = typeof cuerpo.ticketNumber === 'string' && cuerpo.ticketNumber ? (cuerpo.ticketNumber as string) : null;
+  if (!firmaOk) {
+    logger.warn('Webhook de Kushki (transfer-in) con firma inválida', { ip: req.ip });
+    const motivo = req.get('x-kushki-signature') || req.get('x-kushki-simplesignature')
+      ? 'Firma inválida: el secreto o el formato de la firma no coinciden'
+      : 'Sin firma: la llamada no trae X-Kushki-Signature ni X-Kushki-SimpleSignature';
+    await registrarWebhook(req, { ticket, firmaValida: false, estadoHttp: 401, detalle: motivo });
+    return res.status(401).json({ ok: false });
+  }
+
+  try {
+    const candidatos = [cuerpo.token, cuerpo.data?.token, cuerpo.ticketNumber, cuerpo.data?.ticketNumber]
+      .filter((v): v is string => typeof v === 'string' && v.length >= 6 && v.length <= 120);
+    const pago = candidatos.length
+      ? await prisma.kushkiPayment.findFirst({ where: { metodo: { in: ['pse', 'breb'] }, OR: [{ reference: { in: candidatos } }, { ticketNumber: { in: candidatos } }] } })
+      : null;
+    if (!pago) {
+      await registrarWebhook(req, { ticket, firmaValida: true, estadoHttp: 200, detalle: 'Firma válida pero no coincide con ningún pago de TrendPay' });
+      return res.status(200).json({ ok: true });
+    }
+    if (pago.estado !== 'pendiente') {
+      await registrarWebhook(req, { ticket, firmaValida: true, estadoHttp: 200, detalle: `Pago ya resuelto (${pago.estado})` });
+      return res.status(200).json({ ok: true });
+    }
+    const { estado } = await resolverPagoPse(pago);
+    await registrarWebhook(req, { ticket, firmaValida: true, estadoHttp: 200, detalle: `Procesado: ${estado}` });
+    res.status(200).json({ ok: true });
+  } catch (err: any) {
+    logger.error('Error procesando webhook de Kushki (transfer-in)', { err: err.message, ticket });
+    await registrarWebhook(req, { ticket, firmaValida: true, estadoHttp: 500, detalle: 'Error interno al procesar el aviso' });
+    res.status(500).json({ ok: false });
+  }
+});
+
 // ══ POST /api/kushki/consignar/tarjeta ══
 // El frontend tokeniza la tarjeta en el navegador con Kushki.js
 // (kushki.requestToken) y solo nos manda el token de un solo uso — nunca
