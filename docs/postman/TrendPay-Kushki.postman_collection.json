@@ -686,6 +686,829 @@
           ]
         }
       ]
+    },
+    {
+      "name": "D. Escenarios Bre-B (pruebas UAT)",
+      "description": "Un escenario de la tabla de datos de prueba de Kushki por subcarpeta. Ejecútalos con Run folder. Solo valen en UAT: el monto decide el resultado.",
+      "item": [
+        {
+          "name": "D1. Monto 10000 · Exitosa con webhook",
+          "description": "Se aprueba sola en ~40 s y Kushki avisa por webhook. Revisa el panel Admin > Pagos Kushki (y webhook.site si llenaste webhook_site_url).",
+          "item": [
+            {
+              "name": "1. Token (10000)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Public-Merchant-Id",
+                    "value": "{{kushki_public}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/tokens",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "tokens"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  },\n  \"currency\": \"COP\",\n  \"processor\": {\n    \"name\": \"{{breb_processor}}\",\n    \"channel\": \"QR\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('monto', 10000);",
+                      "if (!pm.collectionVariables.get('breb_processor')) { pm.collectionVariables.set('breb_processor', 'Bre-B Credibanco Processor'); }"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const t = pm.response.json().token;",
+                      "pm.test('Entrega un token', () => pm.expect(t).to.be.a('string'));",
+                      "pm.collectionVariables.set('token', t);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "2. Init con webhooks",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Private-Merchant-Id",
+                    "value": "{{kushki_private}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/init",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "init"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"token\": \"{{token}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const urls = [pm.collectionVariables.get('webhook_url_transfer_in')];",
+                      "const extra = pm.collectionVariables.get('webhook_site_url');",
+                      "if (extra) urls.push(extra);",
+                      "const cuerpo = {",
+                      "  token: pm.collectionVariables.get('token'),",
+                      "  amount: { subtotalIva: 0, subtotalIva0: Number(pm.collectionVariables.get('monto')), iva: 0 },",
+                      "  webhooks: [{ events: ['approvedTransaction', 'declinedTransaction'], urls }]",
+                      "};",
+                      "pm.request.body.update(JSON.stringify(cuerpo));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const r = pm.response.json();",
+                      "pm.test('Devuelve el QR', () => pm.expect(r.qr).to.be.a('string'));",
+                      "console.log('QR recibido:', (r.qr || '').length, 'caracteres');"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "3. Status (espera 45 s) → approvedTransaction",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Private-Merchant-Id",
+                    "value": "{{kushki_private}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/status/{{token}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "status",
+                    "{{token}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// En pruebas Kushki resuelve el pago a los ~45 s: se espera antes de consultar",
+                      "setTimeout(function () {}, 45000);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json();",
+                      "console.log('Estado:', r.processorState || r.status);",
+                      "pm.test('Trae un estado', () => pm.expect(r.processorState || r.status).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "D2. Monto 9999 · Inicializada sin webhook (+ Cancel)",
+          "description": "Queda inicializada y NO se aprueba sola: sirve para probar la cancelación. No envía webhook.",
+          "item": [
+            {
+              "name": "1. Token (9999)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Public-Merchant-Id",
+                    "value": "{{kushki_public}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/tokens",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "tokens"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  },\n  \"currency\": \"COP\",\n  \"processor\": {\n    \"name\": \"{{breb_processor}}\",\n    \"channel\": \"QR\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('monto', 9999);",
+                      "if (!pm.collectionVariables.get('breb_processor')) { pm.collectionVariables.set('breb_processor', 'Bre-B Credibanco Processor'); }"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const t = pm.response.json().token;",
+                      "pm.test('Entrega un token', () => pm.expect(t).to.be.a('string'));",
+                      "pm.collectionVariables.set('token', t);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "2. Init (sin webhooks)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Private-Merchant-Id",
+                    "value": "{{kushki_private}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/init",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "init"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"token\": \"{{token}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const r = pm.response.json();",
+                      "pm.test('Devuelve el QR', () => pm.expect(r.qr).to.be.a('string'));",
+                      "console.log('QR recibido:', (r.qr || '').length, 'caracteres');"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "3. Status → inicializada",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Private-Merchant-Id",
+                    "value": "{{kushki_private}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/status/{{token}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "status",
+                    "{{token}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json();",
+                      "console.log('Estado:', r.processorState || r.status);",
+                      "pm.test('Trae un estado', () => pm.expect(r.processorState || r.status).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Cancel Transaction",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Private-Merchant-Id",
+                    "value": "{{kushki_private}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/cancel/{{token}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "cancel",
+                    "{{token}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('204: QR cancelado', () => pm.response.to.have.status(204));"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "5. Status → cancelada",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Private-Merchant-Id",
+                    "value": "{{kushki_private}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/status/{{token}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "status",
+                    "{{token}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json();",
+                      "console.log('Estado:', r.processorState || r.status);",
+                      "pm.test('Trae un estado', () => pm.expect(r.processorState || r.status).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "D3. Monto 12000 · Rechazada con webhook",
+          "description": "Kushki la rechaza y avisa por webhook (declinedTransaction).",
+          "item": [
+            {
+              "name": "1. Token (12000)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Public-Merchant-Id",
+                    "value": "{{kushki_public}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/tokens",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "tokens"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  },\n  \"currency\": \"COP\",\n  \"processor\": {\n    \"name\": \"{{breb_processor}}\",\n    \"channel\": \"QR\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('monto', 12000);",
+                      "if (!pm.collectionVariables.get('breb_processor')) { pm.collectionVariables.set('breb_processor', 'Bre-B Credibanco Processor'); }"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const t = pm.response.json().token;",
+                      "pm.test('Entrega un token', () => pm.expect(t).to.be.a('string'));",
+                      "pm.collectionVariables.set('token', t);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "2. Init con webhooks",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Private-Merchant-Id",
+                    "value": "{{kushki_private}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/init",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "init"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"token\": \"{{token}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const urls = [pm.collectionVariables.get('webhook_url_transfer_in')];",
+                      "const extra = pm.collectionVariables.get('webhook_site_url');",
+                      "if (extra) urls.push(extra);",
+                      "const cuerpo = {",
+                      "  token: pm.collectionVariables.get('token'),",
+                      "  amount: { subtotalIva: 0, subtotalIva0: Number(pm.collectionVariables.get('monto')), iva: 0 },",
+                      "  webhooks: [{ events: ['approvedTransaction', 'declinedTransaction'], urls }]",
+                      "};",
+                      "pm.request.body.update(JSON.stringify(cuerpo));"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const r = pm.response.json();",
+                      "pm.test('Devuelve el QR', () => pm.expect(r.qr).to.be.a('string'));",
+                      "console.log('QR recibido:', (r.qr || '').length, 'caracteres');"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "3. Status (espera 45 s) → rechazada",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Private-Merchant-Id",
+                    "value": "{{kushki_private}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/status/{{token}}",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "status",
+                    "{{token}}"
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "// En pruebas Kushki resuelve el pago a los ~45 s: se espera antes de consultar",
+                      "setTimeout(function () {}, 45000);"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json();",
+                      "console.log('Estado:', r.processorState || r.status);",
+                      "pm.test('Trae un estado', () => pm.expect(r.processorState || r.status).to.be.a('string'));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "D4. Monto 11000 · Error QR-CODE-0001",
+          "description": "El Init debe fallar con el código QR-CODE-0001. No hay webhook.",
+          "item": [
+            {
+              "name": "1. Token (11000)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Public-Merchant-Id",
+                    "value": "{{kushki_public}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/tokens",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "tokens"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  },\n  \"currency\": \"COP\",\n  \"processor\": {\n    \"name\": \"{{breb_processor}}\",\n    \"channel\": \"QR\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('monto', 11000);",
+                      "if (!pm.collectionVariables.get('breb_processor')) { pm.collectionVariables.set('breb_processor', 'Bre-B Credibanco Processor'); }"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const t = pm.response.json().token;",
+                      "pm.test('Entrega un token', () => pm.expect(t).to.be.a('string'));",
+                      "pm.collectionVariables.set('token', t);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "2. Init → error QR-CODE-0001",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Private-Merchant-Id",
+                    "value": "{{kushki_private}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/init",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "init"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"token\": \"{{token}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "console.log('Respuesta:', pm.response.code, pm.response.text());",
+                      "pm.test('Kushki responde con error (se espera QR-CODE-0001)', () => pm.expect(pm.response.code).to.be.at.least(400));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "D5. Monto 13000 · Timeout",
+          "description": "El Init debe quedar sin respuesta a tiempo (timeout). No hay webhook.",
+          "item": [
+            {
+              "name": "1. Token (13000)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Public-Merchant-Id",
+                    "value": "{{kushki_public}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/tokens",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "tokens"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  },\n  \"currency\": \"COP\",\n  \"processor\": {\n    \"name\": \"{{breb_processor}}\",\n    \"channel\": \"QR\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "prerequest",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.collectionVariables.set('monto', 13000);",
+                      "if (!pm.collectionVariables.get('breb_processor')) { pm.collectionVariables.set('breb_processor', 'Bre-B Credibanco Processor'); }"
+                    ]
+                  }
+                },
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                      "const t = pm.response.json().token;",
+                      "pm.test('Entrega un token', () => pm.expect(t).to.be.a('string'));",
+                      "pm.collectionVariables.set('token', t);"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "2. Init → timeout",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Private-Merchant-Id",
+                    "value": "{{kushki_private}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/transfer/v1/init",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "transfer",
+                    "v1",
+                    "init"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"token\": \"{{token}}\",\n  \"amount\": {\n    \"subtotalIva\": 0,\n    \"subtotalIva0\": {{monto}},\n    \"iva\": 0\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "console.log('Respuesta:', pm.response.code, pm.response.text());",
+                      "pm.test('Kushki responde con error (se espera timeout)', () => pm.expect(pm.response.code).to.be.at.least(400));"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -732,6 +1555,10 @@
     {
       "key": "trendpay_api",
       "value": "https://trendpay-api-production.up.railway.app"
+    },
+    {
+      "key": "webhook_site_url",
+      "value": ""
     }
   ]
 }
