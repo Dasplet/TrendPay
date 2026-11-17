@@ -180,7 +180,7 @@ export default function PagosKushkiPage() {
       </Panel>
 
       <Panel style={{ marginTop: 16 }}>
-        <PanelHeader title="Avisos de Kushki (webhook de retiros)" icon={<Webhook size={16} />}
+        <PanelHeader title="Avisos de Kushki (webhooks de retiros y consignaciones)" icon={<Webhook size={16} />}
           actions={
             <>
               <Btn variant="primary" disabled={probar.isPending} onClick={() => probar.mutate()}
@@ -194,7 +194,7 @@ export default function PagosKushkiPage() {
             </>
           } />
         <div style={{ padding: '12px 16px', fontSize: 12, color: 'rgba(var(--adm-fg-rgb),.6)', borderBottom: '1px solid rgba(133,46,199,.12)', lineHeight: 1.6 }}>
-          Cada vez que Kushki llama a TrendPay para avisar el resultado de un retiro, queda aquí (incluso si se rechaza). Se actualiza solo cada 15 segundos.
+          Cada vez que Kushki llama a TrendPay para avisar el resultado de un retiro o de una consignación (Bre-B / PSE), queda aquí (incluso si se rechaza). Las de consignaciones empiezan con "Consignación ·" en el detalle. Se actualiza solo cada 15 segundos.
           {avisosQ.data && !avisosQ.data.secretoConfigurado && (
             <div style={{ color: '#d4a017', fontWeight: 600, marginTop: 4 }}>Falta KUSHKI_WEBHOOK_SECRET en el servidor: todos los avisos se rechazarán.</div>
           )}
@@ -202,7 +202,7 @@ export default function PagosKushkiPage() {
         <Table headers={['Fecha', 'Ticket', 'Firma', 'Respuesta', 'Detalle', 'Origen']}>
           {avisos.length === 0 ? (
             <Tr><Td colSpan={6 as any} style={{ textAlign: 'center', padding: 28, fontSize: 12, color: 'rgba(var(--adm-fg-rgb),.4)', lineHeight: 1.6 }}>
-              Aún no ha llegado ninguna llamada de Kushki. Si ya hiciste retiros por ACH y esto sigue vacío, Kushki no tiene registrada la URL del webhook de TrendPay.
+              Aún no ha llegado ninguna llamada de Kushki. Si ya hiciste retiros por ACH o pagos Bre-B y esto sigue vacío, Kushki no tiene registrada la URL del webhook de TrendPay.
             </Td></Tr>
           ) : avisos.map((a) => (
             <Tr key={a.id}>
