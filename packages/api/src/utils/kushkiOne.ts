@@ -79,6 +79,7 @@ export async function enviarCobroAsync(serial: string, orden: OrdenCobro): Promi
 }
 
 export interface OrdenReembolso {
+  monto: number;                // el monto de la venta original, en pesos enteros (la anulación es total)
   transactionReference: string; // la referencia de la venta original (raw_response.transaction_reference)
   clientTransactionId: string;  // UUID nuevo que une los avisos de la anulación con el cobro
   eventsWebhookUrl: string;
@@ -89,8 +90,9 @@ export interface OrdenReembolso {
 export async function enviarReembolsoAsync(serial: string, orden: OrdenReembolso): Promise<void> {
   const datos = await llamar(serial, 'async/void', {
     events_webhook_url: orden.eventsWebhookUrl,
-    transaction_reference: orden.transactionReference,
+    amount: { subtotal_iva0: orden.monto, subtotal_iva: 0, iva: 0 },
     client_transaction_id: orden.clientTransactionId,
+    transaction_reference: orden.transactionReference,
     omit_card: true,
   });
   if (datos?.status !== 'TERMINAL_ACKNOWLEDGED') {

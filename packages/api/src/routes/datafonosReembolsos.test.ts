@@ -117,7 +117,7 @@ describe('Datáfonos: visibilidad por tienda y reembolsos', () => {
       expect(reembolsar).toHaveBeenCalledTimes(1);
       const [serial, orden] = reembolsar.mock.calls[0];
       expect(serial).toBe('SN-VIS-0001');
-      expect(orden).toMatchObject({ transactionReference: 'ref-sj', eventsWebhookUrl: `https://api.trendpay.test/api/datafonos/webhooks/${TOKEN_URL}` });
+      expect(orden).toMatchObject({ monto: 50000, transactionReference: 'ref-sj', eventsWebhookUrl: `https://api.trendpay.test/api/datafonos/webhooks/${TOKEN_URL}` });
       expect(await prisma.cobroDatafono.findUniqueOrThrow({ where: { id: cobro.id } })).toMatchObject({ estado: 'reembolsando', reembolsoClientId: orden.clientTransactionId });
       expect(await saldoDe(e.empresa.id)).toBe(70000); // todavía no: falta la confirmación de Kushki
 

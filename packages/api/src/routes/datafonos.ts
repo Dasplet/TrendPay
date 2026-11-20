@@ -133,7 +133,7 @@ router.post('/cobros/:id/reembolsar', authenticate, walletLimiter, conCuenta('re
   if (reclamo.count === 0) return res.status(409).json({ ok: false, mensaje: 'Este cobro ya tiene un reembolso en curso' });
 
   try {
-    await enviarReembolsoAsync(cobro.terminal.serial, { transactionReference: cobro.transactionReference, clientTransactionId: reembolsoClientId, eventsWebhookUrl: webhookUrl });
+    await enviarReembolsoAsync(cobro.terminal.serial, { monto: Number(cobro.monto), transactionReference: cobro.transactionReference, clientTransactionId: reembolsoClientId, eventsWebhookUrl: webhookUrl });
   } catch (err: any) {
     const motivo = err instanceof KushkiError ? err.message : 'No se pudo enviar el reembolso';
     await prisma.cobroDatafono.updateMany({ where: { id: cobro.id, estado: 'reembolsando' }, data: { estado: 'aprobado', reembolsoClientId: null, detalle: motivo.slice(0, 200) } });
