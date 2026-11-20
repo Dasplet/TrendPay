@@ -13,6 +13,8 @@ import {
   terminalOcupado, procesarEvento, resolverCobro, resolverReembolso, netoDelCobro, type CobroConTerminal,
 } from '../utils/datafonos';
 import { registrarWebhook } from '../utils/kushkiWebhookLog';
+import { firmaKushkiValida } from '../utils/kushkiWebhook';
+import { terminalDelAviso, webhookSecretDeTitular, procesarAvisoTerminal, claveDelAviso, resumenParaRegistro, serialesDelAviso } from '../utils/ventasTerminal';
 import { encrypt } from '../utils/security';
 import { terminaEn } from '../utils/comerciosKushki';
 
@@ -36,6 +38,8 @@ const mapCobro = (c: CobroConTerminal) => ({
   terminal: c.terminal.alias,
   ticketNumber: c.ticketNumber,
   neto: netoDelCobro(c),
+  tipo: c.tipo,       // cobro | reembolso
+  origen: c.origen,   // terminal (digitado en el datáfono) | trendpay
   creado: c.createdAt,
 });
 
@@ -95,15 +99,18 @@ router.post('/cobros', authenticate, walletLimiter, conCuenta('recargar'), async
   res.status(201).json({ ok: true, cobro: mapCobro(cobro) });
 });
 
-// Una sede solo ve sus cobros; la cuenta padre ve los de toda la empresa
-async function idsVisibles(req: Request): Promise<string[]> {
-  return req.cuenta!.esSubcuenta ? [req.user!.id] : miembrosDe(req.cuenta!.titularId);
+// Los cobros los ve la cuenta principal (todos los de su empresa) y la tienda a la que pertenece el datáfono; las demás sedes no
+function visibilidadCobros(req: Request) {
+  const cuenta = req.cuenta!;
+  return cuenta.esSubcuenta
+    ? { terminal: { titularId: cuenta.titularId }, OR: [{ terminal: { sedeId: req.user!.id } }, { userId: req.user!.id }] }
+    : { terminal: { titularId: cuenta.titularId } };
 }
 
 // ══ GET /api/datafonos/cobros ══
 router.get('/cobros', authenticate, conCuenta('recargar'), async (req: Request, res: Response) => {
   const cobros = await prisma.cobroDatafono.findMany({
-    where: { userId: { in: await idsVisibles(req) } },
+    where: visibilidadCobros(req),
     include: { terminal: true },
     orderBy: { createdAt: 'desc' },
     take: 30,
@@ -153,7 +160,7 @@ router.post('/cobros/:id/reembolsar', authenticate, walletLimiter, conCuenta('re
 // La pantalla lo consulta cada pocos segundos. Si pasaron más de 20 s y sigue pendiente, además se le pregunta a Kushki
 // (por si el aviso se perdió); ese error nunca rompe la respuesta.
 router.get('/cobros/:id', authenticate, conCuenta('recargar'), async (req: Request, res: Response) => {
-  const donde = { id: req.params.id, userId: { in: await idsVisibles(req) } };
+  const donde = { id: req.params.id, ...visibilidadCobros(req) };
   let cobro = await prisma.cobroDatafono.findFirst({ where: donde, include: { terminal: true } });
   if (!cobro) return res.status(404).json({ ok: false, mensaje: 'Cobro no encontrado' });
 
@@ -185,20 +192,23 @@ export function inicioDePeriodo(periodo: Periodo, ahora = Date.now()): Date {
 
 interface FilaResumen { cobros: number; bruto: number; comision: number; neto: number }
 const vacia = (): FilaResumen => ({ cobros: 0, bruto: 0, comision: 0, neto: 0 });
-function sumar(fila: FilaResumen, monto: number, pct: number) {
+// monto ya viene con signo (negativo en un reembolso); el contador solo cuenta cobros, no reembolsos
+function sumar(fila: FilaResumen, monto: number, pct: number, signo = 1) {
   const comision = Math.round((monto * pct) / 100);
-  fila.cobros += 1; fila.bruto += monto; fila.comision += comision; fila.neto += monto - comision;
+  fila.cobros += signo > 0 ? 1 : 0; fila.bruto += monto; fila.comision += comision; fila.neto += monto - comision;
 }
 
 async function resumenDeCobros(where: object, desde: Date) {
+  // Ventas aprobadas (una venta ya reembolsada deja de contar) y reembolsos que no se pudieron ligar a una venta (restan)
   const cobros = await prisma.cobroDatafono.findMany({
-    where: { estado: 'aprobado', createdAt: { gte: desde }, ...where },
-    select: { monto: true, comisionPct: true, terminal: { select: { id: true, alias: true, sedeId: true, sede: { select: { nombre: true } }, titular: { select: { id: true, nombre: true } } } } },
+    where: { estado: 'aprobado', createdAt: { gte: desde }, OR: [{ tipo: 'cobro' }, { tipo: 'reembolso', reembolsoDeId: null }], ...where },
+    select: { tipo: true, monto: true, comisionPct: true, terminal: { select: { id: true, alias: true, sedeId: true, sede: { select: { nombre: true } }, titular: { select: { id: true, nombre: true } } } } },
   });
   const total = vacia();
   const tiendas = new Map<string, FilaResumen & { empresa: string; sedeId: string | null; nombre: string; terminales: Map<string, FilaResumen & { id: string; alias: string }> }>();
   for (const c of cobros) {
-    const monto = Number(c.monto);
+    const signo = c.tipo === 'reembolso' ? -1 : 1;
+    const monto = Number(c.monto) * signo;
     const pct = Number(c.comisionPct);
     const t = c.terminal;
     const clave = `${t.titular.id}:${t.sedeId ?? ''}`;
@@ -206,7 +216,7 @@ async function resumenDeCobros(where: object, desde: Date) {
     if (!tienda) { tienda = { ...vacia(), empresa: t.titular.nombre, sedeId: t.sedeId, nombre: t.sede?.nombre ?? 'Sin tienda asignada', terminales: new Map() }; tiendas.set(clave, tienda); }
     let term = tienda.terminales.get(t.id);
     if (!term) { term = { ...vacia(), id: t.id, alias: t.alias }; tienda.terminales.set(t.id, term); }
-    sumar(total, monto, pct); sumar(tienda, monto, pct); sumar(term, monto, pct);
+    sumar(total, monto, pct, signo); sumar(tienda, monto, pct, signo); sumar(term, monto, pct, signo);
   }
   return {
     total,
@@ -227,6 +237,54 @@ router.get('/resumen', authenticate, conCuenta('recargar'), async (req: Request,
   const desde = inicioDePeriodo(periodo);
   const r = await resumenDeCobros({ terminal: { titularId: cuenta.titularId } }, desde);
   res.json({ ok: true, periodo, desde, ...r });
+});
+
+// ══ POST /api/datafonos/webhooks/tarjeta-presente ══
+// Aviso de Kushki por cada venta o reembolso hecho DIRECTAMENTE en el datáfono (el cajero digita el valor en el aparato).
+// TrendPay lo refleja: acredita o descuenta la billetera de la empresa y deja el movimiento en la tienda y en la cuenta
+// principal. Se autentica con la firma HMAC de Kushki ("Webhook signature" de la consola de esa empresa): quien no la conozca
+// no puede inventar una venta. Kushki reintenta cada aviso hasta 7 veces si no recibe 200/201; cada transacción se registra
+// una sola vez (por su referencia). Un aviso de un aparato que no está registrado se responde 200 y queda en el registro.
+router.post('/webhooks/tarjeta-presente', webhookLimiter, async (req: Request, res: Response) => {
+  const aviso: Record<string, any> = req.body && typeof req.body === 'object' ? req.body : {};
+  const resumen = resumenParaRegistro(aviso);
+  const ticket = claveDelAviso(aviso);
+  const registrar = (firmaValida: boolean, estadoHttp: number, detalle: string) =>
+    registrarWebhook(req, { ticket, firmaValida, estadoHttp, detalle: `Datáfono · ${detalle}`, cuerpo: resumen });
+
+  try {
+    const terminal = await terminalDelAviso(aviso);
+    if (!terminal) {
+      await registrar(false, 200, `aparato no registrado en TrendPay (serial: ${serialesDelAviso(aviso).join(', ') || 'no viene'})`);
+      return res.status(200).json({ ok: true });
+    }
+
+    const secreto = await webhookSecretDeTitular(terminal.titularId);
+    if (!secreto) {
+      await registrar(false, 503, 'falta la firma de webhooks de la empresa (se reintentará)');
+      return res.status(503).json({ ok: false });
+    }
+
+    const cuerpoCrudo = (req as Request & { rawBody?: Buffer }).rawBody;
+    const firmaOk = !!cuerpoCrudo && firmaKushkiValida(cuerpoCrudo, { id: req.get('x-kushki-id'), firma: req.get('x-kushki-signature'), firmaSimple: req.get('x-kushki-simplesignature') }, secreto);
+    if (!firmaOk) {
+      await registrar(false, 401, req.get('x-kushki-signature') || req.get('x-kushki-simplesignature') ? 'firma inválida: la firma de la empresa no coincide' : 'sin firma');
+      return res.status(401).json({ ok: false });
+    }
+
+    if (!terminal.activo) {
+      await registrar(true, 200, `ignorado: el datáfono ${terminal.alias} está desactivado en TrendPay`);
+      return res.status(200).json({ ok: true });
+    }
+
+    const r = await procesarAvisoTerminal(terminal, aviso);
+    await registrar(true, r.http, r.detalle);
+    res.status(r.http).json({ ok: r.http < 400 });
+  } catch (err: any) {
+    logger.error('Error procesando el aviso de una venta de datáfono', { err: err.message });
+    await registrar(false, 500, `error: ${String(err.message).slice(0, 120)}`);
+    res.status(500).json({ ok: false });
+  }
 });
 
 // ══ POST /api/datafonos/webhooks/:token ══
@@ -280,15 +338,16 @@ router.get('/admin/terminales', authenticate, requireAdmin, async (_req: Request
   });
   // Business-Code por empresa: las que tienen datáfonos (y las que ya tienen código aunque aún no tengan datáfonos)
   const codigos = await prisma.comercioKushkiOne.findMany({ include: { user: { select: { nombre: true } } } });
-  const empresas = new Map<string, { titularId: string; nombre: string; configurado: boolean; termina: string; terminales: number }>();
+  const empresas = new Map<string, { titularId: string; nombre: string; configurado: boolean; termina: string; firma: boolean; terminales: number }>();
   for (const t of terminales) {
-    const e = empresas.get(t.titularId) ?? { titularId: t.titularId, nombre: t.titular.nombre, configurado: false, termina: '', terminales: 0 };
+    const e = empresas.get(t.titularId) ?? { titularId: t.titularId, nombre: t.titular.nombre, configurado: false, termina: '', firma: false, terminales: 0 };
     e.terminales += 1;
     empresas.set(t.titularId, e);
   }
   for (const c of codigos) {
-    const e = empresas.get(c.userId) ?? { titularId: c.userId, nombre: c.user.nombre, configurado: false, termina: '', terminales: 0 };
+    const e = empresas.get(c.userId) ?? { titularId: c.userId, nombre: c.user.nombre, configurado: false, termina: '', firma: false, terminales: 0 };
     const codigo = await businessCodeDeTitular(c.userId);
+    e.firma = !!c.webhookSecretCif && c.activo;
     e.configurado = !!codigo;
     e.termina = codigo ? terminaEn(codigo) : '';
     empresas.set(c.userId, e);
@@ -296,6 +355,8 @@ router.get('/admin/terminales', authenticate, requireAdmin, async (_req: Request
   res.json({
     ok: true,
     urlPublica: !!urlPublicaApi(),
+    // Dirección que se registra en la consola de Kushki (Desarrolladores > Webhooks) para recibir las ventas del datáfono
+    urlWebhook: urlPublicaApi() ? `${urlPublicaApi()}/api/datafonos/webhooks/tarjeta-presente` : null,
     empresas: [...empresas.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)),
     terminales: terminales.map((t) => ({
       id: t.id, serial: t.serial, alias: t.alias, modelo: t.modelo, activo: t.activo,
@@ -307,7 +368,12 @@ router.get('/admin/terminales', authenticate, requireAdmin, async (_req: Request
 // PUT /api/datafonos/admin/empresas/:titularId/business-code  → guarda (o reemplaza) el Business-Code de Kushki One de la empresa
 // DELETE /api/datafonos/admin/empresas/:titularId/business-code
 // Es el Private Merchant ID de la Branch de card present de esa empresa. Se guarda cifrado y no se vuelve a mostrar.
-const businessCodeSchema = z.object({ businessCode: z.string().trim().regex(/^[A-Za-z0-9_-]{8,128}$/, 'El Business-Code solo lleva letras, números, guion y guion bajo (8 a 128 caracteres)') });
+const credencialesSchema = z.object({
+  // Opcional: solo sirve para mandar órdenes al aparato desde TrendPay (ya no se usa)
+  businessCode: z.string().trim().regex(/^[A-Za-z0-9_-]{8,128}$/, 'El Business-Code solo lleva letras, números, guion y guion bajo (8 a 128 caracteres)').optional(),
+  // La "Webhook signature" de la consola de Kushki (Desarrolladores > Webhooks): con ella se comprueba que cada aviso viene de Kushki
+  webhookSecret: z.string().trim().regex(/^\S{8,300}$/, 'La firma de webhooks no puede tener espacios (8 a 300 caracteres)').optional(),
+}).refine((d) => d.businessCode !== undefined || d.webhookSecret !== undefined, { message: 'Envía la firma de webhooks o el Business-Code' });
 
 async function empresaValida(titularId: string) {
   const u = await prisma.user.findUnique({ where: { id: titularId }, select: { id: true, rol: true, cuentaPadreId: true, eliminadoAt: true } });
@@ -315,14 +381,18 @@ async function empresaValida(titularId: string) {
 }
 
 router.put('/admin/empresas/:titularId/business-code', authenticate, requireAdmin, async (req: Request, res: Response) => {
-  const parse = businessCodeSchema.safeParse(req.body);
+  const parse = credencialesSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: parse.error.errors[0].message });
   if (!(await empresaValida(req.params.titularId))) return res.status(404).json({ ok: false, mensaje: 'Empresa no encontrada (los datáfonos van en la cuenta principal, no en una sede)' });
-  const businessCodeCif = encrypt(parse.data.businessCode);
-  await prisma.comercioKushkiOne.upsert({ where: { userId: req.params.titularId }, create: { userId: req.params.titularId, businessCodeCif }, update: { businessCodeCif, activo: true } });
-  // La auditoría guarda solo el final del código, nunca el valor
-  await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'GUARDAR_BUSINESS_CODE_KUSHKI_ONE', tabla: 'comercios_kushki_one', registroId: req.params.titularId, ip: req.ip, datos: { termina: terminaEn(parse.data.businessCode) } } }).catch(() => {});
-  res.json({ ok: true, termina: terminaEn(parse.data.businessCode) });
+  const { businessCode, webhookSecret } = parse.data;
+  const cambios = {
+    ...(businessCode !== undefined ? { businessCodeCif: encrypt(businessCode) } : {}),
+    ...(webhookSecret !== undefined ? { webhookSecretCif: encrypt(webhookSecret) } : {}),
+  };
+  await prisma.comercioKushkiOne.upsert({ where: { userId: req.params.titularId }, create: { userId: req.params.titularId, ...cambios }, update: { ...cambios, activo: true } });
+  // La auditoría guarda solo qué se cambió y el final del código, nunca el valor
+  await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'GUARDAR_BUSINESS_CODE_KUSHKI_ONE', tabla: 'comercios_kushki_one', registroId: req.params.titularId, ip: req.ip, datos: { businessCode: businessCode ? terminaEn(businessCode) : undefined, firmaWebhooks: webhookSecret ? 'actualizada' : undefined } } }).catch(() => {});
+  res.json({ ok: true, termina: businessCode ? terminaEn(businessCode) : undefined, firma: webhookSecret !== undefined });
 });
 
 router.delete('/admin/empresas/:titularId/business-code', authenticate, requireAdmin, async (req: Request, res: Response) => {
@@ -427,7 +497,7 @@ router.get('/admin/cobros', authenticate, requireAdmin, async (_req: Request, re
     ok: true,
     cobros: cobros.map((c) => ({
       id: c.id, estado: c.estado, estadoTerminal: c.estadoTerminal, detalle: c.detalle, monto: Number(c.monto), comisionPct: Number(c.comisionPct),
-      terminal: c.terminal.alias, empresa: c.terminal.titular.nombre, cajero: c.user.nombre, ticketNumber: c.ticketNumber, creado: c.createdAt,
+      terminal: c.terminal.alias, empresa: c.terminal.titular.nombre, cajero: c.origen === 'terminal' ? 'En el datáfono' : c.user.nombre, tipo: c.tipo, origen: c.origen, ticketNumber: c.ticketNumber, creado: c.createdAt,
     })),
   });
 });

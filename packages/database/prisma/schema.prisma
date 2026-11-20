@@ -420,7 +420,10 @@ model ComercioKushki {
 model ComercioKushkiOne {
   id              String   @id @default(uuid())
   userId          String   @unique @map("user_id")
-  businessCodeCif String   @map("business_code_cifrado")
+  // Opcional: solo sirve para mandar órdenes al aparato desde TrendPay (ya no se usa; las ventas llegan por webhook)
+  businessCodeCif String?  @map("business_code_cifrado")
+  // Firma de los webhooks de card present de esta empresa (Consola Kushki > Desarrolladores > Webhooks), cifrada
+  webhookSecretCif String? @map("webhook_secret_cifrado")
   activo          Boolean  @default(true)
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -467,6 +470,12 @@ model CobroDatafono {
   reembolsoClientId    String?  @unique @map("reembolso_client_id")
   reembolsadoAt        DateTime? @map("reembolsado_at")
   reembolsadoPor       String?  @map("reembolsado_por")
+  // trendpay = TrendPay mandó el cobro al aparato; terminal = se digitó en el datáfono y Kushki avisó por webhook
+  origen               String   @default("trendpay")
+  // cobro | reembolso (un reembolso hecho en el datáfono es su propio movimiento)
+  tipo                 String   @default("cobro")
+  // Si el reembolso se pudo ligar a la venta original (mismo datáfono y monto), su id
+  reembolsoDeId        String?  @map("reembolso_de_id")
   estadoTerminal       String?  @map("estado_terminal")
   detalle              String?
   transactionReference String?  @map("transaction_reference")
@@ -480,6 +489,7 @@ model CobroDatafono {
 
   @@index([terminalId, estado])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([origen])
   @@map("cobros_datafono")
 }
 

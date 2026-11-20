@@ -15,7 +15,7 @@ export function baseUrlKushkiOne(): string {
 // Cada empresa tiene el suyo: null = esa empresa todavía no tiene Kushki One configurado.
 export async function businessCodeDeTitular(titularId: string): Promise<string | null> {
   const c = await prisma.comercioKushkiOne.findUnique({ where: { userId: titularId } });
-  if (!c?.activo) return null;
+  if (!c?.activo || !c.businessCodeCif) return null;
   const codigo = decrypt(c.businessCodeCif);
   return codigo === '****' ? null : codigo; // no se pudo descifrar (llave de cifrado distinta)
 }

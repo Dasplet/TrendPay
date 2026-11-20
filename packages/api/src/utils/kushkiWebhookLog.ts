@@ -10,7 +10,7 @@ const CABECERAS_OMITIDAS = new Set(['cookie', 'authorization', 'x-kushki-signatu
 // Kushki está llamando y por qué se rechaza. Nunca debe romper la respuesta al webhook.
 export async function registrarWebhook(
   req: Request,
-  datos: { ticket?: string | null; firmaValida: boolean; estadoHttp: number; detalle: string },
+  datos: { ticket?: string | null; firmaValida: boolean; estadoHttp: number; detalle: string; cuerpo?: Record<string, unknown> },
 ): Promise<void> {
   try {
     const cabeceras = {
@@ -20,7 +20,7 @@ export async function registrarWebhook(
       kushkiId: req.get('x-kushki-id') ?? null,
       userAgent: req.get('user-agent')?.slice(0, 120) ?? null,
     };
-    const cuerpo = req.body && typeof req.body === 'object' ? sanitizarWebhook(req.body) : undefined;
+    const cuerpo = datos.cuerpo ?? (req.body && typeof req.body === 'object' ? sanitizarWebhook(req.body) : undefined);
     await prisma.kushkiWebhookLog.create({
       data: {
         ticket: datos.ticket ?? null,
