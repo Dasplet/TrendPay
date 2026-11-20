@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { walletApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+import { calcularComision, textoPct, useComision } from '@/lib/comision';
 import { AmountPicker, ThemeButton, UserModal } from '@/components/user/UserTheme';
 
 export default function EnviarPage() {
@@ -18,7 +19,8 @@ export default function EnviarPage() {
   const [amount, setAmount] = useState(0);
   const [note, setNote] = useState('');
 
-  const commission = Math.ceil(amount * 0.03);
+  const comisionPct = useComision();
+  const commission = calcularComision(amount, comisionPct);
   const total = amount + commission;
 
   const sendMutation = useMutation({
@@ -48,7 +50,7 @@ export default function EnviarPage() {
         <label className="tp-form-field"><span>Celular, correo o cédula</span><input value={destino} onChange={(e) => setDestino(e.target.value)} placeholder="Ej. 3001234567" /></label>
         <AmountPicker value={amount} setValue={setAmount} />
         <label className="tp-form-field"><span>Nota (opcional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. Mitad del almuerzo" /></label>
-        <div className="tp-warning">% · Tarifa de transacción: 3% adicional ({commission.toLocaleString('es-CO')} COP). Total a debitar: {total.toLocaleString('es-CO')} COP.</div>
+        <div className="tp-warning">% · Tarifa de transacción: {textoPct(comisionPct)} adicional ({commission.toLocaleString('es-CO')} COP). Total a debitar: {total.toLocaleString('es-CO')} COP.</div>
         <ThemeButton disabled={sendMutation.isPending} onClick={sendMoney}><Send size={18} /> {sendMutation.isPending ? 'Enviando...' : 'Enviar'}</ThemeButton>
       </div>
     </UserModal>

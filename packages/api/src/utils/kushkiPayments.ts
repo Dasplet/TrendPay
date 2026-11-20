@@ -4,6 +4,7 @@ import { genCodigo } from './security';
 import { getTransferStatus } from './kushki';
 import { credencialesDePago } from './comerciosKushki';
 import { logger } from './logger';
+import { calcularComision } from './comision';
 import { conciliarRetirosEnProceso } from './retiros';
 
 export type EstadoPago = 'completado' | 'pendiente' | 'rechazado';
@@ -31,7 +32,8 @@ export async function resolverPagoPse(pago: KushkiPayment): Promise<ResultadoPag
   }
 
   const monto = Number(pago.monto);
-  const comisionValor = Math.ceil(monto * 0.03);
+  const comisionPct = Number(pago.comisionPct); // la que se cobró al iniciar el pago, aunque la cifra haya cambiado después
+  const comisionValor = calcularComision(monto, comisionPct);
 
   const resultado = await prisma.$transaction(async (tx): Promise<ResultadoPago> => {
     const reclamo = await tx.kushkiPayment.updateMany({
@@ -59,7 +61,7 @@ export async function resolverPagoPse(pago: KushkiPayment): Promise<ResultadoPag
         categoria: 'consigna',
         descripcion: pago.metodo === 'breb' ? 'Consignación Bre-B vía Kushki' : 'Consignación PSE vía Kushki',
         montoBruto: monto,
-        comisionPct: 3,
+        comisionPct,
         comisionValor,
         montoNeto: monto,
         saldoAntes: saldoDespues - monto,

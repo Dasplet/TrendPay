@@ -11,6 +11,7 @@ import { comercioDeTitular, credencialesDePago } from '../utils/comerciosKushki'
 import { anexarRespuesta, resolverRetiroEnProceso } from '../utils/retiros';
 import { firmaKushkiValida, sanitizarWebhook, TICKET_PRUEBA_WEBHOOK } from '../utils/kushkiWebhook';
 import { logger } from '../utils/logger';
+import { comisionGeneralPct, calcularComision } from '../utils/comision';
 import { conCuenta, miembrosDe, saldoVisible } from '../utils/cuentas';
 
 const router = Router();
@@ -160,7 +161,8 @@ router.post('/consignar/tarjeta', authenticate, walletLimiter, conCuenta('recarg
   // El usuario paga la comisión encima del monto que va a su billetera —
   // igual que "Enviar" — así que Kushki cobra monto+comisión en la tarjeta,
   // pero la billetera solo se acredita con el monto elegido.
-  const comisionValor = Math.ceil(monto * 0.03);
+  const comisionPct = await comisionGeneralPct();
+  const comisionValor = calcularComision(monto, comisionPct);
   const totalACobrar = monto + comisionValor;
 
   try {
@@ -181,7 +183,7 @@ router.post('/consignar/tarjeta', authenticate, walletLimiter, conCuenta('recarg
           categoria: 'consigna',
           descripcion: 'Consignación con tarjeta vía Kushki',
           montoBruto: monto,
-          comisionPct: 3,
+          comisionPct,
           comisionValor,
           montoNeto: monto,
           saldoAntes: saldoDespues - monto,
@@ -251,7 +253,8 @@ router.post('/consignar/pse/iniciar', authenticate, walletLimiter, conCuenta('re
   // Mismo modelo que la tarjeta: se debita monto+comisión del banco vía PSE,
   // pero solo `monto` queda registrado como lo que hay que acreditar cuando
   // se confirme el pago (ver /pse/confirmar).
-  const comisionValor = Math.ceil(monto * 0.03);
+  const comisionPct = await comisionGeneralPct();
+  const comisionValor = calcularComision(monto, comisionPct);
   const totalACobrar = monto + comisionValor;
 
   try {
@@ -261,7 +264,7 @@ router.post('/consignar/pse/iniciar', authenticate, walletLimiter, conCuenta('re
     const init = await initTransfer(token, totalACobrar, { fullName: nombreCompleto, email, phoneNumber: telefono });
 
     await prisma.kushkiPayment.create({
-      data: { userId: req.user!.id, reference: token, metodo: 'pse', monto, estado: 'pendiente' },
+      data: { userId: req.user!.id, reference: token, metodo: 'pse', monto, comisionPct, estado: 'pendiente' },
     });
 
     logger.info('PSE iniciado', { token, transactionReference: init.transactionReference, userId: req.user!.id });
@@ -324,7 +327,8 @@ router.post('/consignar/breb/iniciar', authenticate, walletLimiter, conCuenta('r
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Datos de pago inválidos' });
 
   const { monto } = parse.data;
-  const totalACobrar = monto + Math.ceil(monto * 0.03);
+  const comisionPct = await comisionGeneralPct();
+  const totalACobrar = monto + calcularComision(monto, comisionPct);
 
   try {
     const wallet = await prisma.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
@@ -338,7 +342,7 @@ router.post('/consignar/breb/iniciar', authenticate, walletLimiter, conCuenta('r
 
     const pago = await iniciarPagoBreB(totalACobrar, comercio.cred);
     await prisma.kushkiPayment.create({
-      data: { userId: req.user!.id, reference: pago.token, metodo: 'breb', monto, estado: 'pendiente', comercioId: comercio.comercioId },
+      data: { userId: req.user!.id, reference: pago.token, metodo: 'breb', monto, comisionPct, estado: 'pendiente', comercioId: comercio.comercioId },
     });
 
     logger.info('Bre-B iniciado', { transactionReference: pago.transactionReference, userId: req.user!.id });

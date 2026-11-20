@@ -89,6 +89,7 @@ export const bankAccountsApi = {
 export const walletApi = {
   balance:    () => api.get('/wallet/balance'),
   saldoMensual: (meses = 6) => api.get('/wallet/saldo-mensual', { params: { meses } }),
+  comision:   () => api.get('/wallet/comision'),
   history:    (params?: any) => api.get('/wallet/history', { params }),
   send:       (data: any) => api.post('/wallet/enviar', data),
   qrGenerar:  (data: any) => api.post('/wallet/qr/generar', data),
@@ -187,6 +188,8 @@ export const adminApi = {
   kushkiProbarTokenBreB: (monto?: number) => api.post('/admin/kushki/bre-b/probar-token', monto ? { monto } : {}),
   kushkiProbarWebhook: () => api.post('/admin/kushki/webhooks/probar'),
   kushkiLimpiarWebhooks: () => api.delete('/admin/kushki/webhooks'),
+  comision:       () => api.get('/admin/comision'),
+  guardarComision: (comisionPct: number) => api.put('/admin/comision', { comisionPct }),
   limpiezaEstado: () => api.get('/admin/limpieza'),
   limpiarDatos:   (frase: string, incluirVinculaciones = false) => api.post('/admin/limpieza', { frase, incluirVinculaciones }),
 };

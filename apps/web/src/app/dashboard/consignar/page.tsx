@@ -7,6 +7,7 @@ import { Kushki } from '@kushki/js';
 import { ArrowLeft, ArrowRight, Building2, CreditCard, QrCode } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { kushkiApi } from '@/lib/api';
+import { calcularComision, textoPct, useComision } from '@/lib/comision';
 import { AmountPicker, fmtCOP, InfoDestination, OperationCard, ThemeButton, UserModal } from '@/components/user/UserTheme';
 
 const KUSHKI_PUBLIC_MERCHANT_ID = process.env.NEXT_PUBLIC_KUSHKI_PUBLIC_MERCHANT_ID || '';
@@ -128,7 +129,8 @@ export default function ConsignarPage() {
   // El usuario paga la comisión encima del monto elegido — igual que
   // "Enviar" — así que Kushki cobra monto+comisión, pero la billetera solo
   // se acredita con el monto elegido.
-  const comisionValor = Math.ceil(amount * 0.03);
+  const comisionPct = useComision();
+  const comisionValor = calcularComision(amount, comisionPct);
   const totalACobrar = amount + comisionValor;
 
   const consignarMutation = useMutation({
@@ -200,7 +202,7 @@ export default function ConsignarPage() {
 
   const resumenComision = amount > 0 && (
     <p className="tp-modal-label" style={{ textAlign: 'center' }}>
-      Comisión (3%): {fmtCOP(comisionValor)} · Total a cobrar: <strong>{fmtCOP(totalACobrar)}</strong>
+      Comisión ({textoPct(comisionPct)}): {fmtCOP(comisionValor)} · Total a cobrar: <strong>{fmtCOP(totalACobrar)}</strong>
     </p>
   );
 

@@ -39,7 +39,7 @@ export function registrarConexion(c: Conexion): () => void {
 
 export const totalConexiones = () => conexiones.size;
 
-let pendiente = { admin: false, titulares: new Set<string>() };
+let pendiente = { admin: false, todos: false, titulares: new Set<string>() };
 let temporizador: NodeJS.Timeout | null = null;
 
 function escribir(c: Conexion) {
@@ -50,16 +50,18 @@ function escribir(c: Conexion) {
 function emitir() {
   temporizador = null;
   const { admin, titulares } = pendiente;
-  pendiente = { admin: false, titulares: new Set() };
+  const { todos } = pendiente;
+  pendiente = { admin: false, todos: false, titulares: new Set() };
   for (const c of conexiones.values()) {
-    if (c.admin ? admin || titulares.size > 0 : titulares.has(c.titularId)) escribir(c);
+    if (todos || (c.admin ? admin || titulares.size > 0 : titulares.has(c.titularId))) escribir(c);
   }
 }
 
 // Anota que hubo un cambio (de esta empresa, o general si no se sabe de quién) y avisa en breve, una sola vez por ráfaga
-export function anotarCambio(titularId?: string | null): void {
+export function anotarCambio(titularId?: string | null, paraTodos = false): void {
   if (conexiones.size === 0) return;
   pendiente.admin = true;
+  if (paraTodos) pendiente.todos = true;
   if (titularId) pendiente.titulares.add(titularId);
   if (!temporizador) {
     temporizador = setTimeout(emitir, RETARDO_AGRUPAR_MS);
@@ -94,6 +96,8 @@ async function titularDe(prisma: PrismaClient, userId: string): Promise<string> 
 
 async function avisarEscritura(prisma: PrismaClient, modelo: string, resultado: any) {
   if (conexiones.size === 0) return;
+  // La configuración (comisiones, límites) la ve todo el mundo: cambia lo que muestran las pantallas de todos
+  if (modelo === 'Config') { anotarCambio(null, true); return; }
   let titular: string | null = null;
   if (resultado && typeof resultado === 'object') {
     if (modelo === 'User') titular = resultado.cuentaPadreId ?? resultado.id ?? null;

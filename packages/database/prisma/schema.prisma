@@ -379,6 +379,8 @@ model KushkiPayment {
   ticketNumber  String?  @unique @map("ticket_number")
   monto         Decimal  @db.Decimal(18, 2)
   estado        String   @default("pendiente")
+  // Comisión general con la que se cobró (la del momento de iniciar el pago)
+  comisionPct   Decimal  @default(3) @map("comision_pct") @db.Decimal(5, 2)
   // Branch de Kushki con el que se creó el pago (null = el comercio de TrendPay). Para consultar o cancelar el
   // pago hay que usar las mismas llaves con las que se generó.
   comercioId    String?  @map("comercio_id")

@@ -12,6 +12,7 @@ import { cifrarLlavePrivada, credencialesDeComercio, terminaEn } from '../utils/
 import { modoAlmacenamiento, cifradoDelBucket } from '../utils/storage';
 import { PERMISOS_SEDE } from '../utils/cuentas';
 import { logger } from '../utils/logger';
+import { comisionGeneralPct, guardarComisionGeneralPct, COMISION_MAXIMA } from '../utils/comision';
 import { contarDatos, limpiarDatos, limpiezaPermitida, FRASE_LIMPIEZA } from '../utils/limpiarDatos';
 import { solicitarEliminacion, cancelarEliminacion, ErrorEliminacion } from '../utils/eliminarCuentas';
 
@@ -31,7 +32,7 @@ router.get('/metrics', authenticate, requireAdmin, async (_req: Request, res: Re
     ]);
     const total_volumen    = Number.parseFloat(txAgg._sum.montoBruto?.toString() || '0');
     const total_comisiones = Number.parseFloat(txAgg._sum.comisionValor?.toString() || '0');
-    const comision_pct     = Number.parseFloat(comisionCfg?.valor || '3');
+    const comision_pct     = await comisionGeneralPct();
     res.json({ ok: true, metricas: { total_usuarios: totalUsuarios, saldo_plataforma: Number.parseFloat(saldoAgg._sum.saldo?.toString() || '0'), billeteras, total_volumen, total_comisiones, retiros_pendientes: retirosPend, comision_pct } });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
@@ -187,6 +188,22 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req: Request, res
     if (e instanceof ErrorEliminacion) return res.status(e.status).json({ ok: false, mensaje: e.message });
     res.status(500).json({ ok: false, mensaje: e.message });
   }
+});
+
+// ══ GET/PUT /api/admin/comision ══
+// La comisión general de TrendPay (consignaciones y envíos entre cuentas). Se guarda en la base de datos y aplica a las
+// operaciones nuevas; las ya hechas conservan la comisión con la que se cobraron.
+router.get('/comision', authenticate, requireAdmin, async (_req: Request, res: Response) => {
+  res.json({ ok: true, comisionPct: await comisionGeneralPct() });
+});
+
+router.put('/comision', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  const parse = z.object({ comisionPct: z.number().min(0).max(COMISION_MAXIMA) }).safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ ok: false, mensaje: `La comisión debe estar entre 0% y ${COMISION_MAXIMA}%` });
+  const anterior = await comisionGeneralPct();
+  await guardarComisionGeneralPct(parse.data.comisionPct);
+  await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'COMISION_MODIFICADA', tabla: 'configs', registroId: 'comision_pct', ip: req.ip, datos: { antes: { comision: anterior }, despues: { comision: parse.data.comisionPct } } } }).catch(() => {});
+  res.json({ ok: true, comisionPct: parse.data.comisionPct });
 });
 
 // ══ GET /api/admin/alertas ══

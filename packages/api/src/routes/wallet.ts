@@ -5,6 +5,7 @@ import { authenticate } from '../middleware/auth';
 import { walletLimiter } from '../middleware/rateLimiter';
 import { genCodigo, genQrToken } from '../utils/security';
 import { logger } from '../utils/logger';
+import { comisionGeneralPct, calcularComision } from '../utils/comision';
 import { conCuenta, saldoVisible } from '../utils/cuentas';
 
 const router = Router();
@@ -26,6 +27,12 @@ function mapTransaction(t: any) {
   const montoBruto = Number.parseFloat(t.montoBruto.toString());
   return { id: t.id, codigo: t.codigo, categoria: t.categoria, tipo: t.categoria, descripcion: t.descripcion, montoNeto, monto_neto: montoNeto, montoBruto, monto_bruto: montoBruto, status: t.status, estado: t.status, createdAt: t.createdAt, created_at: t.createdAt };
 }
+
+// ══ GET /api/wallet/comision ══
+// La comisión general vigente, para que las pantallas de consignar y enviar muestren la cifra real
+router.get('/comision', authenticate, conCuenta(), async (_req: Request, res: Response) => {
+  res.json({ ok: true, comisionPct: await comisionGeneralPct() });
+});
 
 // ══ GET /api/wallet/balance ══
 router.get('/balance', authenticate, conCuenta('verSaldo'), async (req: Request, res: Response) => {
@@ -169,7 +176,8 @@ router.post('/enviar', authenticate, walletLimiter, conCuenta('enviar'), async (
     if (receptorTitularId === req.cuenta!.titularId) throw new ApiError(400, 'No puedes enviarte dinero a ti mismo');
     if (receptor.bloqueado) throw new ApiError(400, 'El destinatario tiene la cuenta bloqueada');
 
-    const comisionValor = Math.ceil(monto * 0.03);
+    const comisionPct = await comisionGeneralPct();
+    const comisionValor = calcularComision(monto, comisionPct);
     const total = monto + comisionValor;
     const codigo = genCodigo('ENV');
     const notaSuffix = nota ? ` · ${nota}` : '';
@@ -208,7 +216,7 @@ router.post('/enviar', authenticate, walletLimiter, conCuenta('enviar'), async (
           categoria: 'envio',
           descripcion: descripcionEnvio,
           montoBruto: monto,
-          comisionPct: 3,
+          comisionPct,
           comisionValor,
           montoNeto: -total,
           saldoAntes: senderSaldoAntes,
