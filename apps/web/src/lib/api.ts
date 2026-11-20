@@ -134,7 +134,7 @@ export const datafonosApi = {
     editarTerminal: (id: string, data: { alias?: string; sedeId?: string | null; activo?: boolean }) => api.put(`/datafonos/admin/terminales/${id}`, data),
     config:        () => api.get('/datafonos/admin/config'),
     guardarConfig: (comisionPct: number) => api.put('/datafonos/admin/config', { comisionPct }),
-    guardarBusinessCode: (titularId: string, businessCode: string) => api.put(`/datafonos/admin/empresas/${titularId}/business-code`, { businessCode }),
+    guardarCredenciales: (titularId: string, datos: { webhookSecret?: string; businessCode?: string }) => api.put(`/datafonos/admin/empresas/${titularId}/business-code`, datos),
     quitarBusinessCode: (titularId: string) => api.delete(`/datafonos/admin/empresas/${titularId}/business-code`),
     cobros:        () => api.get('/datafonos/admin/cobros'),
   },

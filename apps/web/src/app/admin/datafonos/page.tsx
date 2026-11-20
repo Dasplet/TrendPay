@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, Plus, RefreshCw, Smartphone } from 'lucide-react';
+import { Copy, KeyRound, Plus, RefreshCw, Smartphone } from 'lucide-react';
 import { adminApi, datafonosApi } from '@/lib/api';
 import { ResumenVentas } from '@/components/datafonos/ResumenVentas';
 import { Panel, PanelHeader, Table, Tr, Td, Btn, Modal, Input, Select, fmt, fmtDate } from '@/components/admin/ui';
@@ -13,10 +13,10 @@ interface Terminal {
 }
 interface CobroAdmin {
   id: string; estado: string; estadoTerminal: string | null; detalle: string | null; monto: number; comisionPct: number;
-  terminal: string; empresa: string; cajero: string; ticketNumber: string | null; creado: string;
+  terminal: string; empresa: string; cajero: string; tipo: string; origen: string; ticketNumber: string | null; creado: string;
 }
 interface Empresa { userId: string; nombre: string; subcuentas: { id: string; nombre: string }[] }
-interface EmpresaCodigo { titularId: string; nombre: string; configurado: boolean; termina: string; terminales: number }
+interface EmpresaCodigo { titularId: string; nombre: string; configurado: boolean; termina: string; firma: boolean; terminales: number }
 
 const COLOR_ESTADO: Record<string, string> = { aprobado: '#6CC998', pendiente: '#d4a017', expirado: '#d4a017', revision: '#d4a017', reembolsando: '#d4a017', reembolsado: '#C0392B', rechazado: '#C0392B', cancelado: '#C0392B', error: '#C0392B' };
 const NUEVO = { serial: '', alias: '', titularId: '', sedeId: '' };
@@ -30,13 +30,14 @@ export default function DatafonosAdminPage() {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(NUEVO);
   const [comision, setComision] = useState<string | null>(null);
-  // Business-Code de Kushki One: a qué empresa se le está asignando (vacío = elegir) y el valor escrito
+  // Conexión con Kushki por empresa: a quién se le asigna (vacío = elegir), la firma de webhooks y el Business-Code (opcional)
   const [codigoModal, setCodigoModal] = useState<{ titularId: string } | null>(null);
+  const [firma, setFirma] = useState('');
   const [codigo, setCodigo] = useState('');
 
   const terminalesQ = useQuery({
     queryKey: ['admin-datafonos'],
-    queryFn: () => datafonosApi.admin.terminales().then((r) => r.data as { urlPublica: boolean; empresas: EmpresaCodigo[]; terminales: Terminal[] }),
+    queryFn: () => datafonosApi.admin.terminales().then((r) => r.data as { urlPublica: boolean; urlWebhook: string | null; empresas: EmpresaCodigo[]; terminales: Terminal[] }),
   });
   const cobrosQ = useQuery({
     queryKey: ['admin-datafonos-cobros'],
@@ -67,35 +68,30 @@ export default function DatafonosAdminPage() {
     onSuccess: () => refrescar(),
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo actualizar'),
   });
-  const probar = useMutation({
-    mutationFn: (t: Terminal) => datafonosApi.admin.probarTerminal(t.id).then((r) => ({ t, r: r.data })),
-    onSuccess: ({ t, r }) => {
-      if (r.conectado) toast.success(`${t.alias} responde · ${r.modelo ?? 'modelo desconocido'} · versión ${r.version ?? '?'} · serial ${r.serial ?? t.serial}`, { duration: 8000 });
-      else toast.error(`${t.alias} no responde: ${r.mensaje}`, { duration: 12000 });
-    },
-    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo probar la conexión'),
-  });
   const guardarComision = useMutation({
     mutationFn: (pct: number) => datafonosApi.admin.guardarConfig(pct),
     onSuccess: ({ data }) => { toast.success(`Comisión de datáfono: ${data.comisionPct}%`); setComision(null); queryClient.invalidateQueries({ queryKey: ['admin-datafonos-config'] }); },
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo guardar la comisión'),
   });
 
-  const guardarCodigo = useMutation({
-    mutationFn: () => datafonosApi.admin.guardarBusinessCode(codigoModal!.titularId, codigo.trim()),
-    onSuccess: ({ data }) => { toast.success(`Business-Code guardado (${data.termina})`); setCodigoModal(null); setCodigo(''); refrescar(); },
-    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo guardar el Business-Code'),
+  const guardarCredenciales = useMutation({
+    mutationFn: () => datafonosApi.admin.guardarCredenciales(codigoModal!.titularId, { ...(firma.trim() ? { webhookSecret: firma.trim() } : {}), ...(codigo.trim() ? { businessCode: codigo.trim() } : {}) }),
+    onSuccess: () => { toast.success('Credenciales guardadas'); setCodigoModal(null); setFirma(''); setCodigo(''); refrescar(); },
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudieron guardar'),
   });
   const quitarCodigo = useMutation({
     mutationFn: (titularId: string) => datafonosApi.admin.quitarBusinessCode(titularId),
-    onSuccess: () => { toast.success('Business-Code quitado'); refrescar(); },
+    onSuccess: () => { toast.success('Credenciales quitadas'); refrescar(); },
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo quitar'),
   });
 
   const terminales = terminalesQ.data?.terminales ?? [];
   const empresasCodigo = terminalesQ.data?.empresas ?? [];
-  const sinCodigo = empresasCodigo.filter((e) => e.terminales > 0 && !e.configurado);
-  const codigoOk = /^[A-Za-z0-9_-]{8,128}$/.test(codigo.trim());
+  const sinFirma = empresasCodigo.filter((e) => e.terminales > 0 && !e.firma);
+  const firmaOk = firma.trim() === '' || /^\S{8,300}$/.test(firma.trim());
+  const codigoOk = codigo.trim() === '' || /^[A-Za-z0-9_-]{8,128}$/.test(codigo.trim());
+  const hayAlgo = firma.trim() !== '' || codigo.trim() !== '';
+  const urlWebhook = terminalesQ.data?.urlWebhook ?? '';
   const empresa = empresasQ.data?.find((e) => e.userId === form.titularId);
   const serialOk = /^[A-Za-z0-9_-]{4,64}$/.test(form.serial.trim());
   const puedeCrear = serialOk && form.alias.trim().length >= 2 && !!form.titularId && !crear.isPending;
@@ -109,31 +105,44 @@ export default function DatafonosAdminPage() {
           Agrega en Railway la variable <code>KUSHKI_ONE_WEBHOOK_URL</code> con la dirección del API; sin ella Kushki no sabe a dónde avisar.
         </Panel>
       )}
-      {sinCodigo.length > 0 && (
+      {sinFirma.length > 0 && (
         <Panel style={{ padding: '14px 20px', borderColor: 'rgba(212,160,23,.45)' }}>
-          <strong style={{ color: '#d4a017' }}>Falta el Business-Code de Kushki One</strong> para: {sinCodigo.map((e) => e.nombre).join(', ')}. Hasta que lo asignes (panel de abajo), esas empresas no pueden cobrar con datáfono.
+          <strong style={{ color: '#d4a017' }}>Falta la firma de webhooks de Kushki</strong> para: {sinFirma.map((e) => e.nombre).join(', ')}. Sin ella, las ventas que se hagan en sus datáfonos no se reflejan en TrendPay (Kushki las reintenta unas horas y luego las descarta).
         </Panel>
       )}
 
       <Panel>
         <PanelHeader
-          title="Business-Code de Kushki One por empresa"
+          title="Conexión con Kushki por empresa"
           icon={<KeyRound size={16} />}
-          actions={<Btn variant="primary" onClick={() => { setCodigo(''); setCodigoModal({ titularId: '' }); }}><Plus size={14} /> Asignar Business-Code</Btn>}
+          actions={<Btn variant="primary" onClick={() => { setFirma(''); setCodigo(''); setCodigoModal({ titularId: '' }); }}><Plus size={14} /> Asignar firma de webhooks</Btn>}
         />
-        <p style={{ margin: 0, padding: '12px 20px 0', fontSize: 12, opacity: 0.7, lineHeight: 1.6 }}>
-          Es el <strong>Private Merchant ID</strong> de la Branch de <strong>card present</strong> de cada empresa (consola de Kushki → Credenciales). Cada empresa usa el suyo con sus datáfonos; se guarda cifrado y no se vuelve a mostrar.
-        </p>
-        <Table headers={['Empresa', 'Datáfonos', 'Business-Code', '']} empty="Aún no hay empresas con datáfonos ni código">
+        <div style={{ padding: '12px 20px 4px', fontSize: 12, lineHeight: 1.7, opacity: 0.85 }}>
+          <strong>Cómo se conectan los datáfonos.</strong> El cajero digita el valor en el aparato y Kushki avisa a TrendPay de cada venta y devolución; TrendPay no le manda nada al datáfono. Para eso, en la consola de Kushki de la cuenta de <strong>card present</strong>:
+          <ol style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+            <li>Entra a <strong>Desarrolladores → Webhooks</strong> y crea un webhook con esta dirección, marcando las transacciones aprobadas y las devoluciones:</li>
+          </ol>
+          {urlWebhook ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0', flexWrap: 'wrap' }}>
+              <code style={{ background: 'rgba(var(--adm-card-rgb),.7)', padding: '6px 10px', borderRadius: 8, fontSize: 12, wordBreak: 'break-all' }}>{urlWebhook}</code>
+              <Btn onClick={() => { navigator.clipboard.writeText(urlWebhook); toast.success('Dirección copiada'); }}><Copy size={13} /> Copiar</Btn>
+            </div>
+          ) : <div style={{ color: '#d4a017', margin: '6px 0' }}>Falta la dirección pública del API (arriba).</div>}
+          <ol start={2} style={{ margin: 0, paddingLeft: 18 }}>
+            <li>Copia la <strong>Webhook signature</strong> que sale arriba de esa misma página y pégala aquí para la empresa (se guarda cifrada y no se vuelve a mostrar).</li>
+          </ol>
+        </div>
+        <Table headers={['Empresa', 'Datáfonos', 'Firma de webhooks', 'Business-Code (opcional)', '']} empty="Aún no hay empresas con datáfonos">
           {empresasCodigo.map((e) => (
             <Tr key={e.titularId}>
               <Td><strong>{e.nombre}</strong></Td>
               <Td>{e.terminales}</Td>
-              <Td><Etiqueta texto={e.configurado ? `Configurado ${e.termina}` : 'Falta'} color={e.configurado ? '#6CC998' : '#d4a017'} /></Td>
+              <Td><Etiqueta texto={e.firma ? 'Configurada' : 'Falta'} color={e.firma ? '#6CC998' : '#d4a017'} /></Td>
+              <Td>{e.configurado ? <Etiqueta texto={`Guardado ${e.termina}`} color="#6CC998" /> : <span style={{ opacity: 0.5, fontSize: 12 }}>No hace falta</span>}</Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <Btn onClick={() => { setCodigo(''); setCodigoModal({ titularId: e.titularId }); }}>{e.configurado ? 'Cambiar' : 'Asignar'}</Btn>
-                  {e.configurado && <Btn variant="danger" disabled={quitarCodigo.isPending} onClick={() => { if (window.confirm(`¿Quitar el Business-Code de ${e.nombre}? Dejará de poder cobrar con datáfono.`)) quitarCodigo.mutate(e.titularId); }}>Quitar</Btn>}
+                  <Btn onClick={() => { setFirma(''); setCodigo(''); setCodigoModal({ titularId: e.titularId }); }}>{e.firma ? 'Cambiar' : 'Asignar'}</Btn>
+                  {(e.firma || e.configurado) && <Btn variant="danger" disabled={quitarCodigo.isPending} onClick={() => { if (window.confirm(`¿Quitar las credenciales de ${e.nombre}? Sus datáfonos dejarán de reflejarse en TrendPay.`)) quitarCodigo.mutate(e.titularId); }}>Quitar</Btn>}
                 </div>
               </Td>
             </Tr>
@@ -185,9 +194,6 @@ export default function DatafonosAdminPage() {
               <Td><Etiqueta texto={t.activo ? 'Activo' : 'Desactivado'} color={t.activo ? '#6CC998' : '#888'} /></Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <Btn disabled={probar.isPending} title="Comprueba que Kushki alcanza al datáfono, sin cobrar nada" onClick={() => probar.mutate(t)}>
-                    {probar.isPending && probar.variables?.id === t.id ? 'Probando…' : 'Probar conexión'}
-                  </Btn>
                   <Btn variant={t.activo ? 'danger' : 'default'} disabled={editar.isPending} onClick={() => editar.mutate({ id: t.id, data: { activo: !t.activo } })}>
                     {t.activo ? 'Desactivar' : 'Activar'}
                   </Btn>
@@ -205,14 +211,14 @@ export default function DatafonosAdminPage() {
 
       <Panel>
         <PanelHeader title="Últimos cobros" actions={<Btn onClick={refrescar}><RefreshCw size={14} /> Actualizar</Btn>} />
-        <Table headers={['Fecha', 'Empresa', 'Datáfono', 'Cajero', 'Monto', 'Estado', 'Detalle']} empty="Todavía no hay cobros con datáfono">
+        <Table headers={['Fecha', 'Empresa', 'Datáfono', 'Movimiento', 'Monto', 'Estado', 'Detalle']} empty="Todavía no hay cobros con datáfono">
           {(cobrosQ.data ?? []).map((c) => (
             <Tr key={c.id}>
               <Td>{fmtDate(c.creado)}</Td>
               <Td>{c.empresa}</Td>
               <Td>{c.terminal}</Td>
-              <Td>{c.cajero}</Td>
-              <Td>{fmt(c.monto)}{c.comisionPct > 0 && <div style={{ fontSize: 11, opacity: 0.6 }}>comisión {c.comisionPct}%</div>}</Td>
+              <Td><Etiqueta texto={c.tipo === 'reembolso' ? 'Reembolso' : 'Venta'} color={c.tipo === 'reembolso' ? '#C0392B' : '#852EC7'} /><div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>{c.cajero}</div></Td>
+              <Td>{c.tipo === 'reembolso' ? '−' : ''}{fmt(c.monto)}{c.comisionPct > 0 && <div style={{ fontSize: 11, opacity: 0.6 }}>comisión {c.comisionPct}%</div>}</Td>
               <Td><Etiqueta texto={c.estado} color={COLOR_ESTADO[c.estado] ?? '#888'} /></Td>
               <Td style={{ fontSize: 12, opacity: 0.8 }}>{c.detalle ?? (c.ticketNumber ? `Ticket ${c.ticketNumber}` : c.estadoTerminal ?? '')}</Td>
             </Tr>
@@ -220,17 +226,19 @@ export default function DatafonosAdminPage() {
         </Table>
       </Panel>
 
-      <Modal open={!!codigoModal} onClose={() => { setCodigoModal(null); setCodigo(''); }} title="Business-Code de Kushki One">
+      <Modal open={!!codigoModal} onClose={() => { setCodigoModal(null); setFirma(''); setCodigo(''); }} title="Conexión con Kushki">
         <Select label="Empresa" value={codigoModal?.titularId ?? ''} onChange={(e) => setCodigoModal({ titularId: e.target.value })}>
           <option value="">Elige una empresa…</option>
           {(empresasQ.data ?? []).map((e) => <option key={e.userId} value={e.userId}>{e.nombre}</option>)}
         </Select>
-        <Input label="Business-Code (Private Merchant ID de la Branch de card present)" type="password" autoComplete="off" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
-        {codigo.trim() !== '' && !codigoOk && <p style={{ color: '#C0392B', fontSize: 12, marginTop: -8 }}>Solo letras, números, guion y guion bajo (8 a 128 caracteres).</p>}
-        <p style={{ fontSize: 12, opacity: 0.7, marginTop: -6 }}>Cópialo desde la consola de Kushki, en la cuenta de card present. No se vuelve a mostrar.</p>
+        <Input label="Firma de webhooks (Webhook signature de la consola de Kushki)" type="password" autoComplete="off" value={firma} onChange={(e) => setFirma(e.target.value)} />
+        {!firmaOk && <p style={{ color: '#C0392B', fontSize: 12, marginTop: -8 }}>Sin espacios, de 8 a 300 caracteres.</p>}
+        <p style={{ fontSize: 12, opacity: 0.7, marginTop: -6 }}>Consola de Kushki, cuenta de card present → Desarrolladores → Webhooks: aparece arriba de la página. No se vuelve a mostrar.</p>
+        <Input label="Business-Code (opcional, no hace falta para las ventas del datáfono)" type="password" autoComplete="off" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+        {!codigoOk && <p style={{ color: '#C0392B', fontSize: 12, marginTop: -8 }}>Solo letras, números, guion y guion bajo (8 a 128 caracteres).</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <Btn variant="ghost" onClick={() => { setCodigoModal(null); setCodigo(''); }}>Cancelar</Btn>
-          <Btn variant="primary" disabled={!codigoModal?.titularId || !codigoOk || guardarCodigo.isPending} onClick={() => guardarCodigo.mutate()}>{guardarCodigo.isPending ? 'Guardando…' : 'Guardar'}</Btn>
+          <Btn variant="ghost" onClick={() => { setCodigoModal(null); setFirma(''); setCodigo(''); }}>Cancelar</Btn>
+          <Btn variant="primary" disabled={!codigoModal?.titularId || !hayAlgo || !firmaOk || !codigoOk || guardarCredenciales.isPending} onClick={() => guardarCredenciales.mutate()}>{guardarCredenciales.isPending ? 'Guardando…' : 'Guardar'}</Btn>
         </div>
       </Modal>
 
