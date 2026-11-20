@@ -169,6 +169,16 @@ describe('Datáfonos: Business-Code por empresa y código del webhook', () => {
       expect(sinRespuesta.body.mensaje).toContain('timeout');
     });
 
+    it('un 504 de Kushki (no alcanza al aparato) se explica con palabras claras y con su código', async () => {
+      await empresaConTerminal('SN-AAAA-0001', 'codigo-de-la-empresa-A');
+      http.post.mockRejectedValue({ message: 'Request failed with status code 504', response: { status: 504, data: '<html>Gateway Timeout</html>' } });
+      const res = await probar(await admin(), await idDe('SN-AAAA-0001'));
+      expect(res.body.conectado).toBe(false);
+      expect(res.body.mensaje).toContain('no pudo comunicarse con el datáfono');
+      expect(res.body.mensaje).toContain('[HTTP-504]');
+      expect(res.body.mensaje).not.toContain('Request failed with status code');
+    });
+
     it('una empresa sin Business-Code no llega a llamar a Kushki y lo dice', async () => {
       await empresaConTerminal('SN-CCCC-0003', null);
       const res = await probar(await admin(), await idDe('SN-CCCC-0003'));

@@ -47,7 +47,15 @@ async function llamar(serial: string, ruta: string, payload: unknown, opciones: 
     });
   } catch (err: any) {
     const data = err.response?.data;
-    throw new KushkiError(data?.message || err.message || 'No se pudo hablar con Kushki One', err.response?.status ?? 502, {
+    const status: number | undefined = err.response?.status;
+    // 502/503/504 o sin respuesta a tiempo: la nube de Kushki no logró comunicarse con el aparato. Se explica con palabras claras.
+    if (status === 502 || status === 503 || status === 504 || status === 408 || err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
+      throw new KushkiError(
+        'Kushki no pudo comunicarse con el datáfono a tiempo. Revisa que esté encendido, con internet y con la aplicación de Kushki ONE abierta, y que sea un terminal habilitado para tu cuenta',
+        504, { codigo: `HTTP-${status ?? 'TIMEOUT'}`, respuesta: data },
+      );
+    }
+    throw new KushkiError(data?.message || err.message || 'No se pudo hablar con Kushki One', status ?? 502, {
       codigo: data?.code, respuesta: data,
     });
   }
