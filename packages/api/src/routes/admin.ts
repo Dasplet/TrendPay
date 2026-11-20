@@ -10,6 +10,8 @@ import { cifradoV2Activo } from '../utils/security';
 import { getConfigTransferencias, solicitarTokenBreB, olvidarCacheBreB, AMBIENTES_KUSHKI, KushkiError } from '../utils/kushki';
 import { cifrarLlavePrivada, credencialesDeComercio, terminaEn } from '../utils/comerciosKushki';
 import { modoAlmacenamiento, cifradoDelBucket } from '../utils/storage';
+import { PERMISOS_SEDE } from '../utils/cuentas';
+import { solicitarEliminacion, cancelarEliminacion, ErrorEliminacion } from '../utils/eliminarCuentas';
 
 const router = Router();
 
@@ -17,7 +19,7 @@ const router = Router();
 router.get('/metrics', authenticate, requireAdmin, async (_req: Request, res: Response) => {
   try {
     const [totalUsuarios, txAgg, retirosPend, comisionCfg] = await Promise.all([
-      prisma.user.count(),
+      prisma.user.count({ where: { eliminadoAt: null } }),
       prisma.transaction.aggregate({ where: { categoria: { not: 'ajuste' } }, _sum: { montoBruto: true, comisionValor: true } }),
       prisma.withdrawal.count({ where: { status: 'pendiente' } }).catch(() => 0),
       prisma.config.findUnique({ where: { clave: 'comision_pct' } }),
@@ -38,16 +40,17 @@ router.get('/users', authenticate, requireAdmin, async (req: Request, res: Respo
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: { wallet: true, cuentaPadre: { select: { nombre: true, wallet: true } } },
-      where: q ? { OR: [
+      // Las cuentas eliminadas ya no existen para el sistema: no salen en ningún listado
+      where: { eliminadoAt: null, ...(q ? { OR: [
         { nombre: { contains: q, mode: 'insensitive' } },
         { cedula: { contains: q } },
         { correo: { contains: q, mode: 'insensitive' } },
-      ]} : undefined,
+      ]} : {}) },
     });
     res.json({
       ok: true,
       // Las subcuentas empresariales no tienen billetera propia: se muestra la de su padre.
-      usuarios: users.map(u => { const saldo = Number.parseFloat((u.wallet ?? u.cuentaPadre?.wallet)?.saldo.toString() || '0'); return { id: u.id, cedula: u.cedula, nombre: u.nombre, correo: u.correo, celular: u.celular, ciudad: u.ciudad, rol: u.rol, subRol: u.subRol, kycNivel: u.kycNivel, kycVerificado: u.kycVerificado, bloqueado: u.bloqueado, saldo, cuentaPadre: u.cuentaPadre?.nombre ?? null, ultimoLogin: u.ultimoLogin, createdAt: u.createdAt }; }),
+      usuarios: users.map(u => { const saldo = Number.parseFloat((u.wallet ?? u.cuentaPadre?.wallet)?.saldo.toString() || '0'); return { id: u.id, cedula: u.cedula, nombre: u.nombre, correo: u.correo, celular: u.celular, ciudad: u.ciudad, rol: u.rol, subRol: u.subRol, kycNivel: u.kycNivel, kycVerificado: u.kycVerificado, bloqueado: u.bloqueado, saldo, cuentaPadre: u.cuentaPadre?.nombre ?? null, eliminacionProgramadaAt: u.eliminacionProgramadaAt, ultimoLogin: u.ultimoLogin, createdAt: u.createdAt }; }),
     });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
@@ -62,18 +65,15 @@ const createUserSchema = z.object({
   ciudad:  z.string().optional(),
   // Ya no se crean administradores desde aquí: solo clientes (empresas, usuarios y sedes)
   rol:     z.literal('usuario', { errorMap: () => ({ message: 'No se pueden crear cuentas de administrador' }) }).optional(),
-  // Si viene, la cuenta es una sede (subcuenta) de esa empresa: no tiene billetera propia y opera sobre la de su padre
+  // Si viene, la cuenta es una sede (subcuenta) de esa empresa: no tiene billetera propia y opera sobre la de su padre.
+  // Todas las sedes nacen con el mismo formato (PERMISOS_SEDE): ya no se eligen permisos.
   cuentaPadreId:   z.string().uuid().optional(),
-  permisoVerSaldo: z.boolean().optional(),
-  permisoRecargar: z.boolean().optional(),
-  permisoEnviar:   z.boolean().optional(),
-  permisoRetirar:  z.boolean().optional(),
 });
 
 router.post('/users', authenticate, requireAdmin, async (req: Request, res: Response) => {
   const parse = createUserSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: parse.error.errors[0].message });
-  const { cedula, nombre, correo, pin, celular, ciudad, cuentaPadreId, permisoVerSaldo, permisoRecargar, permisoEnviar, permisoRetirar } = parse.data;
+  const { cedula, nombre, correo, pin, celular, ciudad, cuentaPadreId } = parse.data;
 
   try {
     const exists = await prisma.user.findFirst({ where: { OR: [{ cedula }, { correo }] } });
@@ -98,7 +98,7 @@ router.post('/users', authenticate, requireAdmin, async (req: Request, res: Resp
         pinHash,
         rol: 'usuario',
         ...(cuentaPadreId
-          ? { cuentaPadreId, permisoVerSaldo, permisoRecargar, permisoEnviar, permisoRetirar }
+          ? { cuentaPadreId, ...PERMISOS_SEDE }
           : { wallet: { create: { saldo: 0 } } }),
       },
       include: { wallet: true },
@@ -168,21 +168,29 @@ router.put('/users/:id', authenticate, requireAdmin, async (req: Request, res: R
 });
 
 // ══ DELETE /api/admin/users/:id ══
+// Sin saldo ni operaciones en curso se elimina al momento (se borran sus datos personales y sale del sistema). Con saldo
+// se programa a 7 días: solo puede retirar y, vencido el plazo, se elimina sola cuando el saldo llega a cero.
 router.delete('/users/:id', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const u = await prisma.user.findUnique({ where: { id: req.params.id } });
-    if (!u) return res.status(404).json({ ok: false });
-    // Soft delete
-    await prisma.user.update({
-      where: { id: req.params.id },
-      data: { cedula: `DEL-${u.cedula}`, correo: `${u.cedula}@eliminado.local`, nombre: 'Usuario eliminado', bloqueado: true },
-    });
-    await prisma.auditLog.create({
-      data: { userId: req.user!.id, accion: 'ELIMINAR_USUARIO', tabla: 'users', registroId: req.params.id, ip: req.ip,
-        datos: { antes: { nombre: u.nombre, correo: u.correo, cedula: u.cedula } } },
-    }).catch(() => {});
-    res.json({ ok: true, mensaje: 'Usuario eliminado' });
-  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+    const r = await solicitarEliminacion(req.params.id, req.user!.id, req.ip);
+    if (r.estado === 'eliminada') return res.json({ ok: true, estado: 'eliminada', mensaje: 'Cuenta eliminada' });
+    const hasta = r.fecha.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+    res.json({ ok: true, estado: 'programada', fecha: r.fecha, motivos: r.motivos, mensaje: `La cuenta tiene ${r.motivos.join(' y ')}. Tiene hasta el ${hasta} para retirar su saldo; después se eliminará sola.` });
+  } catch (e: any) {
+    if (e instanceof ErrorEliminacion) return res.status(e.status).json({ ok: false, mensaje: e.message });
+    res.status(500).json({ ok: false, mensaje: e.message });
+  }
+});
+
+// ══ POST /api/admin/users/:id/cancelar-eliminacion ══
+router.post('/users/:id/cancelar-eliminacion', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    await cancelarEliminacion(req.params.id, req.user!.id, req.ip);
+    res.json({ ok: true, mensaje: 'Eliminación cancelada' });
+  } catch (e: any) {
+    if (e instanceof ErrorEliminacion) return res.status(e.status).json({ ok: false, mensaje: e.message });
+    res.status(500).json({ ok: false, mensaje: e.message });
+  }
 });
 
 // ══ GET /api/admin/transactions ══
@@ -395,8 +403,8 @@ const coincide = (q: string) => [
 ];
 
 async function cuentaPadreOrNull(userId: string) {
-  const u = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, nombre: true, rol: true, cuentaPadreId: true } });
-  return u && u.rol === 'usuario' && u.cuentaPadreId === null ? u : null;
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, nombre: true, rol: true, cuentaPadreId: true, eliminadoAt: true, eliminacionProgramadaAt: true } });
+  return u && u.rol === 'usuario' && u.cuentaPadreId === null && !u.eliminadoAt && !u.eliminacionProgramadaAt ? u : null;
 }
 
 // GET /api/admin/kushki/comercios?q=&page=&limit=  → todas las cuentas padre con el estado de su Branch
@@ -410,13 +418,14 @@ router.get('/kushki/comercios', authenticate, requireAdmin, async (req: Request,
     const where = {
       ...(incluirAdmins ? {} : { rol: 'usuario' }),
       cuentaPadreId: null,
+      eliminadoAt: null,
       // La búsqueda también encuentra una sede (subcuenta): se muestra su empresa
       ...(q ? { OR: [
         ...coincide(q),
         { subcuentas: { some: { OR: coincide(q) } } },
       ] } : {}),
     };
-    const datosUsuario = { id: true, nombre: true, cedula: true, correo: true, celular: true, ciudad: true, rol: true, subRol: true, kycNivel: true, kycVerificado: true, bloqueado: true, ultimoLogin: true } as const;
+    const datosUsuario = { id: true, nombre: true, cedula: true, correo: true, celular: true, ciudad: true, rol: true, subRol: true, kycNivel: true, kycVerificado: true, bloqueado: true, ultimoLogin: true, eliminacionProgramadaAt: true } as const;
     const [total, configurados, cuentas] = await Promise.all([
       prisma.user.count({ where }),
       prisma.comercioKushki.count({ where: { user: where } }),

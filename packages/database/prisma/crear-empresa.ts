@@ -2,10 +2,10 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { createInterface } from 'node:readline/promises';
 
-// Crea solo la empresa con subcuentas (Empresa Padre + Hijo 1 + Hijo 2) en la
+// Crea solo la empresa con su subcuenta (Empresa Padre + Hijo 1) en la
 // base de datos a la que apunte DATABASE_URL — pensado para producción, donde
-// no se corre el seed. Los PIN se piden por consola (o se leen de PIN_PADRE,
-// PIN_HIJO1 y PIN_HIJO2) para que nunca queden escritos en el repo.
+// no se corre el seed. Los PIN se piden por consola (o se leen de PIN_PADRE
+// y PIN_HIJO1) para que nunca queden escritos en el repo.
 // La billetera del padre arranca en 0. Si alguna cédula o correo ya existe,
 // no crea nada.
 
@@ -13,12 +13,9 @@ const prisma = new PrismaClient();
 
 const PADRE = { cedula: '900100200', nombre: 'Empresa Padre', correo: 'empresa.padre@trendpay.co' };
 const HIJOS = [
-  // Hijo 1: solo recarga, no ve el saldo
+  // Todas las sedes (cuentas hijo) tienen este formato: solo recargan/cobran, no ven el saldo, no envían ni retiran
   { clave: 'PIN_HIJO1', cedula: '900100201', nombre: 'Empresa Hijo 1', correo: 'empresa.hijo1@trendpay.co',
     permisoVerSaldo: false, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false },
-  // Hijo 2: ve el saldo y solo retira
-  { clave: 'PIN_HIJO2', cedula: '900100202', nombre: 'Empresa Hijo 2', correo: 'empresa.hijo2@trendpay.co',
-    permisoVerSaldo: true, permisoRecargar: false, permisoEnviar: false, permisoRetirar: true },
 ];
 
 async function pedirPin(clave: string, nombre: string): Promise<string> {

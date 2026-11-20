@@ -150,7 +150,8 @@ describe('Admin API', () => {
   });
 
   describe('DELETE /api/admin/users/:id', () => {
-    it('elimina (soft-delete) al usuario y guarda sus datos previos en la auditoría', async () => {
+    // El detalle de la eliminación (plazo de 7 días, anonimización, restricciones) está en eliminarCuentas.test.ts
+    it('elimina al usuario sin saldo: desaparece y no deja sus datos en la auditoría', async () => {
       const admin = await crearUsuarioDePrueba({ rol: 'admin' });
       const target = await crearUsuarioDePrueba({ nombre: 'Por Eliminar' });
 
@@ -158,13 +159,11 @@ describe('Admin API', () => {
         .delete(`/api/admin/users/${target.id}`)
         .set('Authorization', `Bearer ${tokenPara(admin)}`);
       expect(res.status).toBe(200);
+      expect(res.body.estado).toBe('eliminada');
 
-      const eliminado = await prisma.user.findUnique({ where: { id: target.id } });
-      expect(eliminado!.bloqueado).toBe(true);
-      expect(eliminado!.nombre).toBe('Usuario eliminado');
-
-      const auditLog = await prisma.auditLog.findFirst({ where: { accion: 'ELIMINAR_USUARIO', registroId: target.id } });
-      expect((auditLog!.datos as any).antes.nombre).toBe('Por Eliminar');
+      expect(await prisma.user.findUnique({ where: { id: target.id } })).toBeNull();
+      expect(await prisma.auditLog.count({ where: { registroId: target.id } })).toBe(0);
+      expect(JSON.stringify(await prisma.auditLog.findMany())).not.toContain('Por Eliminar');
     });
   });
 

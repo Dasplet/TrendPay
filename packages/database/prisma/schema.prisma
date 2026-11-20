@@ -38,6 +38,10 @@ model User {
   permisoRecargar Boolean   @default(true) @map("permiso_recargar")
   permisoEnviar   Boolean   @default(true) @map("permiso_enviar")
   permisoRetirar  Boolean   @default(true) @map("permiso_retirar")
+  // Eliminación de cuenta: con saldo se da un plazo de 7 días para retirarlo (solo puede retirar); al vencer, y con
+  // saldo en cero, se borran sus datos personales. eliminadoAt marca la cuenta ya anonimizada (no sale en ningún listado).
+  eliminacionProgramadaAt DateTime? @map("eliminacion_programada_at")
+  eliminadoAt     DateTime? @map("eliminado_at")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 

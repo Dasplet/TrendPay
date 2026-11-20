@@ -16,7 +16,14 @@ export interface Cuenta {
   titularId: string;   // dueño de la billetera (el padre, o el propio usuario)
   esSubcuenta: boolean;
   permisos: Permisos;
+  eliminacionProgramadaAt: Date | null; // la cuenta se está eliminando: solo puede ver su saldo y retirarlo
 }
+
+// Todas las sedes (cuentas hijo) tienen el mismo formato: no ven el saldo, solo recargan/cobran y no envían ni retiran.
+export const PERMISOS_SEDE = { permisoVerSaldo: false, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false } as const;
+
+// Durante el plazo de eliminación la cuenta solo puede consultar su saldo y retirarlo
+const PERMISOS_EN_ELIMINACION: Permisos = { verSaldo: true, recargar: false, enviar: false, retirar: true };
 
 declare global {
   namespace Express {
@@ -33,18 +40,21 @@ interface UsuarioConPermisos {
   permisoRecargar: boolean;
   permisoEnviar: boolean;
   permisoRetirar: boolean;
+  eliminacionProgramadaAt?: Date | null;
 }
 
 export function cuentaDe(user: UsuarioConPermisos): Cuenta {
+  const enEliminacion = !!user.eliminacionProgramadaAt;
   return {
     titularId: user.cuentaPadreId ?? user.id,
     esSubcuenta: user.cuentaPadreId !== null,
-    permisos: {
+    permisos: enEliminacion ? PERMISOS_EN_ELIMINACION : {
       verSaldo: user.permisoVerSaldo,
       recargar: user.permisoRecargar,
       enviar: user.permisoEnviar,
       retirar: user.permisoRetirar,
     },
+    eliminacionProgramadaAt: user.eliminacionProgramadaAt ?? null,
   };
 }
 
@@ -75,6 +85,10 @@ export function conCuenta(...requeridos: Permiso[]) {
       const cuenta = await cargarCuenta(req.user!.id);
       if (!cuenta) return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado' });
       const faltante = requeridos.find((p) => !cuenta.permisos[p]);
+      if (faltante && cuenta.eliminacionProgramadaAt) {
+        const hasta = cuenta.eliminacionProgramadaAt.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+        return res.status(403).json({ ok: false, mensaje: `Tu cuenta está en proceso de eliminación: solo puedes retirar tu saldo hasta el ${hasta}`, code: 'CUENTA_EN_ELIMINACION' });
+      }
       if (faltante) return res.status(403).json({ ok: false, mensaje: MENSAJES_SIN_PERMISO[faltante], code: 'SIN_PERMISO' });
       req.cuenta = cuenta;
       next();
@@ -106,6 +120,7 @@ export function datosBilletera(user: UsuarioConBilletera) {
     saldo,
     walletId: wallet?.id,
     permisos: cuenta.permisos,
+    eliminacionProgramadaAt: cuenta.eliminacionProgramadaAt,
     cuentaPadre: user.cuentaPadre ? { id: user.cuentaPadre.id, nombre: user.cuentaPadre.nombre } : null,
   };
 }

@@ -15,6 +15,7 @@ export interface User {
   saldo: number | null; // null cuando la subcuenta no tiene permiso para ver el saldo
   walletId?: string;
   permisos?: Permisos;
+  eliminacionProgramadaAt?: string | null; // la cuenta se elimina ese día: hasta entonces solo puede retirar su saldo
   cuentaPadre?: { id: string; nombre: string } | null;
   kycVerificado: boolean;
   avatarDataUrl?: string | null;

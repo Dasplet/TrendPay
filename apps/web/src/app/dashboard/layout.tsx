@@ -107,7 +107,15 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
         </div>
       </aside>
 
-      <main className="tp-main-area">{children}</main>
+      <main className="tp-main-area">
+        {user.eliminacionProgramadaAt && (
+          <div role="alert" style={{ margin: '12px 16px 0', padding: '12px 16px', borderRadius: 12, background: 'rgba(212,160,23,.15)', border: '1px solid rgba(212,160,23,.5)', fontSize: 14 }}>
+            <strong>Tu cuenta se eliminará el {new Date(user.eliminacionProgramadaAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })}.</strong>{' '}
+            Hasta entonces solo puedes retirar tu saldo. Retíralo antes de esa fecha.
+          </div>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

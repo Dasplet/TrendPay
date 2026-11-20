@@ -17,6 +17,7 @@ import { apiLimiter } from './middleware/rateLimiter';
 import { errorHandler } from './middleware/errorHandler';
 import { iniciarConciliacionKushki } from './utils/kushkiPayments';
 import { iniciarConciliacionDatafonos } from './utils/datafonos';
+import { iniciarEliminacionDeCuentas } from './utils/eliminarCuentas';
 
 // Routes
 import authRouter      from './routes/auth';
@@ -161,6 +162,7 @@ async function start() {
       logger.info(`🏥 Health check: http://localhost:${PORT}/health`);
       iniciarConciliacionKushki();
       iniciarConciliacionDatafonos();
+      iniciarEliminacionDeCuentas();
     });
   } catch (err: any) {
     logger.error('❌ No se pudo iniciar el servidor', { err: err.message, stack: err.stack });

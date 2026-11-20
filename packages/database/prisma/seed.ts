@@ -114,13 +114,10 @@ async function main() {
     },
   });
 
+  // Todas las sedes (cuentas hijo) tienen el mismo formato: solo recargan/cobran, no ven el saldo, no envían ni retiran
   const hijos = [
-    // Hijo 1: solo recarga, no ve el saldo
     { cedula: '900100201', nombre: 'Empresa Hijo 1', correo: 'empresa.hijo1@trendpay.co',
       permisoVerSaldo: false, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false },
-    // Hijo 2: ve el saldo y solo retira
-    { cedula: '900100202', nombre: 'Empresa Hijo 2', correo: 'empresa.hijo2@trendpay.co',
-      permisoVerSaldo: true, permisoRecargar: false, permisoEnviar: false, permisoRetirar: true },
   ];
   for (const hijo of hijos) {
     await prisma.user.upsert({
@@ -134,7 +131,7 @@ async function main() {
   console.log('\n🎉 Seed completed!\n');
   console.log('Admin:    cedula 1000000001 · PIN 0000');
   console.log('Usuario:  cedula 1023456789 · PIN 1234');
-  console.log('Empresa:  cedulas 900100200 (padre) · 900100201 (hijo 1) · 900100202 (hijo 2) · PIN 1234');
+  console.log('Empresa:  cedulas 900100200 (padre) · 900100201 (hijo 1) · PIN 1234');
 }
 
 main()

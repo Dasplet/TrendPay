@@ -4,13 +4,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, Tr, Td, StatusBadge, KycBadge, Avatar, Btn, Modal, Input, Select, fmt, fmtDate } from '@/components/admin/ui';
 import toast from 'react-hot-toast';
-import { Users, Download, Eye, Pencil, Lock, Trash2, AlertTriangle, ChevronDown, ChevronRight, Search } from 'lucide-react';
+import { Users, Download, Eye, Pencil, Lock, Trash2, Undo2, AlertTriangle, ChevronDown, ChevronRight, Search } from 'lucide-react';
 import { downloadCsv } from '@/lib/exportCsv';
 
 // Una empresa (cuenta padre) con sus sedes (cuentas hijo) debajo, y el estado de su Branch de Kushki.
 interface Sede {
   id: string; userId: string; nombre: string; cedula: string; correo: string; celular?: string; ciudad?: string;
   rol: string; kycNivel: number; bloqueado: boolean; ultimoLogin?: string; puedeRecargar: boolean;
+  eliminacionProgramadaAt?: string | null;
 }
 interface Cuenta extends Omit<Sede, 'puedeRecargar'> {
   saldo: number;
@@ -20,14 +21,6 @@ interface Cuenta extends Omit<Sede, 'puedeRecargar'> {
 
 const LIMITE = 50;
 const NUEVO = { nombre:'', cedula:'', correo:'', celular:'', ciudad:'', pin:'' };
-// Permisos con los que nace una sede: ve el saldo y recarga; enviar y retirar se activan a propósito
-const PERMISOS_SEDE = { permisoVerSaldo: true, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false };
-const ETIQUETAS_PERMISOS: [keyof typeof PERMISOS_SEDE, string, string][] = [
-  ['permisoVerSaldo', 'Ver el saldo', 'Consulta el saldo de la empresa'],
-  ['permisoRecargar', 'Recargar', 'Consigna y genera QR de cobro'],
-  ['permisoEnviar',   'Enviar',     'Envía dinero a otras cuentas'],
-  ['permisoRetirar',  'Retirar',    'Retira dinero a un banco'],
-];
 type Empresa = { id: string; nombre: string };
 const SIN_LLAVES = { publicMerchantId: '', privateMerchantId: '', ambiente: 'produccion', activo: true };
 const LLAVE = /^[A-Za-z0-9]{20,64}$/;
@@ -87,7 +80,6 @@ export default function UsuariosPage() {
   const [newUser, setNewUser]   = useState(NUEVO);
   const [esSedeNueva, setEsSedeNueva] = useState(false);
   const [empresaNueva, setEmpresaNueva] = useState<Empresa | null>(null);
-  const [permisos, setPermisos] = useState(PERMISOS_SEDE);
   const [empresaEdit, setEmpresaEdit] = useState<Empresa | null>(null);
   const [showEdit, setShowEdit] = useState<any>(null);
   const [showDel, setShowDel]   = useState<any>(null);
@@ -121,8 +113,20 @@ export default function UsuariosPage() {
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => adminApi.deleteUser(id),
-    onSuccess: () => { refrescar(); toast.success('Usuario eliminado'); setShowDel(null); },
+    onSuccess: ({ data: r }) => {
+      refrescar();
+      // Con saldo no se elimina al momento: queda un plazo de 7 días para que el cliente lo retire
+      if (r.estado === 'programada') toast(r.mensaje, { duration: 9000 });
+      else toast.success('Cuenta eliminada');
+      setShowDel(null);
+    },
     onError: (e:any) => toast.error(e.response?.data?.mensaje || 'Error'),
+  });
+
+  const cancelarEliminacion = useMutation({
+    mutationFn: (id: string) => adminApi.cancelarEliminacion(id),
+    onSuccess: () => { refrescar(); toast.success('Eliminación cancelada'); },
+    onError: (e:any) => toast.error(e.response?.data?.mensaje || 'No se pudo cancelar'),
   });
 
   const createMut = useMutation({
@@ -175,11 +179,11 @@ export default function UsuariosPage() {
   }
 
   function abrirNuevo(empresa?: Empresa) {
-    setNewUser(NUEVO); setPermisos(PERMISOS_SEDE);
+    setNewUser(NUEVO);
     setEsSedeNueva(!!empresa); setEmpresaNueva(empresa ?? null);
     setShowNew(true);
   }
-  function cerrarNuevo() { setShowNew(false); setNewUser(NUEVO); setEsSedeNueva(false); setEmpresaNueva(null); setPermisos(PERMISOS_SEDE); }
+  function cerrarNuevo() { setShowNew(false); setNewUser(NUEVO); setEsSedeNueva(false); setEmpresaNueva(null); }
 
   function submitNewUser() {
     if (!newUser.nombre.trim() || newUser.cedula.length < 6 || !newUser.correo.trim() || !/^\d{4}$/.test(newUser.pin)) {
@@ -187,7 +191,7 @@ export default function UsuariosPage() {
       return;
     }
     if (esSedeNueva && !empresaNueva) { toast.error('Elige la empresa a la que pertenece la sede'); return; }
-    createMut.mutate(esSedeNueva ? { ...newUser, cuentaPadreId: empresaNueva!.id, ...permisos } : newUser);
+    createMut.mutate(esSedeNueva ? { ...newUser, cuentaPadreId: empresaNueva!.id } : newUser);
   }
 
   function abrirBranch(c: Cuenta) {
@@ -200,7 +204,14 @@ export default function UsuariosPage() {
       <Btn variant="ghost" title="Ver detalle" onClick={() => setSelected(u)} style={{ padding:'5px 8px' }}><Eye size={14} /></Btn>
       <Btn variant="ghost" title="Editar" onClick={() => { setShowEdit({...u, esSede: !!empresa}); setEmpresaEdit(empresa ? { id: empresa.id, nombre: empresa.nombre } : null); }} style={{ padding:'5px 8px' }}><Pencil size={14} /></Btn>
       <Btn variant="ghost" title={u.bloqueado ? 'Desbloquear' : 'Bloquear'} onClick={() => updateMut.mutate({ id:u.id, data:{ bloqueado: !u.bloqueado } })} style={{ padding:'5px 8px' }}><Lock size={14} /></Btn>
-      <Btn variant="danger" title="Eliminar" onClick={() => setShowDel(u)} style={{ padding:'5px 8px' }}><Trash2 size={14} /></Btn>
+      {u.eliminacionProgramadaAt ? (
+        <>
+          <Etiqueta color="amarillo">Se elimina el {new Date(u.eliminacionProgramadaAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}</Etiqueta>
+          <Btn variant="ghost" title="Cancelar la eliminación" onClick={() => cancelarEliminacion.mutate(u.id)} style={{ padding:'5px 8px' }}><Undo2 size={14} /></Btn>
+        </>
+      ) : (
+        <Btn variant="danger" title="Eliminar" onClick={() => setShowDel(u)} style={{ padding:'5px 8px' }}><Trash2 size={14} /></Btn>
+      )}
     </div>
   );
 
@@ -376,23 +387,9 @@ export default function UsuariosPage() {
             <>
               <div style={{ fontSize:11, fontWeight:600, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>Empresa a la que pertenece</div>
               <div style={{ marginBottom:14 }}><SelectorEmpresa value={empresaNueva} onChange={setEmpresaNueva} /></div>
-              <div style={{ fontSize:11, fontWeight:600, color:'var(--adm-muted)', textTransform:'uppercase', letterSpacing:'.5px', marginBottom:6 }}>Qué puede hacer la sede con el dinero de la empresa</div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(190px, 1fr))', gap:10, marginBottom:16 }}>
-                {ETIQUETAS_PERMISOS.map(([clave, etiqueta, ayuda]) => {
-                  const activo = permisos[clave];
-                  return (
-                    <label key={clave} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', borderRadius:12, cursor:'pointer', userSelect:'none',
-                      border: activo ? '1.5px solid #852EC7' : '1.5px solid rgba(var(--adm-fg-rgb),.12)',
-                      background: activo ? 'rgba(133,46,199,.14)' : 'rgba(var(--adm-card-rgb),.45)', transition:'all .15s' }}>
-                      <input type="checkbox" checked={activo} onChange={e => setPermisos(p => ({ ...p, [clave]: e.target.checked }))} />
-                      <span style={{ display:'block', minWidth:0 }}>
-                        <span style={{ display:'block', fontSize:13, fontWeight:700, color:'var(--adm-text)' }}>{etiqueta}</span>
-                        <span style={{ display:'block', fontSize:11, color:'var(--adm-muted)', marginTop:2 }}>{ayuda}</span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
+              <p style={{ fontSize:12, color:'var(--adm-muted)', lineHeight:1.6, margin:'0 0 16px' }}>
+                Todas las sedes tienen el mismo formato: <strong>no ven el saldo</strong>, solo <strong>recargan y cobran</strong> (QR y datáfono) y <strong>no envían ni retiran</strong>.
+              </p>
             </>
           )}
           <Btn variant="primary" style={{ width:'100%', justifyContent:'center', marginTop:8 }} disabled={createMut.isPending} onClick={submitNewUser}>
@@ -430,8 +427,9 @@ export default function UsuariosPage() {
           <div style={{ textAlign:'center' }}>
             <div style={{ display:'flex', justifyContent:'center', color:'#d4a017', marginBottom:12 }}><AlertTriangle size={40} /></div>
             <div style={{ fontSize:14, color:'rgba(var(--adm-fg-rgb),.8)', marginBottom:20 }}>
-              Estás por eliminar a <strong style={{ color:'var(--adm-text)' }}>{showDel.nombre}</strong>. Esta acción no se puede deshacer.
-              {showDel.subcuentas?.length > 0 && <div style={{ marginTop:8, color:'#d4a017' }}>Esta empresa tiene {showDel.subcuentas.length} sede(s).</div>}
+              Estás por eliminar a <strong style={{ color:'var(--adm-text)' }}>{showDel.nombre}</strong>. Se borrarán sus datos personales y saldrá del sistema; no se puede deshacer.
+              <div style={{ marginTop:8, fontSize:13 }}>Si la cuenta tiene saldo, tendrá <strong>7 días</strong> para retirarlo (solo podrá retirar) y después se eliminará sola cuando el saldo llegue a cero.</div>
+              {showDel.subcuentas?.length > 0 && <div style={{ marginTop:8, color:'#d4a017' }}>Esta empresa tiene {showDel.subcuentas.length} sede(s): elimínalas primero.</div>}
             </div>
             <div style={{ display:'flex', gap:10 }}>
               <Btn variant="ghost" style={{ flex:1, justifyContent:'center' }} onClick={() => setShowDel(null)}>Cancelar</Btn>

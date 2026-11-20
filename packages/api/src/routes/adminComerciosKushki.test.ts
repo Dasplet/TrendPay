@@ -32,16 +32,17 @@ describe('Admin · crear usuarios y sedes, y mover una sede de empresa', () => {
     expect((await crear(a, nuevo({ rol: 'usuario' }))).body.usuario.rol).toBe('usuario');
   });
 
-  it('crea una sede dentro de una empresa: sin billetera propia, con sus permisos y auditada', async () => {
+  it('crea una sede dentro de una empresa: sin billetera propia, siempre con el formato fijo (ignora permisos enviados) y auditada', async () => {
     const a = await crearUsuarioDePrueba({ rol: 'admin' });
     const empresa = await crearUsuarioDePrueba({ nombre: 'Cool Company SAS', saldo: 50000 });
-    const res = await crear(a, nuevo({ cuentaPadreId: empresa.id, permisoVerSaldo: true, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false }));
+    // aunque se intente pedir más permisos, toda sede nace con el formato de la "hijo 1"
+    const res = await crear(a, nuevo({ cuentaPadreId: empresa.id, permisoVerSaldo: true, permisoRecargar: false, permisoEnviar: true, permisoRetirar: true }));
     expect(res.status).toBe(201);
     expect(res.body.mensaje).toBe('Sede creada');
     expect(res.body.usuario).toMatchObject({ rol: 'usuario', cuentaPadreId: empresa.id });
 
     const sede = await prisma.user.findUnique({ where: { id: res.body.usuario.id }, include: { wallet: true } });
-    expect(sede).toMatchObject({ cuentaPadreId: empresa.id, permisoVerSaldo: true, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false });
+    expect(sede).toMatchObject({ cuentaPadreId: empresa.id, permisoVerSaldo: false, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false });
     expect(sede!.wallet).toBeNull();
     // el saldo de la empresa no cambia
     expect(Number((await prisma.wallet.findUnique({ where: { userId: empresa.id } }))!.saldo)).toBe(50000);
