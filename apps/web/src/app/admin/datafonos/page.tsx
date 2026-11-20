@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, RefreshCw, Smartphone } from 'lucide-react';
+import { KeyRound, Plus, RefreshCw, Smartphone } from 'lucide-react';
 import { adminApi, datafonosApi } from '@/lib/api';
 import { ResumenVentas } from '@/components/datafonos/ResumenVentas';
 import { Panel, PanelHeader, Table, Tr, Td, Btn, Modal, Input, Select, fmt, fmtDate } from '@/components/admin/ui';
@@ -16,6 +16,7 @@ interface CobroAdmin {
   terminal: string; empresa: string; cajero: string; ticketNumber: string | null; creado: string;
 }
 interface Empresa { userId: string; nombre: string; subcuentas: { id: string; nombre: string }[] }
+interface EmpresaCodigo { titularId: string; nombre: string; configurado: boolean; termina: string; terminales: number }
 
 const COLOR_ESTADO: Record<string, string> = { aprobado: '#6CC998', pendiente: '#d4a017', expirado: '#d4a017', revision: '#d4a017', reembolsando: '#d4a017', reembolsado: '#C0392B', rechazado: '#C0392B', cancelado: '#C0392B', error: '#C0392B' };
 const NUEVO = { serial: '', alias: '', titularId: '', sedeId: '' };
@@ -29,10 +30,13 @@ export default function DatafonosAdminPage() {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(NUEVO);
   const [comision, setComision] = useState<string | null>(null);
+  // Business-Code de Kushki One: a qué empresa se le está asignando (vacío = elegir) y el valor escrito
+  const [codigoModal, setCodigoModal] = useState<{ titularId: string } | null>(null);
+  const [codigo, setCodigo] = useState('');
 
   const terminalesQ = useQuery({
     queryKey: ['admin-datafonos'],
-    queryFn: () => datafonosApi.admin.terminales().then((r) => r.data as { configurado: boolean; terminales: Terminal[] }),
+    queryFn: () => datafonosApi.admin.terminales().then((r) => r.data as { urlPublica: boolean; empresas: EmpresaCodigo[]; terminales: Terminal[] }),
   });
   const cobrosQ = useQuery({
     queryKey: ['admin-datafonos-cobros'],
@@ -69,7 +73,21 @@ export default function DatafonosAdminPage() {
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo guardar la comisión'),
   });
 
+  const guardarCodigo = useMutation({
+    mutationFn: () => datafonosApi.admin.guardarBusinessCode(codigoModal!.titularId, codigo.trim()),
+    onSuccess: ({ data }) => { toast.success(`Business-Code guardado (${data.termina})`); setCodigoModal(null); setCodigo(''); refrescar(); },
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo guardar el Business-Code'),
+  });
+  const quitarCodigo = useMutation({
+    mutationFn: (titularId: string) => datafonosApi.admin.quitarBusinessCode(titularId),
+    onSuccess: () => { toast.success('Business-Code quitado'); refrescar(); },
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo quitar'),
+  });
+
   const terminales = terminalesQ.data?.terminales ?? [];
+  const empresasCodigo = terminalesQ.data?.empresas ?? [];
+  const sinCodigo = empresasCodigo.filter((e) => e.terminales > 0 && !e.configurado);
+  const codigoOk = /^[A-Za-z0-9_-]{8,128}$/.test(codigo.trim());
   const empresa = empresasQ.data?.find((e) => e.userId === form.titularId);
   const serialOk = /^[A-Za-z0-9_-]{4,64}$/.test(form.serial.trim());
   const puedeCrear = serialOk && form.alias.trim().length >= 2 && !!form.titularId && !crear.isPending;
@@ -77,12 +95,43 @@ export default function DatafonosAdminPage() {
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
-      {terminalesQ.data && !terminalesQ.data.configurado && (
+      {terminalesQ.data && !terminalesQ.data.urlPublica && (
         <Panel style={{ padding: '14px 20px', borderColor: 'rgba(212,160,23,.45)' }}>
-          <strong style={{ color: '#d4a017' }}>Falta configurar Kushki One en el servidor.</strong>{' '}
-          Mientras no estén las variables <code>KUSHKI_ONE_BUSINESS_CODE</code> y <code>KUSHKI_ONE_WEBHOOK_TOKEN</code> (y la URL pública del API), nadie puede cobrar con datáfono.
+          <strong style={{ color: '#d4a017' }}>Falta la dirección pública del API.</strong>{' '}
+          Agrega en Railway la variable <code>KUSHKI_ONE_WEBHOOK_URL</code> con la dirección del API; sin ella Kushki no sabe a dónde avisar.
         </Panel>
       )}
+      {sinCodigo.length > 0 && (
+        <Panel style={{ padding: '14px 20px', borderColor: 'rgba(212,160,23,.45)' }}>
+          <strong style={{ color: '#d4a017' }}>Falta el Business-Code de Kushki One</strong> para: {sinCodigo.map((e) => e.nombre).join(', ')}. Hasta que lo asignes (panel de abajo), esas empresas no pueden cobrar con datáfono.
+        </Panel>
+      )}
+
+      <Panel>
+        <PanelHeader
+          title="Business-Code de Kushki One por empresa"
+          icon={<KeyRound size={16} />}
+          actions={<Btn variant="primary" onClick={() => { setCodigo(''); setCodigoModal({ titularId: '' }); }}><Plus size={14} /> Asignar Business-Code</Btn>}
+        />
+        <p style={{ margin: 0, padding: '12px 20px 0', fontSize: 12, opacity: 0.7, lineHeight: 1.6 }}>
+          Es el <strong>Private Merchant ID</strong> de la Branch de <strong>card present</strong> de cada empresa (consola de Kushki → Credenciales). Cada empresa usa el suyo con sus datáfonos; se guarda cifrado y no se vuelve a mostrar.
+        </p>
+        <Table headers={['Empresa', 'Datáfonos', 'Business-Code', '']} empty="Aún no hay empresas con datáfonos ni código">
+          {empresasCodigo.map((e) => (
+            <Tr key={e.titularId}>
+              <Td><strong>{e.nombre}</strong></Td>
+              <Td>{e.terminales}</Td>
+              <Td><Etiqueta texto={e.configurado ? `Configurado ${e.termina}` : 'Falta'} color={e.configurado ? '#6CC998' : '#d4a017'} /></Td>
+              <Td>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <Btn onClick={() => { setCodigo(''); setCodigoModal({ titularId: e.titularId }); }}>{e.configurado ? 'Cambiar' : 'Asignar'}</Btn>
+                  {e.configurado && <Btn variant="danger" disabled={quitarCodigo.isPending} onClick={() => { if (window.confirm(`¿Quitar el Business-Code de ${e.nombre}? Dejará de poder cobrar con datáfono.`)) quitarCodigo.mutate(e.titularId); }}>Quitar</Btn>}
+                </div>
+              </Td>
+            </Tr>
+          ))}
+        </Table>
+      </Panel>
 
       <Panel>
         <PanelHeader title="Comisión de TrendPay por cobro con datáfono" icon={<Smartphone size={16} />} />
@@ -157,6 +206,20 @@ export default function DatafonosAdminPage() {
           ))}
         </Table>
       </Panel>
+
+      <Modal open={!!codigoModal} onClose={() => { setCodigoModal(null); setCodigo(''); }} title="Business-Code de Kushki One">
+        <Select label="Empresa" value={codigoModal?.titularId ?? ''} onChange={(e) => setCodigoModal({ titularId: e.target.value })}>
+          <option value="">Elige una empresa…</option>
+          {(empresasQ.data ?? []).map((e) => <option key={e.userId} value={e.userId}>{e.nombre}</option>)}
+        </Select>
+        <Input label="Business-Code (Private Merchant ID de la Branch de card present)" type="password" autoComplete="off" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+        {codigo.trim() !== '' && !codigoOk && <p style={{ color: '#C0392B', fontSize: 12, marginTop: -8 }}>Solo letras, números, guion y guion bajo (8 a 128 caracteres).</p>}
+        <p style={{ fontSize: 12, opacity: 0.7, marginTop: -6 }}>Cópialo desde la consola de Kushki, en la cuenta de card present. No se vuelve a mostrar.</p>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Btn variant="ghost" onClick={() => { setCodigoModal(null); setCodigo(''); }}>Cancelar</Btn>
+          <Btn variant="primary" disabled={!codigoModal?.titularId || !codigoOk || guardarCodigo.isPending} onClick={() => guardarCodigo.mutate()}>{guardarCodigo.isPending ? 'Guardando…' : 'Guardar'}</Btn>
+        </div>
+      </Modal>
 
       <Modal open={modal} onClose={() => setModal(false)} title="Registrar datáfono">
         <Input label="Número de serie del terminal" placeholder="Ej. TJ54241P20911" value={form.serial} onChange={(e) => setForm({ ...form, serial: e.target.value })} />

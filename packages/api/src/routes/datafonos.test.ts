@@ -2,6 +2,7 @@ import request from 'supertest';
 import app, { prisma } from '../index';
 import { limpiarBaseDeDatos, crearUsuarioDePrueba, crearSubcuentaDePrueba, tokenPara } from '../tests/testUtils';
 import { KushkiError } from '../utils/kushki';
+import { encrypt } from '../utils/security';
 
 jest.mock('../utils/kushkiOne', () => {
   const actual = jest.requireActual('../utils/kushkiOne');
@@ -20,12 +21,10 @@ const aprobada = (monto: number, extra: object = {}) => ({ estado: 'aprobada', t
 
 describe('Cobros con datáfono (Kushki One)', () => {
   beforeAll(() => {
-    process.env.KUSHKI_ONE_BUSINESS_CODE = 'business-code-de-prueba';
     process.env.KUSHKI_ONE_WEBHOOK_TOKEN = TOKEN_URL;
     process.env.KUSHKI_ONE_WEBHOOK_URL = 'https://api.trendpay.test';
   });
   afterAll(async () => {
-    delete process.env.KUSHKI_ONE_BUSINESS_CODE;
     delete process.env.KUSHKI_ONE_WEBHOOK_TOKEN;
     delete process.env.KUSHKI_ONE_WEBHOOK_URL;
     await limpiarBaseDeDatos();
@@ -41,6 +40,7 @@ describe('Cobros con datáfono (Kushki One)', () => {
 
   async function escenario() {
     const empresa = await crearUsuarioDePrueba({ saldo: 0, nombre: 'Cool Company' });
+    await prisma.comercioKushkiOne.create({ data: { userId: empresa.id, businessCodeCif: encrypt('business-code-de-prueba') } });
     const sede = await crearSubcuentaDePrueba(empresa.id, { permisoVerSaldo: false, permisoRecargar: true, permisoEnviar: false, permisoRetirar: false });
     const terminal = await prisma.terminalKushki.create({ data: { serial: SERIAL, alias: 'Caja 1', titularId: empresa.id, sedeId: sede.id } });
     return { empresa, sede, terminal, tokenSede: tokenPara(sede), tokenEmpresa: tokenPara(empresa) };
@@ -111,15 +111,12 @@ describe('Cobros con datáfono (Kushki One)', () => {
       expect((await cobrar(tokenPara(sinPermiso), terminal.id, 10000)).status).toBe(403);
     });
 
-    it('sin configuración de Kushki One responde 503 y no crea nada', async () => {
-      const { terminal, tokenSede } = await escenario();
-      delete process.env.KUSHKI_ONE_BUSINESS_CODE;
-      try {
-        expect((await cobrar(tokenSede, terminal.id, 10000)).status).toBe(503);
-        expect(await prisma.cobroDatafono.count()).toBe(0);
-      } finally {
-        process.env.KUSHKI_ONE_BUSINESS_CODE = 'business-code-de-prueba';
-      }
+    it('una empresa sin Business-Code de Kushki One no puede cobrar: responde 503 y no crea nada', async () => {
+      const { empresa, terminal, tokenSede } = await escenario();
+      await prisma.comercioKushkiOne.deleteMany({ where: { userId: empresa.id } });
+      expect((await cobrar(tokenSede, terminal.id, 10000)).status).toBe(503);
+      expect(await prisma.cobroDatafono.count()).toBe(0);
+      expect(enviar).not.toHaveBeenCalled();
     });
   });
 

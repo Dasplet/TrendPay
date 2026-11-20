@@ -2,6 +2,7 @@ import request from 'supertest';
 import app, { prisma } from '../index';
 import { limpiarBaseDeDatos, crearUsuarioDePrueba, crearSubcuentaDePrueba, tokenPara } from '../tests/testUtils';
 import { KushkiError } from '../utils/kushki';
+import { encrypt } from '../utils/security';
 
 jest.mock('../utils/kushkiOne', () => {
   const actual = jest.requireActual('../utils/kushkiOne');
@@ -20,12 +21,10 @@ const anulada = (monto: number) => ({ estado: 'anulada', tipo: 'VOID', transacti
 
 describe('Datáfonos: visibilidad por tienda y reembolsos', () => {
   beforeAll(() => {
-    process.env.KUSHKI_ONE_BUSINESS_CODE = 'business-code-de-prueba';
     process.env.KUSHKI_ONE_WEBHOOK_TOKEN = TOKEN_URL;
     process.env.KUSHKI_ONE_WEBHOOK_URL = 'https://api.trendpay.test';
   });
   afterAll(async () => {
-    delete process.env.KUSHKI_ONE_BUSINESS_CODE;
     delete process.env.KUSHKI_ONE_WEBHOOK_TOKEN;
     delete process.env.KUSHKI_ONE_WEBHOOK_URL;
     await limpiarBaseDeDatos();
@@ -52,6 +51,7 @@ describe('Datáfonos: visibilidad por tienda y reembolsos', () => {
   // Una empresa con dos tiendas, cada una con su datáfono
   async function dosTiendas(comisionPct = 0) {
     const empresa = await crearUsuarioDePrueba({ saldo: 0, nombre: 'Cool Company' });
+    await prisma.comercioKushkiOne.create({ data: { userId: empresa.id, businessCodeCif: encrypt('business-code-de-prueba') } });
     const sanJuan = await crearSubcuentaDePrueba(empresa.id, {});
     const norte = await crearSubcuentaDePrueba(empresa.id, {});
     const tSanJuan = await prisma.terminalKushki.create({ data: { serial: 'SN-VIS-0001', alias: 'Caja San Juan', titularId: empresa.id, sedeId: sanJuan.id } });

@@ -7,12 +7,14 @@ import { walletLimiter, webhookLimiter } from '../middleware/rateLimiter';
 import { conCuenta, miembrosDe } from '../utils/cuentas';
 import { logger } from '../utils/logger';
 import { KushkiError } from '../utils/kushki';
-import { enviarCobroAsync, enviarReembolsoAsync, kushkiOneConfigurado } from '../utils/kushkiOne';
+import { enviarCobroAsync, enviarReembolsoAsync, businessCodeDeTitular } from '../utils/kushkiOne';
 import {
-  comisionDatafonoPct, guardarComisionDatafonoPct, webhookDatafonoUrl, tokenWebhookValido,
+  comisionDatafonoPct, guardarComisionDatafonoPct, webhookDatafonoUrl, tokenWebhookValido, datafonosListosParaEmpresa, urlPublicaApi,
   terminalOcupado, procesarEvento, resolverCobro, resolverReembolso, netoDelCobro, type CobroConTerminal,
 } from '../utils/datafonos';
 import { registrarWebhook } from '../utils/kushkiWebhookLog';
+import { encrypt } from '../utils/security';
+import { terminaEn } from '../utils/comerciosKushki';
 
 const router = Router();
 
@@ -40,7 +42,7 @@ router.get('/terminales', authenticate, conCuenta('recargar'), async (req: Reque
     where: { titularId: cuenta.titularId, activo: true, ...(cuenta.esSubcuenta ? { OR: [{ sedeId: req.user!.id }, { sedeId: null }] } : {}) },
     orderBy: { alias: 'asc' },
   });
-  const disponible = kushkiOneConfigurado() && !!webhookDatafonoUrl();
+  const disponible = (await datafonosListosParaEmpresa(cuenta.titularId)).listo;
   const ocupados = await Promise.all(terminales.map((t) => terminalOcupado(t.id)));
   res.json({
     ok: true,
@@ -58,15 +60,16 @@ router.post('/cobros', authenticate, walletLimiter, conCuenta('recargar'), async
   const { terminalId, monto } = parse.data;
   const cuenta = req.cuenta!;
 
-  const webhookUrl = webhookDatafonoUrl();
-  if (!kushkiOneConfigurado() || !webhookUrl) {
-    return res.status(503).json({ ok: false, mensaje: 'El cobro con datáfono todavía no está habilitado' });
-  }
-
   const terminal = await prisma.terminalKushki.findFirst({
     where: { id: terminalId, titularId: cuenta.titularId, activo: true, ...(cuenta.esSubcuenta ? { OR: [{ sedeId: req.user!.id }, { sedeId: null }] } : {}) },
   });
   if (!terminal) return res.status(404).json({ ok: false, mensaje: 'Datáfono no encontrado' });
+
+  // La empresa dueña del datáfono necesita su Business-Code de Kushki One y la dirección pública del API
+  const webhookUrl = await webhookDatafonoUrl();
+  if (!webhookUrl || !(await datafonosListosParaEmpresa(cuenta.titularId)).listo) {
+    return res.status(503).json({ ok: false, mensaje: 'El cobro con datáfono todavía no está habilitado para esta empresa' });
+  }
   if (await terminalOcupado(terminal.id)) return res.status(409).json({ ok: false, mensaje: 'Ese datáfono tiene un cobro en curso. Espera a que termine' });
 
   const cobro = await prisma.cobroDatafono.create({
@@ -109,11 +112,11 @@ router.post('/cobros/:id/reembolsar', authenticate, walletLimiter, conCuenta('re
   const cuenta = req.cuenta!;
   if (cuenta.esSubcuenta) return res.status(403).json({ ok: false, mensaje: 'Solo la cuenta principal puede hacer reembolsos' });
 
-  const webhookUrl = webhookDatafonoUrl();
-  if (!kushkiOneConfigurado() || !webhookUrl) return res.status(503).json({ ok: false, mensaje: 'El cobro con datáfono todavía no está habilitado' });
-
   const cobro = await prisma.cobroDatafono.findFirst({ where: { id: req.params.id, terminal: { titularId: cuenta.titularId } }, include: { terminal: true } });
   if (!cobro) return res.status(404).json({ ok: false, mensaje: 'Cobro no encontrado' });
+
+  const webhookUrl = await webhookDatafonoUrl();
+  if (!webhookUrl || !(await datafonosListosParaEmpresa(cuenta.titularId)).listo) return res.status(503).json({ ok: false, mensaje: 'El cobro con datáfono todavía no está habilitado para esta empresa' });
   if (cobro.estado !== 'aprobado') return res.status(409).json({ ok: false, mensaje: cobro.estado === 'reembolsando' ? 'Este cobro ya tiene un reembolso en curso' : cobro.estado === 'reembolsado' ? 'Este cobro ya fue reembolsado' : 'Solo se pueden reembolsar cobros aprobados' });
   if (!cobro.transactionReference) return res.status(409).json({ ok: false, mensaje: 'Este cobro no tiene la referencia de Kushki necesaria para reembolsarlo' });
   // Kushki pide esperar al menos 1 minuto después del cobro antes de anularlo (se cuenta desde que se inició el cobro)
@@ -223,11 +226,7 @@ router.get('/resumen', authenticate, conCuenta('recargar'), async (req: Request,
 // aceptan avisos del terminal al que se le mandó el cobro y la aprobación se confirma siempre con Kushki antes de
 // acreditar. Siempre 2xx salvo que haya que reintentar (Kushki no reintenta los 4xx).
 router.post('/webhooks/:token', webhookLimiter, async (req: Request, res: Response) => {
-  if (!process.env.KUSHKI_ONE_WEBHOOK_TOKEN) {
-    logger.error('Webhook de datáfonos recibido sin KUSHKI_ONE_WEBHOOK_TOKEN configurado');
-    return res.status(503).json({ ok: false });
-  }
-  if (!tokenWebhookValido(req.params.token)) {
+  if (!(await tokenWebhookValido(req.params.token))) {
     await registrarWebhook(req, { firmaValida: false, estadoHttp: 404, detalle: 'Datáfono · código de la URL inválido' });
     return res.status(404).json({ ok: false });
   }
@@ -271,14 +270,60 @@ router.get('/admin/terminales', authenticate, requireAdmin, async (_req: Request
     include: { titular: { select: { nombre: true } }, sede: { select: { nombre: true } }, _count: { select: { cobros: true } } },
     orderBy: [{ titularId: 'asc' }, { alias: 'asc' }],
   });
+  // Business-Code por empresa: las que tienen datáfonos (y las que ya tienen código aunque aún no tengan datáfonos)
+  const codigos = await prisma.comercioKushkiOne.findMany({ include: { user: { select: { nombre: true } } } });
+  const empresas = new Map<string, { titularId: string; nombre: string; configurado: boolean; termina: string; terminales: number }>();
+  for (const t of terminales) {
+    const e = empresas.get(t.titularId) ?? { titularId: t.titularId, nombre: t.titular.nombre, configurado: false, termina: '', terminales: 0 };
+    e.terminales += 1;
+    empresas.set(t.titularId, e);
+  }
+  for (const c of codigos) {
+    const e = empresas.get(c.userId) ?? { titularId: c.userId, nombre: c.user.nombre, configurado: false, termina: '', terminales: 0 };
+    const codigo = await businessCodeDeTitular(c.userId);
+    e.configurado = !!codigo;
+    e.termina = codigo ? terminaEn(codigo) : '';
+    empresas.set(c.userId, e);
+  }
   res.json({
     ok: true,
-    configurado: kushkiOneConfigurado() && !!webhookDatafonoUrl(),
+    urlPublica: !!urlPublicaApi(),
+    empresas: [...empresas.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)),
     terminales: terminales.map((t) => ({
       id: t.id, serial: t.serial, alias: t.alias, modelo: t.modelo, activo: t.activo,
       titularId: t.titularId, titular: t.titular.nombre, sedeId: t.sedeId, sede: t.sede?.nombre ?? null, cobros: t._count.cobros,
     })),
   });
+});
+
+// PUT /api/datafonos/admin/empresas/:titularId/business-code  → guarda (o reemplaza) el Business-Code de Kushki One de la empresa
+// DELETE /api/datafonos/admin/empresas/:titularId/business-code
+// Es el Private Merchant ID de la Branch de card present de esa empresa. Se guarda cifrado y no se vuelve a mostrar.
+const businessCodeSchema = z.object({ businessCode: z.string().trim().regex(/^[A-Za-z0-9_-]{8,128}$/, 'El Business-Code solo lleva letras, números, guion y guion bajo (8 a 128 caracteres)') });
+
+async function empresaValida(titularId: string) {
+  const u = await prisma.user.findUnique({ where: { id: titularId }, select: { id: true, rol: true, cuentaPadreId: true, eliminadoAt: true } });
+  return u && u.rol === 'usuario' && !u.cuentaPadreId && !u.eliminadoAt ? u : null;
+}
+
+router.put('/admin/empresas/:titularId/business-code', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  const parse = businessCodeSchema.safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ ok: false, mensaje: parse.error.errors[0].message });
+  if (!(await empresaValida(req.params.titularId))) return res.status(404).json({ ok: false, mensaje: 'Empresa no encontrada (los datáfonos van en la cuenta principal, no en una sede)' });
+  const businessCodeCif = encrypt(parse.data.businessCode);
+  await prisma.comercioKushkiOne.upsert({ where: { userId: req.params.titularId }, create: { userId: req.params.titularId, businessCodeCif }, update: { businessCodeCif, activo: true } });
+  // La auditoría guarda solo el final del código, nunca el valor
+  await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'GUARDAR_BUSINESS_CODE_KUSHKI_ONE', tabla: 'comercios_kushki_one', registroId: req.params.titularId, ip: req.ip, datos: { termina: terminaEn(parse.data.businessCode) } } }).catch(() => {});
+  res.json({ ok: true, termina: terminaEn(parse.data.businessCode) });
+});
+
+router.delete('/admin/empresas/:titularId/business-code', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  const pendientes = await prisma.cobroDatafono.count({ where: { terminal: { titularId: req.params.titularId }, estado: { in: ['pendiente', 'reembolsando'] } } });
+  if (pendientes > 0) return res.status(409).json({ ok: false, mensaje: `Esta empresa tiene ${pendientes} cobro(s) en curso que necesitan ese código. Espera a que terminen` });
+  const r = await prisma.comercioKushkiOne.deleteMany({ where: { userId: req.params.titularId } });
+  if (r.count === 0) return res.status(404).json({ ok: false, mensaje: 'Esta empresa no tiene Business-Code guardado' });
+  await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'QUITAR_BUSINESS_CODE_KUSHKI_ONE', tabla: 'comercios_kushki_one', registroId: req.params.titularId, ip: req.ip } }).catch(() => {});
+  res.json({ ok: true });
 });
 
 // POST /api/datafonos/admin/terminales

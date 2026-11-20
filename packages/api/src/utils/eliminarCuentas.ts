@@ -102,6 +102,7 @@ export async function finalizarEliminacion(userId: string, adminId: string | nul
     await tx.user.updateMany({ where: { referidoPorId: userId }, data: { referidoPorId: null } });
     if (wallet) await tx.qrCode.deleteMany({ where: { walletId: wallet.id } });
     await tx.comercioKushki.deleteMany({ where: { userId } });
+    await tx.comercioKushkiOne.deleteMany({ where: { userId } });
     await tx.terminalKushki.updateMany({ where: { sedeId: userId }, data: { sedeId: null } });
     await tx.terminalKushki.updateMany({ where: { titularId: userId }, data: { activo: false } });
 

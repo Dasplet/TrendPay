@@ -1,6 +1,8 @@
 import axios from 'axios';
+import { prisma } from '../index';
 import { KushkiError } from './kushki';
 import { prepararSolicitud } from './kushkiOneAuth';
+import { decrypt } from './security';
 
 // Cliente de Kushki One (datáfonos Sunmi) por la nube de Kushki: TrendPay le manda al terminal, por su número de serie,
 // la orden de cobro; el resultado llega después por webhook (ver utils/datafonos.ts). Está en Beta en Colombia.
@@ -9,9 +11,21 @@ export function baseUrlKushkiOne(): string {
   return (process.env.KUSHKI_ONE_BASE_URL || 'https://cloudt.kushkipagos.com').replace(/\/+$/, '');
 }
 
-// El cobro por datáfono solo se ofrece si hay Business-Code y un código secreto para la URL del webhook
-export function kushkiOneConfigurado(): boolean {
-  return !!(process.env.KUSHKI_ONE_BUSINESS_CODE && process.env.KUSHKI_ONE_WEBHOOK_TOKEN);
+// Business-Code de la empresa (el Private Merchant ID de su Branch de card present), guardado cifrado por el administrador.
+// Cada empresa tiene el suyo: null = esa empresa todavía no tiene Kushki One configurado.
+export async function businessCodeDeTitular(titularId: string): Promise<string | null> {
+  const c = await prisma.comercioKushkiOne.findUnique({ where: { userId: titularId } });
+  if (!c?.activo) return null;
+  const codigo = decrypt(c.businessCodeCif);
+  return codigo === '****' ? null : codigo; // no se pudo descifrar (llave de cifrado distinta)
+}
+
+// El código con el que se firma un mensaje a un terminal: el de la empresa a la que pertenece
+async function businessCodeDeTerminal(serial: string): Promise<string> {
+  const t = await prisma.terminalKushki.findUnique({ where: { serial }, select: { titularId: true } });
+  const codigo = t ? await businessCodeDeTitular(t.titularId) : null;
+  if (!codigo) throw new KushkiError('Esta empresa todavía no tiene el Business-Code de Kushki One configurado', 503);
+  return codigo;
 }
 
 // Los pagos responden SIEMPRE 200: hay que leer el cuerpo. Los errores vienen planos: { type, code, param, message }
@@ -23,7 +37,7 @@ function errorDeCuerpo(data: any): KushkiError | null {
 }
 
 async function llamar(serial: string, ruta: string, payload: unknown): Promise<any> {
-  const { headers, body } = prepararSolicitud(serial, payload);
+  const { headers, body } = prepararSolicitud(serial, payload, await businessCodeDeTerminal(serial));
   let respuesta;
   try {
     // El relay de la nube suma latencia a lo que tarda el terminal: Kushki recomienda 90 s como mínimo

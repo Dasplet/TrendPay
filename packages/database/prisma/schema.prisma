@@ -64,6 +64,7 @@ model User {
   transactions    Transaction[]
   vinculaciones   Vinculacion[]
   comercioKushki  ComercioKushki?
+  comercioKushkiOne ComercioKushkiOne?
   terminalesTitular TerminalKushki[] @relation("TerminalesTitular")
   terminalesSede    TerminalKushki[] @relation("TerminalesSede")
   cobrosDatafono    CobroDatafono[]
@@ -412,6 +413,21 @@ model ComercioKushki {
 // ══════════════════════════════════════
 // DATÁFONOS KUSHKI ONE (card present)
 // ══════════════════════════════════════
+// Business-Code de Kushki One de cada empresa (= el Private Merchant ID de su Branch de card present). Lo asigna el
+// administrador; se guarda cifrado y nunca sale del servidor. Cada datáfono usa el de la empresa a la que pertenece.
+model ComercioKushkiOne {
+  id              String   @id @default(uuid())
+  userId          String   @unique @map("user_id")
+  businessCodeCif String   @map("business_code_cifrado")
+  activo          Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("comercios_kushki_one")
+}
+
 // Un datáfono (SmartPOS Sunmi) pertenece a una empresa (cuenta padre, dueña de la billetera) y puede estar asignado
 // a una sede (cuenta hija) que es la única que lo ve y lo usa; sin sede lo usa cualquiera de la empresa.
 model TerminalKushki {

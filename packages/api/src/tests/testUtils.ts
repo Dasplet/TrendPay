@@ -11,6 +11,7 @@ export async function limpiarBaseDeDatos() {
   await prisma.eventoDatafono.deleteMany();
   await prisma.cobroDatafono.deleteMany();
   await prisma.terminalKushki.deleteMany();
+  await prisma.comercioKushkiOne.deleteMany();
   await prisma.transaction.deleteMany();
   await prisma.qrCode.deleteMany();
   await prisma.withdrawal.deleteMany();

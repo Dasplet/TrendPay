@@ -9,6 +9,6 @@ export interface SolicitudKushkiOne {
   body: { data: string };
 }
 
-export function prepararSolicitud(_serial: string, _payload: unknown, _ahoraMs: number = Date.now()): SolicitudKushkiOne {
+export function prepararSolicitud(_serial: string, _payload: unknown, _businessCode: string, _ahoraMs: number = Date.now()): SolicitudKushkiOne {
   throw new KushkiError('La autenticación de Kushki One todavía no está implementada', 501);
 }

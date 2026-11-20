@@ -1,9 +1,10 @@
 import { timingSafeEqual, createHash } from 'node:crypto';
 import type { CobroDatafono, TerminalKushki } from '@prisma/client';
 import { prisma } from '../index';
-import { genCodigo } from './security';
+import { genCodigo, encrypt, decrypt } from './security';
 import { logger } from './logger';
-import { buscarTransaccion, kushkiOneConfigurado } from './kushkiOne';
+import { randomBytes } from 'node:crypto';
+import { buscarTransaccion, businessCodeDeTitular } from './kushkiOne';
 
 // ══════════════════════════════════════
 // COBROS CON DATÁFONO (Kushki One)
@@ -28,22 +29,54 @@ export async function guardarComisionDatafonoPct(pct: number): Promise<void> {
   await prisma.config.upsert({ where: { clave: CLAVE_COMISION }, create: { clave: CLAVE_COMISION, valor: String(pct) }, update: { valor: String(pct) } });
 }
 
-// Dirección pública a la que Kushki avisa: lleva un código secreto en el camino porque el aviso no trae firma
-export function webhookDatafonoUrl(): string | null {
-  const token = process.env.KUSHKI_ONE_WEBHOOK_TOKEN;
-  if (!token) return null;
-  const base = (process.env.KUSHKI_ONE_WEBHOOK_URL || (process.env.KUSHKI_WEBHOOK_URL || '').replace(/\/api\/kushki\/webhooks\/payout\/?$/, '')).replace(/\/+$/, '');
-  if (!/^https?:\/\//.test(base)) return null;
-  const raiz = base.endsWith('/api/datafonos/webhooks') ? base : `${base}/api/datafonos/webhooks`;
-  return `${raiz}/${token}`;
+// Código secreto que va en la URL del webhook (los avisos de Kushki One no traen firma). Si no se define la variable
+// KUSHKI_ONE_WEBHOOK_TOKEN, TrendPay lo crea solo la primera vez y lo guarda cifrado en su base de datos.
+const CLAVE_TOKEN_WEBHOOK = 'kushki_one_webhook_token';
+let tokenEnMemoria: string | null = null;
+
+export async function tokenWebhookDatafono(): Promise<string> {
+  if (process.env.KUSHKI_ONE_WEBHOOK_TOKEN) return process.env.KUSHKI_ONE_WEBHOOK_TOKEN;
+  if (tokenEnMemoria) return tokenEnMemoria;
+  const cfg = await prisma.config.findUnique({ where: { clave: CLAVE_TOKEN_WEBHOOK } });
+  const guardado = cfg ? decrypt(cfg.valor) : null;
+  if (guardado && guardado !== '****') return (tokenEnMemoria = guardado);
+  const nuevo = randomBytes(24).toString('hex');
+  // Si dos procesos lo crean a la vez gana el primero que se guarda; todos releen el ganador
+  await prisma.config.upsert({ where: { clave: CLAVE_TOKEN_WEBHOOK }, create: { clave: CLAVE_TOKEN_WEBHOOK, valor: encrypt(nuevo) }, update: {} });
+  const final = await prisma.config.findUnique({ where: { clave: CLAVE_TOKEN_WEBHOOK } });
+  return (tokenEnMemoria = final ? decrypt(final.valor) : nuevo);
 }
 
-export function tokenWebhookValido(recibido: string): boolean {
-  const esperado = process.env.KUSHKI_ONE_WEBHOOK_TOKEN;
-  if (!esperado) return false;
+export function olvidarTokenWebhookEnMemoria(): void { tokenEnMemoria = null; }
+
+// Dirección pública del API (no es secreta). Se toma de la configuración, nunca de lo que mande quien hace la petición:
+// el aviso lleva el código secreto, y una dirección ajena lo filtraría.
+export function urlPublicaApi(): string | null {
+  const base = (process.env.KUSHKI_ONE_WEBHOOK_URL
+    || (process.env.KUSHKI_WEBHOOK_URL || '').replace(/\/api\/kushki\/webhooks\/payout\/?$/, '')
+    || (process.env.NODE_ENV === 'production' ? 'https://trendpay-api-production.up.railway.app' : '')).replace(/\/+$/, '');
+  return /^https?:\/\//.test(base) ? base : null;
+}
+
+// Dirección completa a la que Kushki avisa cada cambio de un cobro
+export async function webhookDatafonoUrl(): Promise<string | null> {
+  const base = urlPublicaApi();
+  if (!base) return null;
+  const raiz = base.endsWith('/api/datafonos/webhooks') ? base : `${base}/api/datafonos/webhooks`;
+  return `${raiz}/${await tokenWebhookDatafono()}`;
+}
+
+export async function tokenWebhookValido(recibido: string): Promise<boolean> {
   const a = createHash('sha256').update(recibido).digest();
-  const b = createHash('sha256').update(esperado).digest();
+  const b = createHash('sha256').update(await tokenWebhookDatafono()).digest();
   return timingSafeEqual(a, b);
+}
+
+// ¿Esta empresa puede cobrar con datáfono? Necesita su Business-Code y la dirección pública del API
+export async function datafonosListosParaEmpresa(titularId: string): Promise<{ listo: boolean; motivo?: string }> {
+  if (!(await businessCodeDeTitular(titularId))) return { listo: false, motivo: 'Esta empresa todavía no tiene el Business-Code de Kushki One' };
+  if (!urlPublicaApi()) return { listo: false, motivo: 'Falta la dirección pública del API (KUSHKI_ONE_WEBHOOK_URL)' };
+  return { listo: true };
 }
 
 export async function terminalOcupado(terminalId: string): Promise<boolean> {
@@ -377,7 +410,7 @@ export async function conciliarCobrosDatafono(opts: { minEdadSeg?: number; maxEd
 }
 
 export function iniciarConciliacionDatafonos(): void {
-  if (process.env.NODE_ENV === 'test' || !kushkiOneConfigurado()) return;
+  if (process.env.NODE_ENV === 'test') return;
   let ciclo = 0;
   const timer = setInterval(() => {
     ciclo += 1;
