@@ -13,6 +13,7 @@ import { modoAlmacenamiento, cifradoDelBucket } from '../utils/storage';
 import { PERMISOS_SEDE } from '../utils/cuentas';
 import { logger } from '../utils/logger';
 import { comisionGeneralPct, guardarComisionGeneralPct, COMISION_MAXIMA } from '../utils/comision';
+import { comisionDatafonoPct } from '../utils/datafonos';
 import { contarDatos, limpiarDatos, limpiezaPermitida, FRASE_LIMPIEZA } from '../utils/limpiarDatos';
 import { solicitarEliminacion, cancelarEliminacion, ErrorEliminacion } from '../utils/eliminarCuentas';
 
@@ -33,7 +34,8 @@ router.get('/metrics', authenticate, requireAdmin, async (_req: Request, res: Re
     const total_volumen    = Number.parseFloat(txAgg._sum.montoBruto?.toString() || '0');
     const total_comisiones = Number.parseFloat(txAgg._sum.comisionValor?.toString() || '0');
     const comision_pct     = await comisionGeneralPct();
-    res.json({ ok: true, metricas: { total_usuarios: totalUsuarios, saldo_plataforma: Number.parseFloat(saldoAgg._sum.saldo?.toString() || '0'), billeteras, total_volumen, total_comisiones, retiros_pendientes: retirosPend, comision_pct } });
+    const comision_datafono_pct = await comisionDatafonoPct();
+    res.json({ ok: true, metricas: { total_usuarios: totalUsuarios, saldo_plataforma: Number.parseFloat(saldoAgg._sum.saldo?.toString() || '0'), billeteras, total_volumen, total_comisiones, retiros_pendientes: retirosPend, comision_pct, comision_datafono_pct } });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 

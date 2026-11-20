@@ -185,8 +185,8 @@ export default function AdminDashboard() {
       <div className="adm-kpis">
         <KpiRing title="Volumen procesado" value={fmt(volumen)} ringPct={pct(exitosas, txs.length)} ringLabel={`${Math.round(pct(exitosas, txs.length))}%`}
           color={ACCENT_L} sub={`${exitosas} de ${txs.length} operaciones exitosas`} />
-        <KpiRing title={`Comisiones (${comisionPct}%)`} value={fmt(comisiones)} ringPct={pct(tasaEfectiva, comisionPct)} ringLabel={`${tasaEfectiva.toFixed(1)}%`}
-          color={GREEN} sub={`Tasa efectiva · objetivo ${comisionPct}%`} />
+        <KpiRing title="Comisiones cobradas" value={fmt(comisiones)} ringPct={pct(tasaEfectiva, comisionPct)} ringLabel={`${tasaEfectiva.toFixed(1)}%`}
+          color={GREEN} sub={`Tasa efectiva · general ${comisionPct}% · datáfonos ${m.comision_datafono_pct ?? 0}%`} />
         <KpiRing title="Clientes" value={String(clientes.length)} ringPct={pct(verificados, clientes.length)} ringLabel={`${Math.round(pct(verificados, clientes.length))}%`}
           color={BLUE} sub={`${verificados} verificados${subcuentas ? ` · ${subcuentas} sede${subcuentas > 1 ? 's' : ''}` : ''}`} />
         <KpiRing title="Retiros pendientes" value={String(m.retiros_pendientes ?? pendientes.length)} ringPct={pct(m.retiros_pendientes ?? pendientes.length, retiros.length)} ringLabel={String(m.retiros_pendientes ?? pendientes.length)}

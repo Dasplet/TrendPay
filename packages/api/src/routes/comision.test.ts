@@ -45,6 +45,7 @@ describe('Comisión general configurable', () => {
     // las métricas del dashboard muestran la cifra vigente
     const metricas = await request(app).get('/api/admin/metrics').set('Authorization', `Bearer ${token}`);
     expect(metricas.body.metricas.comision_pct).toBe(2.5);
+    expect(metricas.body.metricas.comision_datafono_pct).toBe(0); // la de datáfonos es otra cifra, con su propia configuración
   });
 
   it('acepta de 0% a 20%, rechaza lo demás y solo la cambia un administrador; queda auditada con el valor anterior', async () => {
