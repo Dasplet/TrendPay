@@ -53,7 +53,7 @@ async function tiendaUnica(titularId: string): Promise<string | null> {
 
 // Los movimientos que no se pueden atribuir a un aparato concreto van a un datáfono "sin identificar" de la empresa (y a la tienda,
 // si la empresa solo tiene una). Si la tienda se descubre después, también se corrigen los movimientos que ya estaban.
-async function terminalSinIdentificar(titularId: string) {
+export async function terminalSinIdentificar(titularId: string) {
   const serial = `SIN-IDENTIFICAR-${titularId.slice(0, 8)}`;
   const sedeId = await tiendaUnica(titularId);
   const antes = await prisma.terminalKushki.findUnique({ where: { serial } });

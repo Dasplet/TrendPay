@@ -43,6 +43,19 @@ export function montoDelAviso(b: Aviso): number | null {
   return null;
 }
 
+// Cuándo se hizo la transacción según Kushki (no cuándo llegó a TrendPay): importa para los resúmenes por día y el orden del historial
+export function fechaDelAviso(b: Aviso): Date {
+  const crudo = b?.created ?? b?.transaction_date;
+  let ms = NaN;
+  if (typeof crudo === 'number') ms = crudo;
+  else if (typeof crudo === 'string') ms = /^\d{10,13}$/.test(crudo) ? Number(crudo) : Date.parse(crudo);
+  if (Number.isFinite(ms) && ms < 1e11) ms *= 1000; // segundos
+  const ahora = Date.now();
+  return Number.isFinite(ms) && ms > ahora - 400 * 86_400_000 && ms <= ahora + 5 * 60_000 ? new Date(ms) : new Date(ahora);
+}
+
+export interface OpcionesAviso { comisionPct?: number }
+
 export type Clasificacion = { tipo: 'venta' | 'reembolso' } | { ignorar: string };
 
 export function clasificar(b: Aviso): Clasificacion {
@@ -82,8 +95,9 @@ export interface ResultadoAviso { http: number; detalle: string }
 const esDuplicado = (err: any) => err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 
 // ── Venta aprobada en el datáfono: acredita el neto en la billetera de la empresa ──
-async function registrarVenta(terminal: TerminalKushki, b: Aviso, clave: string, monto: number): Promise<ResultadoAviso> {
-  const pct = await comisionDatafonoPct();
+async function registrarVenta(terminal: TerminalKushki, b: Aviso, clave: string, monto: number, opciones: OpcionesAviso = {}): Promise<ResultadoAviso> {
+  const pct = opciones.comisionPct ?? await comisionDatafonoPct();
+  const fecha = fechaDelAviso(b);
   const comision = Math.round((monto * pct) / 100);
   const neto = monto - comision;
   const userId = terminal.sedeId ?? terminal.titularId; // quién "cobró": la tienda del datáfono, o la empresa si no tiene tienda
@@ -93,7 +107,7 @@ async function registrarVenta(terminal: TerminalKushki, b: Aviso, clave: string,
       const cobro = await tx.cobroDatafono.create({
         data: {
           terminalId: terminal.id, userId, clientTransactionId: `terminal:${clave}`, monto, comisionPct: pct, estado: 'aprobado',
-          estadoTerminal: 'APPROVAL', origen: 'terminal', tipo: 'cobro',
+          estadoTerminal: 'APPROVAL', origen: 'terminal', tipo: 'cobro', createdAt: fecha,
           transactionReference: texto(b.transaction_reference) ?? clave, ticketNumber: texto(b.ticket_number, 40),
         },
       });
@@ -103,7 +117,7 @@ async function registrarVenta(terminal: TerminalKushki, b: Aviso, clave: string,
       const saldoDespues = Number.parseFloat(actualizada.saldo.toString());
       await tx.transaction.create({
         data: {
-          walletId: wallet.id, userId, sedeId: terminal.sedeId, codigo: genCodigo('DTF'), categoria: 'datafono',
+          walletId: wallet.id, userId, sedeId: terminal.sedeId, createdAt: fecha, codigo: genCodigo('DTF'), categoria: 'datafono',
           descripcion: `Cobro con datáfono · ${terminal.alias}`, montoBruto: monto, comisionPct: pct, comisionValor: comision, montoNeto: neto,
           saldoAntes: saldoDespues - neto, saldoDespues, status: 'exitosa',
           metadata: { terminal: terminal.serial, cobroId: cobro.id, referencia: clave, ticketNumber: texto(b.ticket_number, 40) ?? null, origen: 'terminal' },
@@ -123,10 +137,13 @@ async function registrarVenta(terminal: TerminalKushki, b: Aviso, clave: string,
 
 // ── Reembolso aprobado en el datáfono: descuenta de la billetera el monto completo devuelto al cliente ──
 async function registrarReembolso(terminal: TerminalKushki, b: Aviso, clave: string, monto: number): Promise<ResultadoAviso> {
+  const fecha = fechaDelAviso(b);
   // Kushki no dice a qué venta corresponde el reembolso: se liga a la más reciente de ese datáfono con el mismo monto
-  const original = await prisma.cobroDatafono.findFirst({
-    where: { terminalId: terminal.id, tipo: 'cobro', estado: 'aprobado', monto }, orderBy: { createdAt: 'desc' },
-  });
+  // Si el aviso trae el ticket de la venta que se anula (los reportes de Kushki lo traen) se liga exactamente a esa venta.
+  const ticketVenta = texto(b.sale_ticket_number, 40);
+  const original = ticketVenta
+    ? await prisma.cobroDatafono.findFirst({ where: { ticketNumber: ticketVenta, tipo: 'cobro', estado: 'aprobado', terminal: { titularId: terminal.titularId } } })
+    : await prisma.cobroDatafono.findFirst({ where: { terminalId: terminal.id, tipo: 'cobro', estado: 'aprobado', monto }, orderBy: { createdAt: 'desc' } });
   // El cliente recibe de vuelta el monto completo y TrendPay conserva la comisión de la venta: a la billetera se le descuenta TODO lo
   // devuelto (la empresa asume la comisión). El reembolso no lleva comisión propia ni devuelve la de la venta.
   const pct = 0;
@@ -144,7 +161,7 @@ async function registrarReembolso(terminal: TerminalKushki, b: Aviso, clave: str
       const cobro = await tx.cobroDatafono.create({
         data: {
           terminalId: terminal.id, userId, clientTransactionId: `terminal:${clave}`, monto, comisionPct: pct, estado: 'aprobado',
-          estadoTerminal: 'APPROVAL', origen: 'terminal', tipo: 'reembolso', reembolsoDeId: ligado ? original!.id : null,
+          estadoTerminal: 'APPROVAL', origen: 'terminal', tipo: 'reembolso', createdAt: fecha, reembolsoDeId: ligado ? original!.id : null,
           transactionReference: texto(b.transaction_reference) ?? clave, ticketNumber: texto(b.ticket_number, 40),
         },
       });
@@ -154,7 +171,7 @@ async function registrarReembolso(terminal: TerminalKushki, b: Aviso, clave: str
       const despues = Number.parseFloat(actualizada.saldo.toString());
       await tx.transaction.create({
         data: {
-          walletId: wallet.id, userId, sedeId: terminal.sedeId, codigo: genCodigo('RDT'), categoria: 'reembolso_datafono',
+          walletId: wallet.id, userId, sedeId: terminal.sedeId, createdAt: fecha, codigo: genCodigo('RDT'), categoria: 'reembolso_datafono',
           descripcion: `Reembolso de cobro con datáfono · ${terminal.alias}`, montoBruto: monto, comisionPct: pct, comisionValor: comision, montoNeto: -neto,
           saldoAntes: despues + neto, saldoDespues: despues, status: 'exitosa',
           metadata: { terminal: terminal.serial, cobroId: cobro.id, referencia: clave, ligadoA: ligado ? original!.id : null, origen: 'terminal' },
@@ -175,12 +192,12 @@ async function registrarReembolso(terminal: TerminalKushki, b: Aviso, clave: str
 }
 
 // Procesa un aviso ya autenticado de un terminal conocido
-export async function procesarAvisoTerminal(terminal: TerminalKushki, b: Aviso): Promise<ResultadoAviso> {
+export async function procesarAvisoTerminal(terminal: TerminalKushki, b: Aviso, opciones: OpcionesAviso = {}): Promise<ResultadoAviso> {
   const clasificacion = clasificar(b);
   if ('ignorar' in clasificacion) return { http: 200, detalle: `ignorado: ${clasificacion.ignorar}` };
   const clave = claveDelAviso(b);
   const monto = montoDelAviso(b);
   if (!clave) return { http: 200, detalle: 'ignorado: el aviso no trae referencia de la transacción' };
   if (monto === null) return { http: 200, detalle: 'ignorado: el aviso no trae un monto válido' };
-  return clasificacion.tipo === 'venta' ? registrarVenta(terminal, b, clave, monto) : registrarReembolso(terminal, b, clave, monto);
+  return clasificacion.tipo === 'venta' ? registrarVenta(terminal, b, clave, monto, opciones) : registrarReembolso(terminal, b, clave, monto);
 }

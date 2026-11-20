@@ -1,8 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, KeyRound, Plus, RefreshCw, Smartphone } from 'lucide-react';
+import { Copy, FileUp, KeyRound, Plus, RefreshCw, Smartphone } from 'lucide-react';
 import { adminApi, datafonosApi } from '@/lib/api';
 import { ResumenVentas } from '@/components/datafonos/ResumenVentas';
 import { Panel, PanelHeader, Table, Tr, Td, Btn, Modal, Input, Select, fmt, fmtDate } from '@/components/admin/ui';
@@ -88,6 +88,26 @@ export default function DatafonosAdminPage() {
     },
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo sincronizar con Kushki', { duration: 10000 }),
   });
+  // Importar un reporte de transacciones de la consola de Kushki (.csv): refleja ventas y anulaciones que ya ocurrieron
+  const archivoRef = useRef<HTMLInputElement>(null);
+  const [importarA, setImportarA] = useState<EmpresaCodigo | null>(null);
+  const importar = useMutation({
+    mutationFn: (v: { e: EmpresaCodigo; archivo: File }) => datafonosApi.admin.importarVentas(v.e.titularId, v.archivo).then((r) => ({ e: v.e, r: r.data.resumen })),
+    onSuccess: ({ e, r }) => {
+      refrescar();
+      toast.success(`${e.nombre}: ${r.ventas} ventas (${fmt(r.montoVentas)}) y ${r.reembolsos} anulaciones (${fmt(r.montoReembolsos)}) importadas · ${r.repetidas} ya estaban${r.ignoradas ? ` · ${r.ignoradas} ignoradas` : ''}${r.errores ? ` · ${r.errores} con error` : ''}`, { duration: 20000 });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo importar el archivo', { duration: 10000 }),
+  });
+  function alElegirArchivo(ev: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = ev.target.files?.[0];
+    ev.target.value = '';
+    if (!archivo || !importarA) return;
+    if (window.confirm(`¿Importar "${archivo.name}" para ${importarA.nombre}?\n\nSe acreditarán las ventas y se descontarán las anulaciones del archivo, con la comisión de datáfono vigente (${configQ.data ?? 0}%) y la fecha real de cada una. Lo que ya esté registrado no se duplica.`)) {
+      importar.mutate({ e: importarA, archivo });
+    }
+  }
+
   const quitarCodigo = useMutation({
     mutationFn: (titularId: string) => datafonosApi.admin.quitarBusinessCode(titularId),
     onSuccess: () => { toast.success('Credenciales quitadas'); refrescar(); },
@@ -150,6 +170,7 @@ export default function DatafonosAdminPage() {
               <Td>{e.configurado ? <Etiqueta texto={`Guardada ${e.termina}`} color="#6CC998" /> : <Etiqueta texto="Falta" color="#d4a017" />}</Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
+                  <Btn disabled={importar.isPending} title="Sube el reporte de transacciones de la consola de Kushki para reflejar ventas y anulaciones que ya ocurrieron" onClick={() => { setImportarA(e); archivoRef.current?.click(); }}><FileUp size={13} /> {importar.isPending && importar.variables?.e.titularId === e.titularId ? 'Importando…' : 'Importar archivo'}</Btn>
                   {e.configurado && <Btn disabled={sincronizar.isPending} title="Trae ahora las ventas del datáfono desde Kushki (se hace solo cada 2 minutos)" onClick={() => sincronizar.mutate(e)}>{sincronizar.isPending && sincronizar.variables?.titularId === e.titularId ? 'Sincronizando…' : 'Sincronizar ahora'}</Btn>}
                   <Btn onClick={() => { setFirma(''); setCodigo(''); setCodigoModal({ titularId: e.titularId }); }}>{e.firma ? 'Cambiar' : 'Asignar'}</Btn>
                   {(e.firma || e.configurado) && <Btn variant="danger" disabled={quitarCodigo.isPending} onClick={() => { if (window.confirm(`¿Quitar las credenciales de ${e.nombre}? Sus datáfonos dejarán de reflejarse en TrendPay.`)) quitarCodigo.mutate(e.titularId); }}>Quitar</Btn>}
@@ -235,6 +256,8 @@ export default function DatafonosAdminPage() {
           ))}
         </Table>
       </Panel>
+
+      <input ref={archivoRef} type="file" accept=".csv,text/csv,text/plain" style={{ display: 'none' }} onChange={alElegirArchivo} />
 
       <Modal open={!!codigoModal} onClose={() => { setCodigoModal(null); setFirma(''); setCodigo(''); }} title="Conexión con Kushki">
         <Select label="Empresa" value={codigoModal?.titularId ?? ''} onChange={(e) => setCodigoModal({ titularId: e.target.value })}>
