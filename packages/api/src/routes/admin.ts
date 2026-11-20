@@ -125,6 +125,10 @@ router.put('/users/:id', authenticate, requireAdmin, async (req: Request, res: R
     if (!existing) return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado' });
 
     const { nombre, correo, celular, ciudad, bloqueado, kycNivel, nuevo_pin, cuentaPadreId } = req.body;
+    // Las cuentas de administrador nunca se bloquean (ni se eliminan): así nadie se queda sin acceso al panel
+    if (existing.rol === 'admin' && bloqueado === true) {
+      return res.status(400).json({ ok: false, mensaje: 'No se puede bloquear una cuenta de administrador' });
+    }
     const data: any = {};
     const antes: any = {};
     const despues: any = {};

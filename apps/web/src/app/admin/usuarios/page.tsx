@@ -96,7 +96,8 @@ export default function UsuariosPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-users', q, page],
-    queryFn: () => adminApi.kushkiComercios({ q: q || undefined, page, limit: LIMITE, todos: 1 }),
+    // Sin administradores: la cuenta de administración no se lista, ni se puede bloquear ni eliminar desde aquí
+    queryFn: () => adminApi.kushkiComercios({ q: q || undefined, page, limit: LIMITE }),
     select: d => d.data as { total: number; configurados: number; cuentas: Cuenta[] },
   });
   const cuentas = data?.cuentas ?? [];
@@ -166,7 +167,7 @@ export default function UsuariosPage() {
   // Exporta lo que coincide con la búsqueda (empresas y sedes), hasta 200 empresas
   async function exportarCsv() {
     try {
-      const { data: todo } = await adminApi.kushkiComercios({ q: q || undefined, page: 1, limit: 200, todos: 1 });
+      const { data: todo } = await adminApi.kushkiComercios({ q: q || undefined, page: 1, limit: 200 });
       const filas: (string | number)[][] = [];
       for (const c of todo.cuentas as Cuenta[]) {
         const fila = (u: Cuenta | Sede, empresa: string, saldo: number | string) =>

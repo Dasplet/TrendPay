@@ -73,6 +73,15 @@ describe('Admin API', () => {
   });
 
   describe('PUT /api/admin/users/:id', () => {
+    it('una cuenta de administrador no se puede bloquear', async () => {
+      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+      const otroAdmin = await crearUsuarioDePrueba({ rol: 'admin' });
+      const res = await request(app).put(`/api/admin/users/${otroAdmin.id}`).set('Authorization', `Bearer ${tokenPara(admin)}`).send({ bloqueado: true });
+      expect(res.status).toBe(400);
+      expect(res.body.mensaje).toContain('administrador');
+      expect((await prisma.user.findUniqueOrThrow({ where: { id: otroAdmin.id } })).bloqueado).toBe(false);
+    });
+
     it('actualiza los campos enviados y registra el antes/después en la auditoría', async () => {
       const admin = await crearUsuarioDePrueba({ rol: 'admin' });
       const target = await crearUsuarioDePrueba({ nombre: 'Nombre Original' });
