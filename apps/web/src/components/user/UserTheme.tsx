@@ -55,7 +55,7 @@ export function firstName(user?: User | null) {
 }
 
 export function initials(user?: User | null) {
-  const name = user?.nombre || 'Usuario Demo';
+  const name = user?.nombre || 'Usuario';
   return name
     .split(' ')
     .filter(Boolean)
@@ -308,24 +308,6 @@ export function InfoDestination({ saldo, label = 'Destino: Tu billetera virtual'
   );
 }
 
-// Rejilla decorativa de un QR falso — sin datos reales por celda, así que
-// las claves son ids estables generados una sola vez, no el índice del map.
-// Math.random() aquí no es sensible a seguridad: son claves de React para
-// celdas decorativas, no tokens, sesiones ni nada que deba ser impredecible.
-const FAKE_QR_CELL_KEYS = Array.from({ length: 36 }, () => Math.random().toString(36).slice(2)); // NOSONAR
-
-export function FakeQr({ user, amount, concept }: Readonly<{ user?: User | null; amount?: number; concept?: string }>) {
-  return (
-    <div className="tp-qr-box">
-      <div className="tp-fake-qr" aria-label="QR demo">
-        {FAKE_QR_CELL_KEYS.map((key) => <i key={key} />)}
-      </div>
-      <p>{user?.correo || 'usuario@trendpay.co'} · CC {user?.cedula || '1023456789'}</p>
-      {(amount || concept) && <small>{amount ? compactCOP(amount) : 'Monto libre'}{concept ? ` · ${concept}` : ''}</small>}
-    </div>
-  );
-}
-
 export function RealQr({ value, size = 220 }: Readonly<{ value: string; size?: number }>) {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
 
@@ -343,9 +325,8 @@ export function RealQr({ value, size = 220 }: Readonly<{ value: string; size?: n
       {dataUrl ? (
         <img src={dataUrl} width={size} height={size} alt="Código QR para pagar" style={{ borderRadius: 12, display: 'block', margin: '0 auto' }} />
       ) : (
-        <div className="tp-fake-qr" aria-hidden="true">
-          {FAKE_QR_CELL_KEYS.map((key) => <i key={key} />)}
-        </div>
+        // Mientras se genera el QR real se muestra un recuadro vacío, nunca un QR de relleno
+        <div className="tp-fake-qr" aria-label="Generando el código QR" style={{ width: size, height: size, margin: '0 auto' }} />
       )}
     </div>
   );

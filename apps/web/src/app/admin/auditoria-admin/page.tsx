@@ -33,18 +33,16 @@ const ACTION_STYLE: Record<string,{icon:LucideIcon,color:string,label:string}> =
   CREAR_USUARIO:          { icon:UserPlus,         color:'#852EC7', label:'Usuario creado'          },
   EDITAR_USUARIO:         { icon:Pencil,           color:'#AE93AA', label:'Usuario editado'         },
   ELIMINAR_USUARIO:       { icon:UserX,            color:'#C0392B', label:'Usuario eliminado'       },
+  ELIMINAR_CUENTA:        { icon:UserX,            color:'#C0392B', label:'Cuenta eliminada'        },
+  PROGRAMAR_ELIMINACION:  { icon:UserX,            color:'#d4a017', label:'Eliminación programada'  },
+  CANCELAR_ELIMINACION:   { icon:UserCheck,        color:'#6CC998', label:'Eliminación cancelada'   },
+  LIMPIAR_DATOS:          { icon:Settings2,        color:'#C0392B', label:'Limpieza de datos de prueba' },
+  CREAR_TERMINAL_KUSHKI:  { icon:Settings2,        color:'#852EC7', label:'Datáfono registrado'     },
+  EDITAR_TERMINAL_KUSHKI: { icon:Pencil,           color:'#AE93AA', label:'Datáfono editado'        },
+  GUARDAR_BUSINESS_CODE_KUSHKI_ONE: { icon:Settings2, color:'#852EC7', label:'Business-Code de Kushki One asignado' },
+  QUITAR_BUSINESS_CODE_KUSHKI_ONE:  { icon:Settings2, color:'#C0392B', label:'Business-Code de Kushki One quitado' },
+  CAMBIAR_COMISION_DATAFONO: { icon:CircleDollarSign, color:'#d4a017', label:'Comisión de datáfono cambiada' },
 };
-
-// Fallback mock logs for demo (when DB has no data yet)
-const MOCK = [
-  { id:'1', accion:'LOGIN',                  desc:'Admin TrendPay · CC 1000000001',    tiempo:'Hace 2 min' },
-  { id:'2', accion:'RETIRO_APROBADO',        desc:'RET-000102 · Juan García · $300.000', tiempo:'Hace 1 h' },
-  { id:'3', accion:'COMISION_MODIFICADA',    desc:'3.0% → 3.0% · Admin TrendPay',     tiempo:'Hace 2 h'  },
-  { id:'4', accion:'USUARIO_VERIFICADO_KYC', desc:'CC 1023456789 · Nivel 2',           tiempo:'Hace 5 h'  },
-  { id:'5', accion:'BLOQUEO_CUENTA',         desc:'CC 9999999999 · 5 intentos fallidos', tiempo:'Ayer 3:40 pm' },
-  { id:'6', accion:'CONFIG_ACTUALIZADA',     desc:'Limite diario: $3.000.000',         tiempo:'Ayer 11:20 am' },
-  { id:'7', accion:'BANCO_TOGGLE',           desc:'Banco Popular · Admin TrendPay',    tiempo:'Lun 22 jun' },
-];
 
 function AuditLogDetail({ antes, despues, datos }: Readonly<{ antes: any; despues: any; datos: any }>) {
   if (antes || despues) {
@@ -92,8 +90,8 @@ export default function AuditoriaAdminPage() {
     select: d => d.data,
   });
   const apiLogs: any[] = data?.logs||[];
-  const logs = apiLogs.length > 0 ? apiLogs : MOCK;
-  const isReal = apiLogs.length > 0;
+  const logs = apiLogs;
+  const isReal = true; // solo se muestran registros reales
 
   function exportarCsv() {
     if (!isReal) return toast.error('Aún no hay registros reales para exportar');
@@ -112,6 +110,7 @@ export default function AuditoriaAdminPage() {
         actions={<Btn variant="ghost" onClick={exportarCsv}><Download size={13} /> Exportar</Btn>}
       />
       <div style={{ padding:'12px 0' }}>
+        {logs.length === 0 && <div style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)', fontSize:13 }}>Todavía no hay registros de auditoría</div>}
         {logs.map((l:any)=>{
           const style = ACTION_STYLE[l.accion||''] || { icon:Circle, color:'var(--adm-muted)', label: l.accion||'Acción' };
           const desc  = isReal ? (l.datos?.motivo || l.datos?.banco || l.tabla || '') : l.desc;

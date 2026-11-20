@@ -184,6 +184,60 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req: Request, res
   }
 });
 
+// ══ GET /api/admin/alertas ══
+// Alertas de riesgo calculadas con los datos de ahora (nada guardado ni inventado): si no hay nada que atender, la lista
+// va vacía. Cada una apunta a la pantalla donde se resuelve.
+const UMBRAL_RETIRO_ALERTA = 2_000_000; // un retiro de este monto o más pide revisión manual
+const ORDEN_NIVEL = { alto: 0, medio: 1, info: 2 } as const;
+
+router.get('/alertas', authenticate, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const ahora = new Date();
+    const hace = (min: number) => new Date(ahora.getTime() - min * 60_000);
+    const [retiros, bloqueadas, pagos, cobrosRevision, reembolsos, eliminaciones, negativas] = await Promise.all([
+      prisma.withdrawal.findMany({ where: { status: { in: ['pendiente', 'en_proceso'] } }, include: { user: { select: { nombre: true, cedula: true } } }, orderBy: { createdAt: 'asc' }, take: 100 }),
+      prisma.user.findMany({ where: { eliminadoAt: null, bloqueadoHasta: { gt: ahora } }, select: { nombre: true, cedula: true, bloqueadoHasta: true, updatedAt: true }, take: 100 }),
+      prisma.kushkiPayment.findMany({ where: { estado: 'pendiente', createdAt: { lte: hace(30) } }, orderBy: { createdAt: 'asc' }, take: 100 }),
+      prisma.cobroDatafono.findMany({ where: { estado: 'revision' }, include: { terminal: { select: { alias: true } } }, take: 100 }),
+      prisma.cobroDatafono.findMany({ where: { estado: 'reembolsando', updatedAt: { lte: hace(30) } }, include: { terminal: { select: { alias: true } } }, take: 100 }),
+      prisma.user.findMany({ where: { eliminadoAt: null, eliminacionProgramadaAt: { lte: ahora } }, select: { id: true, nombre: true, cedula: true, eliminacionProgramadaAt: true }, take: 100 }),
+      prisma.wallet.findMany({ where: { saldo: { lt: 0 }, user: { eliminadoAt: null } }, include: { user: { select: { nombre: true, cedula: true } } }, take: 100 }),
+    ]);
+
+    const cop = (n: number) => `$${Math.round(n).toLocaleString('es-CO')}`;
+    const alertas: { id: string; nivel: keyof typeof ORDEN_NIVEL; titulo: string; detalle: string; fecha: Date; href?: string }[] = [];
+
+    for (const r of retiros) {
+      const monto = Number(r.monto);
+      const horas = Math.floor((ahora.getTime() - r.createdAt.getTime()) / 3_600_000);
+      const quien = `${r.user.nombre} · CC ${r.user.cedula}`;
+      if (monto >= UMBRAL_RETIRO_ALERTA) alertas.push({ id: `retiro-alto-${r.id}`, nivel: 'alto', titulo: 'Retiro de monto alto', detalle: `${cop(monto)} · ${quien} · pide revisión manual (umbral ${cop(UMBRAL_RETIRO_ALERTA)})`, fecha: r.createdAt, href: '/admin/retiros' });
+      if (horas >= 24) alertas.push({ id: `retiro-viejo-${r.id}`, nivel: horas >= 48 ? 'alto' : 'medio', titulo: 'Retiro esperando hace más de un día', detalle: `${cop(monto)} · ${quien} · lleva ${horas} h sin resolverse`, fecha: r.createdAt, href: '/admin/retiros' });
+    }
+    for (const u of bloqueadas) {
+      alertas.push({ id: `bloqueo-${u.cedula}`, nivel: 'medio', titulo: 'Cuenta bloqueada por intentos fallidos de PIN', detalle: `${u.nombre} · CC ${u.cedula} · bloqueada hasta las ${u.bloqueadoHasta!.toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' })}`, fecha: u.updatedAt, href: '/admin/usuarios' });
+    }
+    for (const p of pagos) {
+      alertas.push({ id: `pago-${p.id}`, nivel: 'medio', titulo: 'Consignación sin confirmar', detalle: `${cop(Number(p.monto))} (${p.metodo.toUpperCase()}) lleva más de 30 minutos pendiente en Kushki`, fecha: p.createdAt, href: '/admin/pagos-kushki' });
+    }
+    for (const c of cobrosRevision) {
+      alertas.push({ id: `cobro-revision-${c.id}`, nivel: 'alto', titulo: 'Cobro de datáfono en revisión', detalle: `${cop(Number(c.monto))} en ${c.terminal.alias}: ${c.detalle ?? 'el monto aprobado no coincide con el cobrado'}`, fecha: c.updatedAt, href: '/admin/datafonos' });
+    }
+    for (const c of reembolsos) {
+      alertas.push({ id: `reembolso-${c.id}`, nivel: 'medio', titulo: 'Reembolso de datáfono sin confirmar', detalle: `${cop(Number(c.monto))} en ${c.terminal.alias} lleva más de 30 minutos esperando a Kushki`, fecha: c.updatedAt, href: '/admin/datafonos' });
+    }
+    for (const u of eliminaciones) {
+      alertas.push({ id: `eliminacion-${u.id}`, nivel: 'info', titulo: 'Cuenta con plazo de eliminación vencido', detalle: `${u.nombre} · CC ${u.cedula} sigue con saldo u operaciones en curso; se eliminará sola cuando quede en cero`, fecha: u.eliminacionProgramadaAt!, href: '/admin/usuarios' });
+    }
+    for (const w of negativas) {
+      alertas.push({ id: `saldo-negativo-${w.id}`, nivel: 'alto', titulo: 'Billetera con saldo negativo', detalle: `${w.user.nombre} · CC ${w.user.cedula} · ${cop(Number(w.saldo))}`, fecha: w.updatedAt, href: '/admin/usuarios' });
+    }
+
+    alertas.sort((a, b) => ORDEN_NIVEL[a.nivel] - ORDEN_NIVEL[b.nivel] || b.fecha.getTime() - a.fecha.getTime());
+    res.json({ ok: true, alertas, reglas: { umbralRetiro: UMBRAL_RETIRO_ALERTA, intentosPin: 5, bloqueoMinutos: 30 } });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
 // ══ Limpieza de datos de prueba ══
 // Borra el historial financiero y deja las billeteras en $0 (ver utils/limpiarDatos.ts). Irreversible: solo funciona si el
 // servidor tiene PERMITIR_LIMPIEZA=1 y se escribe la frase de confirmación.

@@ -1,89 +1,97 @@
 'use client';
-import { useState } from 'react';
-import { Panel, PanelHeader, Btn } from '@/components/admin/ui';
-import toast from 'react-hot-toast';
-import { TrendingUp, Lock, Smartphone, AlertTriangle, Settings2, Eye, Check, Pencil, Trash2, X, type LucideIcon } from 'lucide-react';
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { api } from '@/lib/api';
+import { Panel, PanelHeader, fmt } from '@/components/admin/ui';
 
-const MOCK_ALERTS: { id:number; tipo:string; titulo:string; desc:string; tiempo:string; icon:LucideIcon; color:string; bg:string }[] = [
-  { id:1, tipo:'Alto', titulo:'Alto volumen inusual', desc:"Retiro de $2.800.000 · CC 1023456789 · supera el 90% del límite diario", tiempo:'Hace 8 min', icon:TrendingUp, color:'#C0392B', bg:'rgba(192,57,43,.15)' },
-  { id:2, tipo:'Medio', titulo:'Intentos fallidos de PIN', desc:'3 intentos incorrectos · CC 1023456789 · dispositivo Samsung S24', tiempo:'Hace 15 min', icon:Lock, color:'#d4a017', bg:'rgba(212,160,23,.15)' },
-  { id:3, tipo:'Info', titulo:'Nuevo dispositivo detectado', desc:'Admin TrendPay · Chrome en MacBook · Medellín, Colombia', tiempo:'Hace 2 h', icon:Smartphone, color:'#852EC7', bg:'rgba(133,46,199,.15)' },
-];
+type Nivel = 'alto' | 'medio' | 'info';
+interface Alerta { id: string; nivel: Nivel; titulo: string; detalle: string; fecha: string; href?: string }
+interface Respuesta { alertas: Alerta[]; reglas: { umbralRetiro: number; intentosPin: number; bloqueoMinutos: number } }
 
+const ESTILO: Record<Nivel, { etiqueta: string; color: string; bg: string }> = {
+  alto:  { etiqueta: 'Alto',  color: '#C0392B', bg: 'rgba(192,57,43,.15)' },
+  medio: { etiqueta: 'Medio', color: '#d4a017', bg: 'rgba(212,160,23,.15)' },
+  info:  { etiqueta: 'Info',  color: '#852EC7', bg: 'rgba(133,46,199,.15)' },
+};
+
+function haceCuanto(fecha: string) {
+  const diff = Date.now() - new Date(fecha).getTime();
+  if (diff < 60_000) return 'Hace unos segundos';
+  if (diff < 3_600_000) return `Hace ${Math.floor(diff / 60_000)} min`;
+  if (diff < 86_400_000) return `Hace ${Math.floor(diff / 3_600_000)} h`;
+  return new Date(fecha).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+}
+
+// Alertas calculadas con los datos de ahora: si no hay nada que atender, no se muestra nada inventado
 export default function AlertasPage() {
-  const [alerts, setAlerts] = useState(MOCK_ALERTS);
-  const [params] = useState({ umbral: 2000000, intentos: 3, dispositivos: true });
-
-  function dismiss(id: number) {
-    setAlerts(a => a.filter(x => x.id !== id));
-    toast.success('Alerta marcada como revisada');
-  }
-
-  function remove(id: number) {
-    setAlerts(a => a.filter(x => x.id !== id));
-    toast.success('Alerta eliminada');
-  }
-
-  function clearAll() {
-    setAlerts([]);
-    toast.success('Todas las alertas fueron eliminadas');
-  }
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['admin-alertas'],
+    queryFn: () => api.get('/admin/alertas').then((r) => r.data as Respuesta),
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
+  const alertas = data?.alertas ?? [];
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-
-      {/* Active alerts */}
-      <Panel style={{ border:'1px solid rgba(192,57,43,.25)' }}>
-        <PanelHeader title="Alertas de riesgo activas" icon={<AlertTriangle size={16} />}
-          actions={alerts.length > 0 ? <Btn variant="ghost" onClick={clearAll}><X size={13} /> Limpiar todas</Btn> : undefined}
-        />
-        <div style={{ padding:'12px 16px', display:'flex', flexDirection:'column', gap:10 }}>
-          {alerts.length === 0 && (
-            <div style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)', fontSize:13 }}>Sin alertas activas</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Panel style={{ border: alertas.length ? '1px solid rgba(192,57,43,.25)' : undefined }}>
+        <PanelHeader title={alertas.length ? `Alertas de riesgo activas (${alertas.length})` : 'Alertas de riesgo'} icon={<AlertTriangle size={16} />} />
+        <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {isLoading && <div style={{ textAlign: 'center', padding: 32, opacity: 0.6, fontSize: 13 }}>Cargando…</div>}
+          {isError && <div style={{ textAlign: 'center', padding: 32, color: '#C0392B', fontSize: 13 }}>No se pudieron cargar las alertas.</div>}
+          {data && alertas.length === 0 && (
+            <div style={{ textAlign: 'center', padding: 32, fontSize: 13, color: '#6CC998', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <ShieldCheck size={28} />
+              <strong>Todo al día</strong>
+              <span style={{ opacity: 0.7, color: 'var(--adm-text)' }}>No hay retiros por revisar, cuentas bloqueadas, pagos sin confirmar ni saldos negativos.</span>
+            </div>
           )}
-          {alerts.map(a => (
-            <div key={a.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 16px', background:'rgba(var(--adm-card-rgb),.5)', borderRadius:12, border:'1px solid rgba(133,46,199,.12)' }}>
-              <div style={{ width:44, height:44, borderRadius:12, background:a.bg, display:'flex', alignItems:'center', justifyContent:'center', color:a.color, flexShrink:0 }}><a.icon size={20} /></div>
-              <div style={{ flex:1 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:3 }}>
-                  <span style={{ fontSize:14, fontWeight:700, color:'var(--adm-text)' }}>{a.titulo}</span>
-                  <span style={{ fontSize:11, fontWeight:700, background:a.bg, color:a.color, padding:'2px 8px', borderRadius:12 }}>{a.tipo}</span>
+          {alertas.map((a) => {
+            const e = ESTILO[a.nivel];
+            return (
+              <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: 'rgba(var(--adm-card-rgb),.5)', borderRadius: 12, border: '1px solid rgba(133,46,199,.12)' }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: e.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: e.color, flexShrink: 0 }}><AlertTriangle size={20} /></div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--adm-text)' }}>{a.titulo}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, background: e.bg, color: e.color, padding: '2px 8px', borderRadius: 12 }}>{e.etiqueta}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'rgba(var(--adm-fg-rgb),.6)', marginBottom: 3 }}>{a.detalle}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(var(--adm-fg-rgb),.35)' }}>{haceCuanto(a.fecha)}</div>
                 </div>
-                <div style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.6)', marginBottom:3 }}>{a.desc}</div>
-                <div style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.35)' }}>{a.tiempo}</div>
+                {a.href && (
+                  <Link href={a.href} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#c088f0', border: '1px solid rgba(133,46,199,.25)', borderRadius: 9, padding: '7px 12px', whiteSpace: 'nowrap' }}>
+                    Revisar <ArrowRight size={13} />
+                  </Link>
+                )}
               </div>
-              <div style={{ display:'flex', gap:8 }}>
-                <Btn variant="ghost" style={{ padding:'6px 10px' }} title="Ver detalle"><Eye size={14} /></Btn>
-                <Btn variant="ghost" style={{ padding:'6px 10px' }} onClick={() => dismiss(a.id)} title="Marcar como revisada"><Check size={14} /></Btn>
-                <Btn variant="danger" style={{ padding:'6px 10px' }} onClick={() => remove(a.id)} title="Eliminar"><Trash2 size={14} /></Btn>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Panel>
 
-      {/* Antifraud params */}
-      <Panel>
-        <PanelHeader title="Parámetros antifraude" icon={<Settings2 size={16} />} />
-        <div style={{ padding:'8px 0' }}>
-          {[
-            { label:'Umbral de alerta por retiro', sub:'Monto que dispara revisión manual', value:`$${params.umbral.toLocaleString('es-CO')}`, key:'umbral' },
-            { label:'Max intentos PIN antes de bloqueo', sub:'Bloqueo temporal de 15 minutos', value:`${params.intentos} intentos`, key:'intentos' },
-            { label:'Revisión de nuevos dispositivos', sub:'Requiere 2FA en dispositivos nuevos', value:params.dispositivos?'Activo':'Inactivo', key:'dispositivos' },
-          ].map(p => (
-            <div key={p.key} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'16px 20px', borderBottom:'1px solid rgba(var(--adm-fg-rgb),.04)' }}>
-              <div>
-                <div style={{ fontSize:14, fontWeight:600, color:'var(--adm-text)', marginBottom:3 }}>{p.label}</div>
-                <div style={{ fontSize:12, color:'rgba(var(--adm-fg-rgb),.4)' }}>{p.sub}</div>
+      {data && (
+        <Panel>
+          <PanelHeader title="Reglas vigentes" icon={<ShieldCheck size={16} />} />
+          <div style={{ padding: '8px 0' }}>
+            {[
+              { label: 'Retiro de monto alto', sub: 'Se avisa cuando un retiro pendiente llega a este monto', value: fmt(data.reglas.umbralRetiro) },
+              { label: 'Bloqueo por PIN incorrecto', sub: 'La cuenta se bloquea temporalmente al fallar el PIN', value: `${data.reglas.intentosPin} intentos · ${data.reglas.bloqueoMinutos} min` },
+              { label: 'Retiros sin resolver', sub: 'Se avisa a las 24 h (medio) y a las 48 h (alto)', value: '24 h / 48 h' },
+              { label: 'Pagos Kushki sin confirmar', sub: 'Se avisa cuando una consignación sigue pendiente', value: '30 min' },
+            ].map((r) => (
+              <div key={r.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 20px', borderBottom: '1px solid rgba(var(--adm-fg-rgb),.04)' }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--adm-text)', marginBottom: 3 }}>{r.label}</div>
+                  <div style={{ fontSize: 12, color: 'rgba(var(--adm-fg-rgb),.4)' }}>{r.sub}</div>
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#6CC998', whiteSpace: 'nowrap' }}>{r.value}</span>
               </div>
-              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <span style={{ fontSize:13, fontWeight:700, color:'#6CC998' }}>{p.value}</span>
-                <Btn variant="ghost" style={{ padding:'5px 8px' }}><Pencil size={14} /></Btn>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Panel>
+            ))}
+          </div>
+        </Panel>
+      )}
     </div>
   );
 }
