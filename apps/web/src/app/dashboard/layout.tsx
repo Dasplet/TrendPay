@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { LogOut } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { datafonosApi } from '@/lib/api';
 import { useAuthStore, type User } from '@/store/authStore';
 import { BrandLogo, UserAvatar, fmtCOP, userMenu } from '@/components/user/UserTheme';
 import { permisoDeRuta, puede } from '@/lib/permisos';
@@ -41,6 +43,15 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
     if (user.rol === 'admin') router.push('/admin');
   }, [router, user, hydrated]);
 
+  // El enlace de cobro con datáfono solo aparece si la cuenta tiene terminales asignados
+  const { data: tieneDatafonos } = useQuery({
+    queryKey: ['datafonos-terminales', user?.id],
+    queryFn: () => datafonosApi.terminales(),
+    select: (res) => (res.data.terminales as unknown[]).length > 0,
+    enabled: hydrated && !!user && user.rol !== 'admin' && puede(user, 'recargar'),
+    staleTime: 5 * 60_000,
+  });
+
   // Una subcuenta que entra por URL a una operación que no tiene permitida
   // vuelve al inicio (el backend igual la rechazaría con 403).
   const permisoRequerido = permisoDeRuta(pathname);
@@ -75,7 +86,7 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
           {userMenu.map((group) => (
             <div key={group.section} className="tp-nav-group">
               <p>{group.section}</p>
-              {group.items.filter((item) => !item.permiso || puede(user, item.permiso)).map((item) => {
+              {group.items.filter((item) => (!item.permiso || puede(user, item.permiso)) && (!item.soloConDatafonos || tieneDatafonos)).map((item) => {
                 const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
                 return (
                   <Link key={item.href} href={item.href} className={`tp-nav-link ${active ? 'active' : ''}`}>

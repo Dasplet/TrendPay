@@ -20,7 +20,7 @@ export default function ComisionesPage() {
     bycat[cat] = (bycat[cat]||0) + Number.parseFloat(t.comision_valor||0);
   });
 
-  const catLabels: Record<string,string> = { consigna:'Consignaciones', cobro_qr:'Cobros QR', retiro:'Retiros', envio:'Envíos' };
+  const catLabels: Record<string,string> = { consigna:'Consignaciones', cobro_qr:'Cobros QR', retiro:'Retiros', envio:'Envíos', datafono:'Datáfonos' };
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>

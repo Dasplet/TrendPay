@@ -16,6 +16,7 @@ import { logger } from './utils/logger';
 import { apiLimiter } from './middleware/rateLimiter';
 import { errorHandler } from './middleware/errorHandler';
 import { iniciarConciliacionKushki } from './utils/kushkiPayments';
+import { iniciarConciliacionDatafonos } from './utils/datafonos';
 
 // Routes
 import authRouter      from './routes/auth';
@@ -26,6 +27,7 @@ import withdrawalsRouter from './routes/withdrawals';
 import adminRouter     from './routes/admin';
 import userAuditRouter from './routes/userAudit';
 import kushkiRouter    from './routes/kushki';
+import datafonosRouter from './routes/datafonos';
 import bankAccountsRouter from './routes/bankAccounts';
 import vinculacionesRouter from './routes/vinculaciones';
 import vinculacionPublicaRouter from './routes/vinculacionPublica';
@@ -111,6 +113,7 @@ app.use('/api/vinculacion', vinculacionPublicaRouter);
 app.use('/api/admin',       adminRouter);
 app.use('/api/user-audit',  userAuditRouter);
 app.use('/api/kushki',      kushkiRouter);
+app.use('/api/datafonos',   datafonosRouter);
 
 // ── Serve frontend static files ──
 const publicPath = path.join(__dirname, '../../web/dist');
@@ -157,6 +160,7 @@ async function start() {
       logger.info(`🚀 TrendPay API corriendo en http://localhost:${PORT}`);
       logger.info(`🏥 Health check: http://localhost:${PORT}/health`);
       iniciarConciliacionKushki();
+      iniciarConciliacionDatafonos();
     });
   } catch (err: any) {
     logger.error('❌ No se pudo iniciar el servidor', { err: err.message, stack: err.stack });

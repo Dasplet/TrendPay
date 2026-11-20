@@ -16,6 +16,7 @@ const PERMISO_POR_RUTA: [string, Permiso][] = [
   ['/dashboard/consignar', 'recargar'],
   ['/dashboard/consignaciones', 'recargar'],
   ['/dashboard/cobrar-qr', 'recargar'],
+  ['/dashboard/datafono', 'recargar'],
   ['/dashboard/enviar', 'enviar'],
   ['/dashboard/pagar-qr', 'enviar'],
   ['/dashboard/pagar-nfc', 'enviar'],

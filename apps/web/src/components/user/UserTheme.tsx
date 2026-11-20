@@ -360,7 +360,8 @@ export function EmptyState({ title = 'Sin movimientos', icon = <History size={40
   );
 }
 
-export const userMenu: { section: string; items: { href: string; label: string; icon: React.ReactNode; permiso?: Permiso }[] }[] = [
+// soloConDatafonos: el enlace aparece únicamente si la cuenta tiene datáfonos asignados
+export const userMenu: { section: string; items: { href: string; label: string; icon: React.ReactNode; permiso?: Permiso; soloConDatafonos?: boolean }[] }[] = [
   { section: 'Principal', items: [
     { href: '/dashboard', label: 'Inicio', icon: <Home size={19} /> },
     { href: '/dashboard/historial', label: 'Historial', icon: <History size={19} /> },
@@ -368,6 +369,7 @@ export const userMenu: { section: string; items: { href: string; label: string; 
   { section: 'Operaciones', items: [
     { href: '/dashboard/consignar', label: 'Consignar', icon: <QrCode size={19} />, permiso: 'recargar' },
     { href: '/dashboard/cobrar-qr', label: 'Cobrar QR', icon: <QrCode size={19} />, permiso: 'recargar' },
+    { href: '/dashboard/datafono', label: 'Cobrar con datáfono', icon: <CreditCard size={19} />, permiso: 'recargar', soloConDatafonos: true },
     { href: '/dashboard/pagar-nfc', label: 'Pagar con NFC', icon: <Nfc size={19} />, permiso: 'enviar' },
     { href: '/dashboard/enviar', label: 'Enviar', icon: <Send size={19} />, permiso: 'enviar' },
     { href: '/dashboard/retirar-banco', label: 'Retirar a banco', icon: <Building2 size={19} />, permiso: 'retirar' },

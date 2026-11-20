@@ -60,6 +60,9 @@ model User {
   transactions    Transaction[]
   vinculaciones   Vinculacion[]
   comercioKushki  ComercioKushki?
+  terminalesTitular TerminalKushki[] @relation("TerminalesTitular")
+  terminalesSede    TerminalKushki[] @relation("TerminalesSede")
+  cobrosDatafono    CobroDatafono[]
 
   @@index([cuentaPadreId])
   @@map("users")
@@ -395,6 +398,72 @@ model ComercioKushki {
   pagos KushkiPayment[]
 
   @@map("comercios_kushki")
+}
+
+// ══════════════════════════════════════
+// DATÁFONOS KUSHKI ONE (card present)
+// ══════════════════════════════════════
+// Un datáfono (SmartPOS Sunmi) pertenece a una empresa (cuenta padre, dueña de la billetera) y puede estar asignado
+// a una sede (cuenta hija) que es la única que lo ve y lo usa; sin sede lo usa cualquiera de la empresa.
+model TerminalKushki {
+  id        String   @id @default(uuid())
+  serial    String   @unique
+  alias     String
+  modelo    String   @default("Sunmi P3")
+  titularId String   @map("titular_id")
+  sedeId    String?  @map("sede_id")
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  titular User            @relation("TerminalesTitular", fields: [titularId], references: [id])
+  sede    User?           @relation("TerminalesSede", fields: [sedeId], references: [id])
+  cobros  CobroDatafono[]
+
+  @@index([titularId])
+  @@index([sedeId])
+  @@map("terminales_kushki")
+}
+
+// Cada cobro que TrendPay le manda a un datáfono. clientTransactionId es el UUID que une todos los avisos de Kushki
+// con este cobro. El saldo se acredita solo cuando Kushki confirma la aprobación (nunca por el aviso a secas).
+model CobroDatafono {
+  id                   String   @id @default(uuid())
+  terminalId           String   @map("terminal_id")
+  userId               String   @map("user_id")
+  clientTransactionId  String   @unique @map("client_transaction_id")
+  monto                Decimal  @db.Decimal(18, 2)
+  comisionPct          Decimal  @default(0) @map("comision_pct") @db.Decimal(5, 2)
+  // pendiente | aprobado | rechazado | cancelado | expirado | revision
+  estado               String   @default("pendiente")
+  estadoTerminal       String?  @map("estado_terminal")
+  detalle              String?
+  transactionReference String?  @map("transaction_reference")
+  ticketNumber         String?  @unique @map("ticket_number")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  terminal TerminalKushki    @relation(fields: [terminalId], references: [id])
+  user     User              @relation(fields: [userId], references: [id])
+  eventos  EventoDatafono[]
+
+  @@index([terminalId, estado])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("cobros_datafono")
+}
+
+// Eventos de Kushki ya recibidos (Kushki reenvía y repite avisos): se guardan para no procesar dos veces el mismo.
+model EventoDatafono {
+  id        String   @id @default(uuid())
+  eventId   String   @unique @map("event_id")
+  cobroId   String   @map("cobro_id")
+  status    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  cobro CobroDatafono @relation(fields: [cobroId], references: [id], onDelete: Cascade)
+
+  @@index([cobroId])
+  @@map("eventos_datafono")
 }
 
 // ══════════════════════════════════════

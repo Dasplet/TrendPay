@@ -8,6 +8,9 @@ export async function limpiarBaseDeDatos() {
   await prisma.vinculacionArchivo.deleteMany();
   await prisma.vinculacionDocumento.deleteMany();
   await prisma.vinculacion.deleteMany();
+  await prisma.eventoDatafono.deleteMany();
+  await prisma.cobroDatafono.deleteMany();
+  await prisma.terminalKushki.deleteMany();
   await prisma.transaction.deleteMany();
   await prisma.qrCode.deleteMany();
   await prisma.withdrawal.deleteMany();

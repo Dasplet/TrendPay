@@ -117,6 +117,22 @@ export const kushkiApi = {
   consignaciones: () => api.get('/kushki/consignaciones'),
 };
 
+// Cobros con datáfono (Kushki One): la cuenta elige un terminal y un monto; el resultado se consulta hasta que termina
+export const datafonosApi = {
+  terminales: () => api.get('/datafonos/terminales'),
+  cobrar:     (terminalId: string, monto: number) => api.post('/datafonos/cobros', { terminalId, monto }),
+  cobro:      (id: string) => api.get(`/datafonos/cobros/${id}`),
+  cobros:     () => api.get('/datafonos/cobros'),
+  admin: {
+    terminales:    () => api.get('/datafonos/admin/terminales'),
+    crearTerminal: (data: { serial: string; alias: string; titularId: string; sedeId?: string | null; modelo?: string }) => api.post('/datafonos/admin/terminales', data),
+    editarTerminal: (id: string, data: { alias?: string; sedeId?: string | null; activo?: boolean }) => api.put(`/datafonos/admin/terminales/${id}`, data),
+    config:        () => api.get('/datafonos/admin/config'),
+    guardarConfig: (comisionPct: number) => api.put('/datafonos/admin/config', { comisionPct }),
+    cobros:        () => api.get('/datafonos/admin/cobros'),
+  },
+};
+
 export const notificationsApi = {
   list:    () => api.get('/users/notifications'),
   readAll: () => api.put('/users/notifications/read'),
