@@ -176,24 +176,23 @@ describe('Ventas y reembolsos hechos en el datáfono (webhook de card present)',
   });
 
   describe('reembolsos', () => {
-    it('un reembolso del mismo monto se liga a la venta, descuenta lo que se había acreditado y aparece en la tienda y en la principal', async () => {
+    it('un reembolso del mismo monto se liga a la venta y descuenta el monto COMPLETO devuelto al cliente (la empresa asume la comisión)', async () => {
       const { e, sanJuan, norte } = await empresa();
       await prisma.config.create({ data: { clave: 'comision_datafono_pct', valor: '2' } });
       await enviar(aviso({ approved_transaction_amount: 50000, request_amount: 50000 }));
       expect(await saldoDe(e.id)).toBe(49000); // 50.000 menos 2% de comisión
 
-      // la comisión cambia después: el reembolso devuelve lo que se había acreditado con la comisión original
-      await prisma.config.update({ where: { clave: 'comision_datafono_pct' }, data: { valor: '5' } });
       const res = await enviar(aviso({ transaction_type: 'REFUND', approved_transaction_amount: 50000, request_amount: 50000 }));
       expect(res.status).toBe(200);
-      expect(await saldoDe(e.id)).toBe(0);
+      expect(await saldoDe(e.id)).toBe(-1000); // 49.000 − 50.000: el cliente recibió los 50.000 completos; TrendPay se queda con su comisión
 
       const venta = await prisma.cobroDatafono.findFirstOrThrow({ where: { tipo: 'cobro' } });
       const reembolso = await prisma.cobroDatafono.findFirstOrThrow({ where: { tipo: 'reembolso' } });
       expect(venta.estado).toBe('reembolsado');
       expect(reembolso).toMatchObject({ origen: 'terminal', estado: 'aprobado', reembolsoDeId: venta.id });
       const tx = await prisma.transaction.findFirstOrThrow({ where: { categoria: 'reembolso_datafono' } });
-      expect(Number(tx.montoNeto)).toBe(-49000);
+      expect(Number(tx.montoNeto)).toBe(-50000);
+      expect([Number(tx.montoBruto), Number(tx.comisionValor)]).toEqual([50000, 0]); // el reembolso no devuelve ni cobra comisión
       expect(tx.sedeId).toBe(sanJuan.id);
 
       expect((await historial(e)).filter((t) => t.categoria === 'reembolso_datafono')).toHaveLength(1);
@@ -244,7 +243,7 @@ describe('Ventas y reembolsos hechos en el datáfono (webhook de card present)',
   });
 
   describe('resumen de ventas', () => {
-    it('cuenta las ventas y resta los reembolsos que no se pudieron ligar; una venta reembolsada deja de contar', async () => {
+    it('el resumen coincide con la billetera: suma las ventas y resta los reembolsos por el monto completo', async () => {
       const { e } = await empresa();
       await enviar(aviso({ approved_transaction_amount: 50000, request_amount: 50000 }));  // se reembolsa completa
       await enviar(aviso({ approved_transaction_amount: 30000, request_amount: 30000 }));  // se queda
@@ -253,7 +252,8 @@ describe('Ventas y reembolsos hechos en el datáfono (webhook de card present)',
 
       const res = await request(app).get('/api/datafonos/resumen?periodo=mes').set('Authorization', `Bearer ${tokenPara(e)}`);
       expect(res.status).toBe(200);
-      expect(res.body.total).toMatchObject({ cobros: 1, bruto: 25000 }); // 30.000 de la venta que queda − 5.000 del reembolso suelto
+      // ventas 50.000 + 30.000, reembolsos −50.000 y −5.000: 25.000 en bruto, igual que el saldo (sin comisión)
+      expect(res.body.total).toMatchObject({ cobros: 2, bruto: 25000, comision: 0, neto: 25000 });
     });
   });
 

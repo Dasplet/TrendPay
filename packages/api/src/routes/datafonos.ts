@@ -200,9 +200,18 @@ function sumar(fila: FilaResumen, monto: number, pct: number, signo = 1) {
 }
 
 async function resumenDeCobros(where: object, desde: Date) {
-  // Ventas aprobadas (una venta ya reembolsada deja de contar) y reembolsos que no se pudieron ligar a una venta (restan)
+  // Ventas aprobadas y reembolsos (restan el monto completo devuelto). Los cobros mandados desde TrendPay que se anularon dejan de contar.
   const cobros = await prisma.cobroDatafono.findMany({
-    where: { estado: 'aprobado', createdAt: { gte: desde }, OR: [{ tipo: 'cobro' }, { tipo: 'reembolso', reembolsoDeId: null }], ...where },
+    where: {
+      createdAt: { gte: desde },
+      OR: [
+        { tipo: 'cobro', estado: 'aprobado' },
+        // una venta hecha en el datáfono y luego reembolsada sigue contando; su reembolso (abajo) la resta: el resumen coincide con la billetera
+        { tipo: 'cobro', estado: 'reembolsado', origen: 'terminal' },
+        { tipo: 'reembolso', estado: 'aprobado' },
+      ],
+      ...where,
+    },
     select: { tipo: true, monto: true, comisionPct: true, terminal: { select: { id: true, alias: true, sedeId: true, sede: { select: { nombre: true } }, titular: { select: { id: true, nombre: true } } } } },
   });
   const total = vacia();
@@ -210,7 +219,7 @@ async function resumenDeCobros(where: object, desde: Date) {
   for (const c of cobros) {
     const signo = c.tipo === 'reembolso' ? -1 : 1;
     const monto = Number(c.monto) * signo;
-    const pct = Number(c.comisionPct);
+    const pct = c.tipo === 'reembolso' ? 0 : Number(c.comisionPct); // el reembolso no devuelve la comisión
     const t = c.terminal;
     const clave = `${t.titular.id}:${t.sedeId ?? ''}`;
     let tienda = tiendas.get(clave);

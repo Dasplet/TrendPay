@@ -121,15 +121,17 @@ async function registrarVenta(terminal: TerminalKushki, b: Aviso, clave: string,
   return { http: 200, detalle: `venta aprobada · acreditado ${neto}` };
 }
 
-// ── Reembolso aprobado en el datáfono: descuenta de la billetera lo que se había acreditado ──
+// ── Reembolso aprobado en el datáfono: descuenta de la billetera el monto completo devuelto al cliente ──
 async function registrarReembolso(terminal: TerminalKushki, b: Aviso, clave: string, monto: number): Promise<ResultadoAviso> {
   // Kushki no dice a qué venta corresponde el reembolso: se liga a la más reciente de ese datáfono con el mismo monto
   const original = await prisma.cobroDatafono.findFirst({
     where: { terminalId: terminal.id, tipo: 'cobro', estado: 'aprobado', monto }, orderBy: { createdAt: 'desc' },
   });
-  const pct = original ? Number(original.comisionPct) : await comisionDatafonoPct();
-  const comision = Math.round((monto * pct) / 100);
-  const neto = monto - comision;
+  // El cliente recibe de vuelta el monto completo y TrendPay conserva la comisión de la venta: a la billetera se le descuenta TODO lo
+  // devuelto (la empresa asume la comisión). El reembolso no lleva comisión propia ni devuelve la de la venta.
+  const pct = 0;
+  const comision = 0;
+  const neto = monto;
   const userId = terminal.sedeId ?? terminal.titularId;
 
   try {
