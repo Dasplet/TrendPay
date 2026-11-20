@@ -79,6 +79,15 @@ export default function DatafonosAdminPage() {
     onSuccess: () => { toast.success('Credenciales guardadas'); setCodigoModal(null); setFirma(''); setCodigo(''); refrescar(); },
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudieron guardar'),
   });
+  const sincronizar = useMutation({
+    mutationFn: (e: EmpresaCodigo) => datafonosApi.admin.sincronizar(e.titularId).then((r) => ({ e, r: r.data.resumen })),
+    onSuccess: ({ e, r }) => {
+      refrescar();
+      if (r.omitida) { toast(`${e.nombre}: ${r.omitida}`, { duration: 8000 }); return; }
+      toast.success(`${e.nombre}: ${r.revisadas} movimientos revisados · ${r.ventas} ventas nuevas · ${r.reembolsos} reembolsos${r.sinAparato ? ` · ${r.sinAparato} sin identificar el datáfono` : ''}${r.errores ? ` · ${r.errores} con error` : ''}`, { duration: 10000 });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo sincronizar con Kushki', { duration: 10000 }),
+  });
   const quitarCodigo = useMutation({
     mutationFn: (titularId: string) => datafonosApi.admin.quitarBusinessCode(titularId),
     onSuccess: () => { toast.success('Credenciales quitadas'); refrescar(); },
@@ -118,7 +127,7 @@ export default function DatafonosAdminPage() {
           actions={<Btn variant="primary" onClick={() => { setFirma(''); setCodigo(''); setCodigoModal({ titularId: '' }); }}><Plus size={14} /> Asignar firma de webhooks</Btn>}
         />
         <div style={{ padding: '12px 20px 4px', fontSize: 12, lineHeight: 1.7, opacity: 0.85 }}>
-          <strong>Cómo se conectan los datáfonos.</strong> El cajero digita el valor en el aparato y Kushki avisa a TrendPay de cada venta y devolución; TrendPay no le manda nada al datáfono. Para eso, en la consola de Kushki de la cuenta de <strong>card present</strong>:
+          <strong>Cómo se conectan los datáfonos.</strong> El cajero digita el valor en el aparato; TrendPay no le manda nada. Las ventas llegan de dos formas que pueden convivir: <strong>(1) sincronización</strong> — TrendPay le pregunta a Kushki cada 2 minutos con la llave privada de la empresa (columna Business-Code; basta con asignarla), y <strong>(2) webhook</strong> — Kushki avisa al instante, si te activan los webhooks de card present. Para el webhook, en la consola de la cuenta de <strong>card present</strong>:
           <ol style={{ margin: '6px 0 0', paddingLeft: 18 }}>
             <li>Entra a <strong>Desarrolladores → Webhooks</strong> y crea un webhook con esta dirección, marcando las transacciones aprobadas y las devoluciones:</li>
           </ol>
@@ -132,15 +141,16 @@ export default function DatafonosAdminPage() {
             <li>Copia la <strong>Webhook signature</strong> que sale arriba de esa misma página y pégala aquí para la empresa (se guarda cifrada y no se vuelve a mostrar).</li>
           </ol>
         </div>
-        <Table headers={['Empresa', 'Datáfonos', 'Firma de webhooks', 'Business-Code (opcional)', '']} empty="Aún no hay empresas con datáfonos">
+        <Table headers={['Empresa', 'Datáfonos', 'Firma de webhooks (opcional)', 'Llave privada (Business-Code)', '']} empty="Aún no hay empresas con datáfonos">
           {empresasCodigo.map((e) => (
             <Tr key={e.titularId}>
               <Td><strong>{e.nombre}</strong></Td>
               <Td>{e.terminales}</Td>
               <Td><Etiqueta texto={e.firma ? 'Configurada' : 'Falta'} color={e.firma ? '#6CC998' : '#d4a017'} /></Td>
-              <Td>{e.configurado ? <Etiqueta texto={`Guardado ${e.termina}`} color="#6CC998" /> : <span style={{ opacity: 0.5, fontSize: 12 }}>No hace falta</span>}</Td>
+              <Td>{e.configurado ? <Etiqueta texto={`Guardada ${e.termina}`} color="#6CC998" /> : <Etiqueta texto="Falta" color="#d4a017" />}</Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
+                  {e.configurado && <Btn disabled={sincronizar.isPending} title="Trae ahora las ventas del datáfono desde Kushki (se hace solo cada 2 minutos)" onClick={() => sincronizar.mutate(e)}>{sincronizar.isPending && sincronizar.variables?.titularId === e.titularId ? 'Sincronizando…' : 'Sincronizar ahora'}</Btn>}
                   <Btn onClick={() => { setFirma(''); setCodigo(''); setCodigoModal({ titularId: e.titularId }); }}>{e.firma ? 'Cambiar' : 'Asignar'}</Btn>
                   {(e.firma || e.configurado) && <Btn variant="danger" disabled={quitarCodigo.isPending} onClick={() => { if (window.confirm(`¿Quitar las credenciales de ${e.nombre}? Sus datáfonos dejarán de reflejarse en TrendPay.`)) quitarCodigo.mutate(e.titularId); }}>Quitar</Btn>}
                 </div>
@@ -231,10 +241,10 @@ export default function DatafonosAdminPage() {
           <option value="">Elige una empresa…</option>
           {(empresasQ.data ?? []).map((e) => <option key={e.userId} value={e.userId}>{e.nombre}</option>)}
         </Select>
-        <Input label="Firma de webhooks (Webhook signature de la consola de Kushki)" type="password" autoComplete="off" value={firma} onChange={(e) => setFirma(e.target.value)} />
+        <Input label="Firma de webhooks (opcional: solo si Kushki te activa los webhooks)" type="password" autoComplete="off" value={firma} onChange={(e) => setFirma(e.target.value)} />
         {!firmaOk && <p style={{ color: '#C0392B', fontSize: 12, marginTop: -8 }}>Sin espacios, de 8 a 300 caracteres.</p>}
         <p style={{ fontSize: 12, opacity: 0.7, marginTop: -6 }}>Consola de Kushki, cuenta de card present → Desarrolladores → Webhooks: aparece arriba de la página. No se vuelve a mostrar.</p>
-        <Input label="Business-Code (opcional, no hace falta para las ventas del datáfono)" type="password" autoComplete="off" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+        <Input label="Llave privada de la Branch de card present (Business-Code): para la sincronización cada 2 minutos" type="password" autoComplete="off" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
         {!codigoOk && <p style={{ color: '#C0392B', fontSize: 12, marginTop: -8 }}>Solo letras, números, guion y guion bajo (8 a 128 caracteres).</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Btn variant="ghost" onClick={() => { setCodigoModal(null); setFirma(''); setCodigo(''); }}>Cancelar</Btn>

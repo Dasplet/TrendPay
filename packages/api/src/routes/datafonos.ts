@@ -16,6 +16,7 @@ import { registrarWebhook } from '../utils/kushkiWebhookLog';
 import { firmaKushkiValida } from '../utils/kushkiWebhook';
 import { terminalDelAviso, webhookSecretDeTitular, procesarAvisoTerminal, claveDelAviso, resumenParaRegistro, serialesDelAviso } from '../utils/ventasTerminal';
 import { encrypt } from '../utils/security';
+import { sincronizarEmpresa } from '../utils/sincronizarVentas';
 import { terminaEn } from '../utils/comerciosKushki';
 
 const router = Router();
@@ -393,6 +394,21 @@ router.put('/admin/empresas/:titularId/business-code', authenticate, requireAdmi
   // La auditoría guarda solo qué se cambió y el final del código, nunca el valor
   await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'GUARDAR_BUSINESS_CODE_KUSHKI_ONE', tabla: 'comercios_kushki_one', registroId: req.params.titularId, ip: req.ip, datos: { businessCode: businessCode ? terminaEn(businessCode) : undefined, firmaWebhooks: webhookSecret ? 'actualizada' : undefined } } }).catch(() => {});
   res.json({ ok: true, termina: businessCode ? terminaEn(businessCode) : undefined, firma: webhookSecret !== undefined });
+});
+
+// POST /api/datafonos/admin/empresas/:titularId/sincronizar  → trae ahora las ventas del datáfono desde Kushki (sin esperar los 2 minutos)
+// Con { desde: <fecha> } vuelve a mirar desde esa fecha (las ventas ya reflejadas no se duplican).
+router.post('/admin/empresas/:titularId/sincronizar', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  if (!(await empresaValida(req.params.titularId))) return res.status(404).json({ ok: false, mensaje: 'Empresa no encontrada' });
+  const desde = typeof req.body?.desde === 'string' ? Date.parse(req.body.desde) : undefined;
+  if (req.body?.desde !== undefined && (desde === undefined || Number.isNaN(desde))) return res.status(400).json({ ok: false, mensaje: 'La fecha "desde" no es válida' });
+  try {
+    res.json({ ok: true, resumen: await sincronizarEmpresa(req.params.titularId, { desdeMs: desde }) });
+  } catch (err: any) {
+    const mensaje = err instanceof KushkiError ? descripcionDeError(err) : 'No se pudo sincronizar con Kushki';
+    logger.warn('Sincronización manual de ventas de datáfono fallida', { err: err.message, status: err.status });
+    res.status(502).json({ ok: false, mensaje });
+  }
 });
 
 router.delete('/admin/empresas/:titularId/business-code', authenticate, requireAdmin, async (req: Request, res: Response) => {

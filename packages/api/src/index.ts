@@ -18,6 +18,7 @@ import { errorHandler } from './middleware/errorHandler';
 import { iniciarConciliacionKushki } from './utils/kushkiPayments';
 import { iniciarConciliacionDatafonos } from './utils/datafonos';
 import { iniciarEliminacionDeCuentas } from './utils/eliminarCuentas';
+import { iniciarSincronizacionVentas } from './utils/sincronizarVentas';
 
 // Routes
 import authRouter      from './routes/auth';
@@ -170,6 +171,7 @@ async function start() {
       iniciarConciliacionKushki();
       iniciarConciliacionDatafonos();
       iniciarEliminacionDeCuentas();
+      iniciarSincronizacionVentas();
     });
   } catch (err: any) {
     logger.error('❌ No se pudo iniciar el servidor', { err: err.message, stack: err.stack });
