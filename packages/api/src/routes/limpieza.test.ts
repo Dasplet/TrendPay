@@ -74,10 +74,39 @@ describe('Limpieza de datos de prueba (Admin)', () => {
     expect(await prisma.user.count({ where: { id: { in: [a.id, u.id] } } })).toBe(2);
     expect((await prisma.qrCode.findMany()).map((q) => q.permanente)).toEqual([true]);
     expect(await prisma.bank.count({ where: { id: 'limp-banco' } })).toBe(1);
-    // la única constancia: quién la ejecutó
-    const auditoria = await prisma.auditLog.findMany();
-    expect(auditoria.map((x) => x.accion)).toEqual(['LIMPIAR_DATOS']);
-    expect(auditoria[0].userId).toBe(a.id);
+    // la auditoría queda vacía (la constancia de quién la ejecutó queda en el registro del servidor)
+    expect(await prisma.auditLog.count()).toBe(0);
     await prisma.bank.deleteMany({ where: { id: 'limp-banco' } });
+  });
+
+  describe('vinculaciones (opcionales)', () => {
+    async function conVinculacion(admin: { id: string }) {
+      const v = await prisma.vinculacion.create({ data: { tokenHash: `h-${Math.random()}`, razonSocial: 'Cliente de prueba SAS', contactoNombre: 'Ana', contactoCorreo: 'a@x.test', expiraAt: new Date(Date.now() + 86_400_000), creadaPor: admin.id } });
+      await prisma.vinculacionDocumento.create({ data: { vinculacionId: v.id, tipo: 'rut', storageKey: 'bd:doc-1', nombreOriginal: 'rut.pdf', mime: 'application/pdf', tamano: 3, sha256: 'x' } });
+      await prisma.vinculacionArchivo.create({ data: { key: 'bd:doc-1', contenido: Buffer.from('abc') } });
+    }
+
+    it('por defecto NO se tocan: pueden ser reales aunque el resto sea de prueba', async () => {
+      process.env.PERMITIR_LIMPIEZA = '1';
+      const a = await crearUsuarioDePrueba({ rol: 'admin' });
+      await conVinculacion(a);
+      expect((await ver(a)).body.vinculaciones).toBe(1);
+      expect((await limpiar(a, 'BORRAR TODO')).status).toBe(200);
+      expect(await prisma.vinculacion.count()).toBe(1);
+      expect(await prisma.vinculacionDocumento.count()).toBe(1);
+      expect(await prisma.vinculacionArchivo.count()).toBe(1);
+    });
+
+    it('si se pide, se borran las vinculaciones con sus documentos y archivos', async () => {
+      process.env.PERMITIR_LIMPIEZA = '1';
+      const a = await crearUsuarioDePrueba({ rol: 'admin' });
+      await conVinculacion(a);
+      const res = await request(app).post('/api/admin/limpieza').set('Authorization', `Bearer ${tokenPara(a)}`).send({ frase: 'BORRAR TODO', incluirVinculaciones: true });
+      expect(res.status).toBe(200);
+      expect(res.body.despues.vinculaciones).toBe(0);
+      expect(await prisma.vinculacion.count()).toBe(0);
+      expect(await prisma.vinculacionDocumento.count()).toBe(0);
+      expect(await prisma.vinculacionArchivo.count()).toBe(0);
+    });
   });
 });

@@ -2,6 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { useEffect, useState } from 'react';
+import { NuevaVersion } from '@/components/NuevaVersion';
 
 export function Providers({ children }: Readonly<{ children: React.ReactNode }>) {
   useEffect(() => {
@@ -33,6 +34,7 @@ export function Providers({ children }: Readonly<{ children: React.ReactNode }>)
   return (
     <QueryClientProvider client={queryClient}>
       {children}
+      <NuevaVersion />
       <Toaster
         position="bottom-center"
         toastOptions={{

@@ -188,5 +188,5 @@ export const adminApi = {
   kushkiProbarWebhook: () => api.post('/admin/kushki/webhooks/probar'),
   kushkiLimpiarWebhooks: () => api.delete('/admin/kushki/webhooks'),
   limpiezaEstado: () => api.get('/admin/limpieza'),
-  limpiarDatos:   (frase: string) => api.post('/admin/limpieza', { frase }),
+  limpiarDatos:   (frase: string, incluirVinculaciones = false) => api.post('/admin/limpieza', { frase, incluirVinculaciones }),
 };

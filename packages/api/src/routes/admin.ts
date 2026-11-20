@@ -11,6 +11,7 @@ import { getConfigTransferencias, solicitarTokenBreB, olvidarCacheBreB, AMBIENTE
 import { cifrarLlavePrivada, credencialesDeComercio, terminaEn } from '../utils/comerciosKushki';
 import { modoAlmacenamiento, cifradoDelBucket } from '../utils/storage';
 import { PERMISOS_SEDE } from '../utils/cuentas';
+import { logger } from '../utils/logger';
 import { contarDatos, limpiarDatos, limpiezaPermitida, FRASE_LIMPIEZA } from '../utils/limpiarDatos';
 import { solicitarEliminacion, cancelarEliminacion, ErrorEliminacion } from '../utils/eliminarCuentas';
 
@@ -258,9 +259,9 @@ router.post('/limpieza', authenticate, requireAdmin, async (req: Request, res: R
   if (req.body?.frase !== FRASE_LIMPIEZA) return res.status(400).json({ ok: false, mensaje: `Escribe exactamente "${FRASE_LIMPIEZA}" para confirmar` });
   try {
     const antes = await contarDatos();
-    const despues = await limpiarDatos();
-    // La limpieza borra también la auditoría: la única constancia es quién la ejecutó y cuándo
-    await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'LIMPIAR_DATOS', tabla: 'sistema', ip: req.ip, datos: { saldoBorrado: antes.saldoTotal } } }).catch(() => {});
+    const despues = await limpiarDatos({ incluirVinculaciones: req.body?.incluirVinculaciones === true });
+    // La auditoría queda vacía, como se pide para el lanzamiento; la constancia de quién la ejecutó queda en el registro del servidor
+    logger.warn('Limpieza de datos ejecutada desde el panel', { adminId: req.user!.id, ip: req.ip, saldoBorrado: antes.saldoTotal });
     res.json({ ok: true, mensaje: 'Datos de prueba eliminados. Todas las billeteras quedaron en $0', antes, despues });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
