@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import Link from 'next/link';
 import {
   LayoutDashboard, Users, ArrowLeftRight,
-  Landmark, Percent, Building2, AlertTriangle, FileText,
+  Landmark, Percent, AlertTriangle, FileText,
   Settings, ClipboardList, UserCheck, LogOut, Search, CreditCard, FolderCheck, Smartphone
 } from 'lucide-react';
 import { NotificationBell } from '@/components/admin/NotificationBell';
@@ -20,7 +20,6 @@ const NAV = [
   { section: 'OPERACIONES', items: [
     { href: '/admin/retiros',       icon: Landmark,        label: 'Retiros'            },
     { href: '/admin/comisiones',    icon: Percent,         label: 'Comisiones'         },
-    { href: '/admin/bancos',        icon: Building2,       label: 'Bancos'             },
     { href: '/admin/pagos-kushki',  icon: CreditCard,      label: 'Pagos Kushki'       },
     { href: '/admin/datafonos',     icon: Smartphone,      label: 'Datáfonos'          },
     { href: '/admin/vinculaciones', icon: FolderCheck,     label: 'Vinculaciones'      },
@@ -42,7 +41,6 @@ const PAGE_TITLES: Record<string, { title: string; sub: string }> = {
   '/admin/transacciones':      { title: 'Transacciones',       sub: 'Historial global de movimientos'         },
   '/admin/retiros':            { title: 'Retiros pendientes',  sub: 'Cola de aprobacion de retiros'           },
   '/admin/comisiones':         { title: 'Comisiones',          sub: 'Ingresos por comisiones del 3%'          },
-  '/admin/bancos':             { title: 'Bancos',              sub: 'Bancos habilitados para retiro'           },
   '/admin/pagos-kushki':       { title: 'Pagos Kushki',        sub: 'Consignaciones con tarjeta y PSE'         },
   '/admin/datafonos':          { title: 'Datáfonos',           sub: 'Terminales Kushki One y cobros con tarjeta' },
   '/admin/vinculaciones':      { title: 'Vinculaciones',       sub: 'Documentos de clientes empresariales'    },

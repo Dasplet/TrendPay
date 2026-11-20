@@ -16,17 +16,21 @@ const TIPOS = [
   { clave: 'cobro', label: 'Cobros QR', color: GREEN },
   { clave: 'envio', label: 'Envíos', color: BLUE },
   { clave: 'retiro', label: 'Retiros', color: RED },
+  { clave: 'datafono', label: 'Datáfonos', color: AMBER },
 ] as const;
 
 function tipoDe(categoria?: string) {
   const c = (categoria || '').toLowerCase();
   if (c.includes('consign')) return 'consigna';
+  if (c.includes('datafono')) return 'datafono';
   if (c.includes('cobro')) return 'cobro';
   if (c.includes('envi')) return 'envio';
   if (c.includes('retiro')) return 'retiro';
   return 'otros';
 }
 
+// Todas las consultas del dashboard se refrescan solas (tiempo real) y al volver a la pestaña
+const VIVO = { refetchInterval: 15_000, refetchOnWindowFocus: true } as const;
 const num = (v: any) => Number.parseFloat(v) || 0;
 const pct = (a: number, b: number) => (b > 0 ? (a / b) * 100 : 0);
 
@@ -52,13 +56,13 @@ function diasDesde(fecha: string) {
 
 export default function AdminDashboard() {
   const [period, setPeriod] = useState('6');
-  const { data: metricsData } = useQuery({ queryKey: ['admin-metrics'], queryFn: () => adminApi.metrics(), select: (d) => d.data });
-  const { data: txData } = useQuery({ queryKey: ['admin-tx'], queryFn: () => adminApi.transactions({ limit: 300 }), select: (d) => d.data });
-  const { data: usersData } = useQuery({ queryKey: ['admin-users'], queryFn: () => adminApi.users({ limit: 200 }), select: (d) => d.data });
-  const { data: chartData } = useQuery({ queryKey: ['admin-chart', period], queryFn: () => adminApi.chart(period), select: (d) => d.data });
-  const { data: pendData } = useQuery({ queryKey: ['admin-pending'], queryFn: () => adminApi.pending(), select: (d) => d.data });
-  const { data: retirosData } = useQuery({ queryKey: ['admin-retiros-all'], queryFn: () => adminApi.withdrawalsAll(), select: (d) => d.data });
-  const { data: kushkiData } = useQuery({ queryKey: ['admin-kushki-pagos', ''], queryFn: () => adminApi.kushkiPagos(), select: (d) => d.data });
+  const { data: metricsData } = useQuery({ queryKey: ['admin-metrics'], queryFn: () => adminApi.metrics(), select: (d) => d.data, ...VIVO });
+  const { data: txData } = useQuery({ queryKey: ['admin-tx'], queryFn: () => adminApi.transactions({ limit: 300 }), select: (d) => d.data, ...VIVO });
+  const { data: usersData } = useQuery({ queryKey: ['admin-users'], queryFn: () => adminApi.users({ limit: 200 }), select: (d) => d.data, ...VIVO });
+  const { data: chartData } = useQuery({ queryKey: ['admin-chart', period], queryFn: () => adminApi.chart(period), select: (d) => d.data, ...VIVO });
+  const { data: pendData } = useQuery({ queryKey: ['admin-pending'], queryFn: () => adminApi.pending(), select: (d) => d.data, ...VIVO });
+  const { data: retirosData } = useQuery({ queryKey: ['admin-retiros-all'], queryFn: () => adminApi.withdrawalsAll(), select: (d) => d.data, ...VIVO });
+  const { data: kushkiData } = useQuery({ queryKey: ['admin-kushki-pagos', ''], queryFn: () => adminApi.kushkiPagos(), select: (d) => d.data, ...VIVO });
 
   const m = metricsData?.metricas || {};
   const txs: any[] = txData?.transacciones || [];
@@ -74,17 +78,19 @@ export default function AdminDashboard() {
   const comisiones = num(m.total_comisiones);
   const comisionPct = num(m.comision_pct) || 3;
   const tasaEfectiva = pct(comisiones, volumen);
-  const verificados = users.filter((u) => u.kycVerificado).length;
-  const retirosProcesados = retiros.filter((r) => r.status === 'procesado').length;
+  const verificados = users.filter((u) => u.rol !== 'admin' && u.kycVerificado).length;
   const kushkiEstado = (e: string) => totalesKushki.find((t) => t.estado === e) || { estado: e, cantidad: 0, monto: 0 };
   const kOk = kushkiEstado('completado');
   const kPend = kushkiEstado('pendiente');
   const kRech = kushkiEstado('rechazado');
 
   // Las subcuentas muestran el saldo de su padre: contar solo titulares evita sumar la misma billetera varias veces.
-  const titulares = users.filter((u) => !u.cuentaPadre);
-  const totalSaldo = titulares.reduce((s, u) => s + num(u.saldo), 0);
-  const subcuentas = users.length - titulares.length;
+  const clientes = users.filter((u) => u.rol !== 'admin');
+  const titulares = clientes.filter((u) => !u.cuentaPadre);
+  // El saldo y el número de billeteras vienen del servidor (suma real de todas las billeteras)
+  const totalSaldo = m.saldo_plataforma === undefined ? titulares.reduce((s, u) => s + num(u.saldo), 0) : num(m.saldo_plataforma);
+  const numBilleteras = m.billeteras ?? titulares.length;
+  const subcuentas = clientes.length - titulares.length;
 
   // ── Operaciones por tipo ──
   const porTipo = TIPOS.map((t) => {
@@ -166,7 +172,7 @@ export default function AdminDashboard() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ fontSize: 12, color: 'var(--adm-muted)' }}>Resumen operativo · billetera, retiros y pagos Kushki</div>
+        <div style={{ fontSize: 12, color: 'var(--adm-muted)' }}>Resumen operativo · se actualiza solo cada 15 segundos</div>
         <select value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Periodo del gráfico"
           style={{ width: 190, background: 'var(--adm-panel)', border: '1px solid rgba(133,46,199,.3)', borderRadius: 10, padding: '7px 12px', fontSize: 12, color: 'var(--adm-text)', cursor: 'pointer' }}>
           <option value="6">Últimos 6 meses</option>
@@ -181,14 +187,14 @@ export default function AdminDashboard() {
           color={ACCENT_L} sub={`${exitosas} de ${txs.length} operaciones exitosas`} />
         <KpiRing title={`Comisiones (${comisionPct}%)`} value={fmt(comisiones)} ringPct={pct(tasaEfectiva, comisionPct)} ringLabel={`${tasaEfectiva.toFixed(1)}%`}
           color={GREEN} sub={`Tasa efectiva · objetivo ${comisionPct}%`} />
-        <KpiRing title="Usuarios" value={String(users.length)} ringPct={pct(verificados, users.length)} ringLabel={`${Math.round(pct(verificados, users.length))}%`}
-          color={BLUE} sub={`${verificados} verificados${subcuentas ? ` · ${subcuentas} subcuentas` : ''}`} />
-        <KpiRing title="Retiros pendientes" value={String(m.retiros_pendientes ?? pendientes.length)} ringPct={pct(retirosProcesados, retiros.length)} ringLabel={`${Math.round(pct(retirosProcesados, retiros.length))}%`}
+        <KpiRing title="Clientes" value={String(clientes.length)} ringPct={pct(verificados, clientes.length)} ringLabel={`${Math.round(pct(verificados, clientes.length))}%`}
+          color={BLUE} sub={`${verificados} verificados${subcuentas ? ` · ${subcuentas} sede${subcuentas > 1 ? 's' : ''}` : ''}`} />
+        <KpiRing title="Retiros pendientes" value={String(m.retiros_pendientes ?? pendientes.length)} ringPct={pct(m.retiros_pendientes ?? pendientes.length, retiros.length)} ringLabel={String(m.retiros_pendientes ?? pendientes.length)}
           color={AMBER} sub={(m.retiros_pendientes ?? pendientes.length) ? 'Esperan aprobación' : 'Al día'} subColor={(m.retiros_pendientes ?? pendientes.length) ? AMBER : GREEN} />
         <KpiRing title="Pagos Kushki" value={fmt(kOk.monto)} ringPct={pct(kOk.cantidad, resueltosK)} ringLabel={`${Math.round(pct(kOk.cantidad, resueltosK))}%`}
           color={ACCENT} sub={`Aprobación · ${totalKushki} pagos`} />
         <KpiRing title="Saldo en plataforma" value={fmt(totalSaldo)} ringPct={pct(totalSaldo, consignado)} ringLabel={`${Math.round(clamp(pct(totalSaldo, consignado)))}%`}
-          color={BLUE} sub={`${titulares.length} billeteras · del dinero consignado`} />
+          color={BLUE} sub={`${numBilleteras} billetera${numBilleteras === 1 ? '' : 's'} · del dinero consignado`} />
       </div>
 
       {/* Operaciones, gráfica y canales */}

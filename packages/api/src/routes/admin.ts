@@ -18,16 +18,19 @@ const router = Router();
 // ══ GET /api/admin/metrics ══
 router.get('/metrics', authenticate, requireAdmin, async (_req: Request, res: Response) => {
   try {
-    const [totalUsuarios, txAgg, retirosPend, comisionCfg] = await Promise.all([
+    const [totalUsuarios, txAgg, retirosPend, comisionCfg, saldoAgg, billeteras] = await Promise.all([
       prisma.user.count({ where: { eliminadoAt: null } }),
       prisma.transaction.aggregate({ where: { categoria: { not: 'ajuste' } }, _sum: { montoBruto: true, comisionValor: true } }),
       prisma.withdrawal.count({ where: { status: 'pendiente' } }).catch(() => 0),
       prisma.config.findUnique({ where: { clave: 'comision_pct' } }),
+      // Saldo real de todas las billeteras (no depende de cuántos usuarios cargue la pantalla)
+      prisma.wallet.aggregate({ where: { user: { eliminadoAt: null } }, _sum: { saldo: true } }),
+      prisma.wallet.count({ where: { user: { eliminadoAt: null } } }),
     ]);
     const total_volumen    = Number.parseFloat(txAgg._sum.montoBruto?.toString() || '0');
     const total_comisiones = Number.parseFloat(txAgg._sum.comisionValor?.toString() || '0');
     const comision_pct     = Number.parseFloat(comisionCfg?.valor || '3');
-    res.json({ ok: true, metricas: { total_usuarios: totalUsuarios, total_volumen, total_comisiones, retiros_pendientes: retirosPend, comision_pct } });
+    res.json({ ok: true, metricas: { total_usuarios: totalUsuarios, saldo_plataforma: Number.parseFloat(saldoAgg._sum.saldo?.toString() || '0'), billeteras, total_volumen, total_comisiones, retiros_pendientes: retirosPend, comision_pct } });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 

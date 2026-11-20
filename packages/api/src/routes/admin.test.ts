@@ -196,6 +196,18 @@ describe('Admin API', () => {
       expect(typeof res.body.metricas.total_volumen).toBe('number');
       expect(typeof res.body.metricas.comision_pct).toBe('number');
     });
+
+    it('el saldo de la plataforma es la suma real de las billeteras y no cuenta las cuentas eliminadas', async () => {
+      const admin = await crearUsuarioDePrueba({ rol: 'admin' });
+      await crearUsuarioDePrueba({ saldo: 40000 });
+      await crearUsuarioDePrueba({ saldo: 2500 });
+      const eliminada = await crearUsuarioDePrueba({ saldo: 0 });
+      await prisma.user.update({ where: { id: eliminada.id }, data: { eliminadoAt: new Date() } });
+
+      const res = await request(app).get('/api/admin/metrics').set('Authorization', `Bearer ${tokenPara(admin)}`);
+      expect(res.body.metricas.saldo_plataforma).toBe(42500);
+      expect(res.body.metricas.billeteras).toBe(3); // admin + 2 clientes (la eliminada no cuenta)
+    });
   });
 
   describe('GET /api/admin/users', () => {
