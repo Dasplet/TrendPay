@@ -143,9 +143,19 @@ router.post('/enviar', authenticate, walletLimiter, conCuenta('enviar'), async (
   const { destino, monto, nota } = parse.data;
 
   try {
-    const receptor = await prisma.user.findFirst({
-      where: { OR: [{ celular: destino }, { correo: { equals: destino, mode: 'insensitive' } }, { cedula: destino }] },
+    // La cédula identifica a una sola cuenta. El correo (y el celular) pueden repetirse: si el dato coincide con cuentas de
+    // distintos titulares no se adivina a quién enviar, porque el dinero iría a la persona equivocada.
+    const coincidencias = await prisma.user.findMany({
+      where: { eliminadoAt: null, OR: [{ celular: destino }, { correo: { equals: destino, mode: 'insensitive' } }, { cedula: destino }] },
+      take: 10,
     });
+    const porCedula = coincidencias.find((u) => u.cedula === destino);
+    const titulares = new Set(coincidencias.map((u) => u.cuentaPadreId ?? u.id));
+    if (!porCedula && titulares.size > 1) {
+      throw new ApiError(409, 'Hay varias cuentas con ese dato. Envía el dinero usando la cédula del destinatario');
+    }
+    // Una empresa y sus sedes comparten billetera: el destinatario es la cuenta principal
+    const receptor = porCedula ?? coincidencias.find((u) => u.cuentaPadreId === null) ?? coincidencias[0];
     if (!receptor) throw new ApiError(404, 'No encontramos un usuario con ese celular, correo o cédula');
     const receptorTitularId = receptor.cuentaPadreId ?? receptor.id;
     if (receptorTitularId === req.cuenta!.titularId) throw new ApiError(400, 'No puedes enviarte dinero a ti mismo');

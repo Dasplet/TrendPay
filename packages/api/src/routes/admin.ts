@@ -76,11 +76,9 @@ router.post('/users', authenticate, requireAdmin, async (req: Request, res: Resp
   const { cedula, nombre, correo, pin, celular, ciudad, cuentaPadreId } = parse.data;
 
   try {
-    const exists = await prisma.user.findFirst({ where: { OR: [{ cedula }, { correo }] } });
-    if (exists) {
-      const campo = exists.cedula === cedula ? 'cédula' : 'correo';
-      return res.status(400).json({ ok: false, mensaje: `Esta ${campo} ya está registrada` });
-    }
+    // Solo la cédula identifica a la cuenta: el correo puede repetirse (p. ej. una empresa y sus sedes)
+    const exists = await prisma.user.findUnique({ where: { cedula } });
+    if (exists) return res.status(400).json({ ok: false, mensaje: 'Esta cédula ya está registrada' });
 
     // Una sede solo puede colgar de una empresa (cuenta padre de un cliente), nunca de otra sede ni de un admin
     if (cuentaPadreId && !(await cuentaPadreOrNull(cuentaPadreId))) {

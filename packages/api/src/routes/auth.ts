@@ -467,7 +467,9 @@ router.post('/validate-email', async (req: Request, res: Response) => {
   const disposable = ['mailinator','guerrillamail','tempmail','yopmail','throwam','sharklasers','fakeinbox'];
   const domain = correo.split('@')[1]?.toLowerCase();
   if (disposable.some((d: string) => domain?.includes(d))) return res.json({ ok: false, mensaje: 'No se permiten correos temporales o desechables' });
-  const existing = await prisma.user.findUnique({ where: { correo } }).catch(() => null);
+  // El registro público sigue exigiendo un correo sin usar (si no, cualquiera podría registrar el correo de otra persona);
+  // los administradores sí pueden crear varias cuentas con el mismo correo.
+  const existing = await prisma.user.findFirst({ where: { correo, eliminadoAt: null } }).catch(() => null);
   if (existing) return res.json({ ok: false, mensaje: 'Este correo ya está registrado' });
   res.json({ ok: true, mensaje: 'Correo válido' });
 });
