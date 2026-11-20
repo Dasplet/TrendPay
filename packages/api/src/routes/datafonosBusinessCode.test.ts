@@ -135,6 +135,55 @@ describe('Datáfonos: Business-Code por empresa y código del webhook', () => {
     });
   });
 
+  describe('probar la conexión con un terminal (sin cobrar)', () => {
+    const admin = async () => tokenPara(await crearUsuarioDePrueba({ rol: 'admin' }));
+    const probar = (token: string, id: string) => request(app).post(`/api/datafonos/admin/terminales/${id}/probar`).set('Authorization', `Bearer ${token}`);
+    const idDe = async (serial: string) => (await prisma.terminalKushki.findUniqueOrThrow({ where: { serial } })).id;
+
+    it('consulta los datos del terminal por su serial y con el código de su empresa', async () => {
+      await empresaConTerminal('SN-AAAA-0001', 'codigo-de-la-empresa-A');
+      http.post.mockResolvedValue({ data: { model: 'P3', room: '3.0.10', serialNumber: 'SN-AAAA-0001' } });
+
+      const res = await probar(await admin(), await idDe('SN-AAAA-0001'));
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ ok: true, conectado: true, modelo: 'P3', version: '3.0.10', serial: 'SN-AAAA-0001' });
+      const [url, cuerpo, opciones] = http.post.mock.calls[0] as [string, unknown, { timeout: number }];
+      expect(url).toContain('/terminal/v1/SN-AAAA-0001/sync/config/terminal_info');
+      expect(cuerpo).toEqual({ data: 'iv:cifrado' });
+      expect(opciones.timeout).toBe(40_000); // no deja la pantalla esperando minuto y medio
+      expect(preparar.mock.calls[0][2]).toBe('codigo-de-la-empresa-A');
+    });
+
+    it('si el terminal no responde dice por qué, con el código de Kushki, sin romper la pantalla', async () => {
+      await empresaConTerminal('SN-AAAA-0001', 'codigo-de-la-empresa-A');
+      http.post.mockResolvedValue({ data: { type: 'AUTH', code: 'AUTH-001', message: 'Invalid or expired credentials' } });
+      const res = await probar(await admin(), await idDe('SN-AAAA-0001'));
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ ok: true, conectado: false });
+      expect(res.body.mensaje).toContain('Invalid or expired credentials');
+      expect(res.body.mensaje).toContain('[AUTH-001]');
+
+      http.post.mockRejectedValue(new Error('timeout of 40000ms exceeded'));
+      const sinRespuesta = await probar(await admin(), await idDe('SN-AAAA-0001'));
+      expect(sinRespuesta.body.conectado).toBe(false);
+      expect(sinRespuesta.body.mensaje).toContain('timeout');
+    });
+
+    it('una empresa sin Business-Code no llega a llamar a Kushki y lo dice', async () => {
+      await empresaConTerminal('SN-CCCC-0003', null);
+      const res = await probar(await admin(), await idDe('SN-CCCC-0003'));
+      expect(res.body).toMatchObject({ conectado: false });
+      expect(res.body.mensaje).toContain('Business-Code');
+      expect(http.post).not.toHaveBeenCalled();
+    });
+
+    it('solo un administrador puede probar y el terminal tiene que existir', async () => {
+      const e = await empresaConTerminal('SN-AAAA-0001', 'codigo-de-la-empresa-A');
+      expect((await probar(tokenPara(e), await idDe('SN-AAAA-0001'))).status).toBe(403);
+      expect((await probar(await admin(), '00000000-0000-4000-8000-000000000000')).status).toBe(404);
+    });
+  });
+
   describe('el código secreto del webhook se crea solo', () => {
     const guardarEnv = { token: process.env.KUSHKI_ONE_WEBHOOK_TOKEN, url: process.env.KUSHKI_ONE_WEBHOOK_URL };
     beforeEach(() => { delete process.env.KUSHKI_ONE_WEBHOOK_TOKEN; process.env.KUSHKI_ONE_WEBHOOK_URL = 'https://api.trendpay.test'; });

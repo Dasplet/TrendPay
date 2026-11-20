@@ -153,16 +153,21 @@ export default function DatafonoPage() {
             </label>
             {valor > 0 && valor < 1000 && <p style={{ color: '#c0392b', fontSize: 13, margin: 0 }}>El monto mínimo es {fmtCOP(1000)}.</p>}
 
+            {cobrar.isPending && <p style={{ fontSize: 13, opacity: 0.75, margin: 0 }}>Enviando la orden al datáfono. Puede tardar hasta un minuto y medio si el aparato está apagado o sin internet.</p>}
             <ThemeButton disabled={!puedeCobrar} onClick={() => cobrar.mutate()}>
               <CreditCard size={18} /> {cobrar.isPending ? 'Enviando al datáfono…' : `Cobrar${valor >= 1000 ? ` ${fmtCOP(valor)}` : ''}`}
             </ThemeButton>
           </>
         )}
 
-        {/* Ventas por tienda y datáfono */}
-        <hr className="tp-divider" />
-        <p className="tp-modal-label">Ventas con datáfono</p>
-        <ResumenVentas />
+        {/* Ventas por tienda y datáfono: solo la cuenta principal (una sede no las ve) */}
+        {puedeReembolsar && (
+          <>
+            <hr className="tp-divider" />
+            <p className="tp-modal-label">Ventas con datáfono</p>
+            <ResumenVentas />
+          </>
+        )}
 
         {/* Últimos cobros */}
         {(recientes?.length ?? 0) > 0 && (

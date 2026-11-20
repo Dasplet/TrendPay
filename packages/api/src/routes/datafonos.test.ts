@@ -88,7 +88,8 @@ describe('Cobros con datáfono (Kushki One)', () => {
       enviar.mockRejectedValueOnce(new KushkiError('Terminal ocupado', 409, { codigo: 'TERM-001' }));
       const res = await cobrar(tokenSede, terminal.id, 10000);
       expect(res.status).toBe(409);
-      expect((await prisma.cobroDatafono.findFirst())!.estado).toBe('error');
+      expect(await prisma.cobroDatafono.findFirst()).toMatchObject({ estado: 'error', detalle: 'Terminal ocupado [TERM-001]' }); // con el código de Kushki, para poder reportarlo
+      expect(res.body.mensaje).toContain('[TERM-001]');
       expect((await cobrar(tokenSede, terminal.id, 10000)).status).toBe(201);
     });
 
@@ -362,13 +363,12 @@ describe('Cobros con datáfono (Kushki One)', () => {
       expect(resto[0]).toMatchObject({ nombre: 'Sin tienda asignada', bruto: 5000 });
     });
 
-    it('una sede solo ve lo que ella cobró; otra empresa no ve nada ajeno', async () => {
+    it('una sede no ve las ventas por tienda; otra empresa no ve nada ajeno', async () => {
       const { empresa, sanJuan, norte, c1, c3 } = await tiendas();
       await cobro(c1.id, sanJuan.id, 50000);
       await cobro(c3.id, norte.id, 10000);
-      const propia = await resumen(tokenPara(sanJuan));
-      expect(propia.body.total).toMatchObject({ cobros: 1, bruto: 50000 });
-      expect(propia.body.tiendas).toHaveLength(1);
+      // una sede no ve las ventas por tienda: son de la cuenta principal
+      expect((await resumen(tokenPara(sanJuan))).status).toBe(403);
 
       const ajena = await crearUsuarioDePrueba({ saldo: 0 });
       expect((await resumen(tokenPara(ajena))).body.total.cobros).toBe(0);

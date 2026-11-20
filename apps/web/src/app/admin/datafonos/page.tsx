@@ -67,6 +67,14 @@ export default function DatafonosAdminPage() {
     onSuccess: () => refrescar(),
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo actualizar'),
   });
+  const probar = useMutation({
+    mutationFn: (t: Terminal) => datafonosApi.admin.probarTerminal(t.id).then((r) => ({ t, r: r.data })),
+    onSuccess: ({ t, r }) => {
+      if (r.conectado) toast.success(`${t.alias} responde · ${r.modelo ?? 'modelo desconocido'} · versión ${r.version ?? '?'} · serial ${r.serial ?? t.serial}`, { duration: 8000 });
+      else toast.error(`${t.alias} no responde: ${r.mensaje}`, { duration: 12000 });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo probar la conexión'),
+  });
   const guardarComision = useMutation({
     mutationFn: (pct: number) => datafonosApi.admin.guardarConfig(pct),
     onSuccess: ({ data }) => { toast.success(`Comisión de datáfono: ${data.comisionPct}%`); setComision(null); queryClient.invalidateQueries({ queryKey: ['admin-datafonos-config'] }); },
@@ -176,9 +184,14 @@ export default function DatafonosAdminPage() {
               <Td>{t.cobros}</Td>
               <Td><Etiqueta texto={t.activo ? 'Activo' : 'Desactivado'} color={t.activo ? '#6CC998' : '#888'} /></Td>
               <Td>
-                <Btn variant={t.activo ? 'danger' : 'default'} disabled={editar.isPending} onClick={() => editar.mutate({ id: t.id, data: { activo: !t.activo } })}>
-                  {t.activo ? 'Desactivar' : 'Activar'}
-                </Btn>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <Btn disabled={probar.isPending} title="Comprueba que Kushki alcanza al datáfono, sin cobrar nada" onClick={() => probar.mutate(t)}>
+                    {probar.isPending && probar.variables?.id === t.id ? 'Probando…' : 'Probar conexión'}
+                  </Btn>
+                  <Btn variant={t.activo ? 'danger' : 'default'} disabled={editar.isPending} onClick={() => editar.mutate({ id: t.id, data: { activo: !t.activo } })}>
+                    {t.activo ? 'Desactivar' : 'Activar'}
+                  </Btn>
+                </div>
               </Td>
             </Tr>
           ))}

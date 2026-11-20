@@ -7,7 +7,7 @@ import { walletLimiter, webhookLimiter } from '../middleware/rateLimiter';
 import { conCuenta, miembrosDe } from '../utils/cuentas';
 import { logger } from '../utils/logger';
 import { KushkiError } from '../utils/kushki';
-import { enviarCobroAsync, enviarReembolsoAsync, businessCodeDeTitular } from '../utils/kushkiOne';
+import { enviarCobroAsync, enviarReembolsoAsync, businessCodeDeTitular, infoTerminal } from '../utils/kushkiOne';
 import {
   comisionDatafonoPct, guardarComisionDatafonoPct, webhookDatafonoUrl, tokenWebhookValido, datafonosListosParaEmpresa, urlPublicaApi,
   terminalOcupado, procesarEvento, resolverCobro, resolverReembolso, netoDelCobro, type CobroConTerminal,
@@ -17,6 +17,12 @@ import { encrypt } from '../utils/security';
 import { terminaEn } from '../utils/comerciosKushki';
 
 const router = Router();
+
+// El mensaje de Kushki con su código, para que quien lo lea pueda decirle a Kushki exactamente qué pasó
+function descripcionDeError(err: KushkiError): string {
+  const codigo = err.codigo ? ` [${err.codigo}]` : '';
+  return `${err.message}${codigo}`;
+}
 
 const MONTO_MIN = 1000;
 const MONTO_MAX = 50_000_000;
@@ -80,7 +86,7 @@ router.post('/cobros', authenticate, walletLimiter, conCuenta('recargar'), async
   try {
     await enviarCobroAsync(terminal.serial, { monto, clientTransactionId: cobro.clientTransactionId, eventsWebhookUrl: webhookUrl, referencia: cobro.id });
   } catch (err: any) {
-    const motivo = err instanceof KushkiError ? err.message : 'No se pudo enviar el cobro';
+    const motivo = err instanceof KushkiError ? descripcionDeError(err) : 'No se pudo enviar el cobro';
     await prisma.cobroDatafono.update({ where: { id: cobro.id }, data: { estado: 'error', detalle: motivo.slice(0, 200) } });
     logger.error('No se pudo enviar el cobro al datáfono', { err: err.message, codigo: err.codigo, terminal: terminal.serial, cobroId: cobro.id });
     return res.status(err instanceof KushkiError && err.status === 409 ? 409 : 502).json({ ok: false, mensaje: `No se pudo enviar el cobro al datáfono: ${motivo}` });
@@ -135,7 +141,7 @@ router.post('/cobros/:id/reembolsar', authenticate, walletLimiter, conCuenta('re
   try {
     await enviarReembolsoAsync(cobro.terminal.serial, { monto: Number(cobro.monto), transactionReference: cobro.transactionReference, clientTransactionId: reembolsoClientId, eventsWebhookUrl: webhookUrl });
   } catch (err: any) {
-    const motivo = err instanceof KushkiError ? err.message : 'No se pudo enviar el reembolso';
+    const motivo = err instanceof KushkiError ? descripcionDeError(err) : 'No se pudo enviar el reembolso';
     await prisma.cobroDatafono.updateMany({ where: { id: cobro.id, estado: 'reembolsando' }, data: { estado: 'aprobado', reembolsoClientId: null, detalle: motivo.slice(0, 200) } });
     logger.error('No se pudo enviar el reembolso al datáfono', { err: err.message, codigo: err.codigo, cobroId: cobro.id });
     return res.status(err instanceof KushkiError && err.status === 409 ? 409 : 502).json({ ok: false, mensaje: `No se pudo enviar el reembolso: ${motivo}` });
@@ -214,10 +220,12 @@ const periodoDe = (req: Request): Periodo => (PERIODOS as readonly string[]).inc
 
 // GET /api/datafonos/resumen?periodo=hoy|7d|mes
 router.get('/resumen', authenticate, conCuenta('recargar'), async (req: Request, res: Response) => {
+  const cuenta = req.cuenta!;
+  // Las ventas por tienda son de la cuenta principal: una sede (que no ve el saldo) no las ve
+  if (cuenta.esSubcuenta) return res.status(403).json({ ok: false, mensaje: 'Las ventas por tienda las ve la cuenta principal' });
   const periodo = periodoDe(req);
   const desde = inicioDePeriodo(periodo);
-  const cuenta = req.cuenta!;
-  const r = await resumenDeCobros({ terminal: { titularId: cuenta.titularId }, ...(cuenta.esSubcuenta ? { userId: req.user!.id } : {}) }, desde);
+  const r = await resumenDeCobros({ terminal: { titularId: cuenta.titularId } }, desde);
   res.json({ ok: true, periodo, desde, ...r });
 });
 
@@ -346,6 +354,21 @@ router.post('/admin/terminales', authenticate, requireAdmin, async (req: Request
   } catch (err: any) {
     if (err.code === 'P2002') return res.status(409).json({ ok: false, mensaje: 'Ya existe un datáfono con ese serial' });
     throw err;
+  }
+});
+
+// POST /api/datafonos/admin/terminales/:id/probar  → comprueba la conexión con el terminal sin mover dinero
+router.post('/admin/terminales/:id/probar', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  const terminal = await prisma.terminalKushki.findUnique({ where: { id: req.params.id } });
+  if (!terminal) return res.status(404).json({ ok: false, mensaje: 'Datáfono no encontrado' });
+  try {
+    const info = await infoTerminal(terminal.serial);
+    res.json({ ok: true, conectado: true, ...info });
+  } catch (err: any) {
+    const mensaje = err instanceof KushkiError ? descripcionDeError(err) : 'No se pudo consultar al terminal';
+    logger.warn('Prueba de conexión con el datáfono fallida', { terminal: terminal.serial, err: err.message, codigo: err.codigo, status: err.status });
+    // 200 con conectado:false: la prueba se hizo; el resultado es que no hubo conexión (y el motivo)
+    res.json({ ok: true, conectado: false, mensaje });
   }
 });
 

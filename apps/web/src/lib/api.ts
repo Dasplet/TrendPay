@@ -130,6 +130,7 @@ export const datafonosApi = {
     resumen:       (periodo: string) => api.get('/datafonos/admin/resumen', { params: { periodo } }),
     terminales:    () => api.get('/datafonos/admin/terminales'),
     crearTerminal: (data: { serial: string; alias: string; titularId: string; sedeId?: string | null; modelo?: string }) => api.post('/datafonos/admin/terminales', data),
+    probarTerminal: (id: string) => api.post(`/datafonos/admin/terminales/${id}/probar`),
     editarTerminal: (id: string, data: { alias?: string; sedeId?: string | null; activo?: boolean }) => api.put(`/datafonos/admin/terminales/${id}`, data),
     config:        () => api.get('/datafonos/admin/config'),
     guardarConfig: (comisionPct: number) => api.put('/datafonos/admin/config', { comisionPct }),

@@ -36,14 +36,14 @@ function errorDeCuerpo(data: any): KushkiError | null {
   return null;
 }
 
-async function llamar(serial: string, ruta: string, payload: unknown): Promise<any> {
+async function llamar(serial: string, ruta: string, payload: unknown, opciones: { timeoutMs?: number } = {}): Promise<any> {
   const { headers, body } = prepararSolicitud(serial, payload, await businessCodeDeTerminal(serial));
   let respuesta;
   try {
     // El relay de la nube suma latencia a lo que tarda el terminal: Kushki recomienda 90 s como mínimo
     respuesta = await axios.post(`${baseUrlKushkiOne()}/terminal/v1/${encodeURIComponent(serial)}/${ruta}`, body, {
       headers: { 'Content-Type': 'application/json', ...headers },
-      timeout: 95_000,
+      timeout: opciones.timeoutMs ?? 95_000,
     });
   } catch (err: any) {
     const data = err.response?.data;
@@ -54,6 +54,15 @@ async function llamar(serial: string, ruta: string, payload: unknown): Promise<a
   const error = errorDeCuerpo(respuesta.data);
   if (error) throw error;
   return respuesta.data;
+}
+
+export interface InfoTerminal { modelo: string | null; version: string | null; serial: string | null }
+
+// Pregunta al terminal por sus datos (modelo, versión de la aplicación y serial) sin mover dinero. Sirve para comprobar que
+// Kushki alcanza al aparato, que el Business-Code es el correcto y que el serial existe.
+export async function infoTerminal(serial: string): Promise<InfoTerminal> {
+  const datos = await llamar(serial, 'sync/config/terminal_info', {}, { timeoutMs: 40_000 });
+  return { modelo: datos?.model ?? null, version: datos?.room ?? null, serial: datos?.serialNumber ?? null };
 }
 
 export interface OrdenCobro {
