@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, RefreshCw, Smartphone } from 'lucide-react';
 import { adminApi, datafonosApi } from '@/lib/api';
+import { ResumenVentas } from '@/components/datafonos/ResumenVentas';
 import { Panel, PanelHeader, Table, Tr, Td, Btn, Modal, Input, Select, fmt, fmtDate } from '@/components/admin/ui';
 
 interface Terminal {
@@ -45,7 +46,6 @@ export default function DatafonosAdminPage() {
   const empresasQ = useQuery({
     queryKey: ['admin-datafonos-empresas'],
     queryFn: () => adminApi.kushkiComercios({ limit: 200 }).then((r) => r.data.cuentas as Empresa[]),
-    enabled: modal,
   });
 
   const refrescar = () => {
@@ -111,7 +111,19 @@ export default function DatafonosAdminPage() {
               <Td><strong>{t.alias}</strong><div style={{ fontSize: 11, opacity: 0.6 }}>{t.modelo}</div></Td>
               <Td style={{ fontFamily: 'monospace', fontSize: 12 }}>{t.serial}</Td>
               <Td>{t.titular}</Td>
-              <Td>{t.sede ?? <span style={{ opacity: 0.5 }}>Toda la empresa</span>}</Td>
+              <Td>
+                {/* Cambiar la tienda a la que pertenece el datáfono */}
+                <select
+                  aria-label={`Tienda de ${t.alias}`}
+                  value={t.sedeId ?? ''}
+                  disabled={editar.isPending}
+                  onChange={(e) => editar.mutate({ id: t.id, data: { sedeId: e.target.value || null } })}
+                  style={{ background: 'rgba(var(--adm-card-rgb),.7)', border: '1.5px solid rgba(133,46,199,.25)', borderRadius: 8, padding: '6px 8px', fontSize: 12, color: 'var(--adm-text)', maxWidth: 200 }}
+                >
+                  <option value="">Toda la empresa</option>
+                  {(empresasQ.data?.find((e) => e.userId === t.titularId)?.subcuentas ?? []).map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                </select>
+              </Td>
               <Td>{t.cobros}</Td>
               <Td><Etiqueta texto={t.activo ? 'Activo' : 'Desactivado'} color={t.activo ? '#6CC998' : '#888'} /></Td>
               <Td>
@@ -122,6 +134,11 @@ export default function DatafonosAdminPage() {
             </Tr>
           ))}
         </Table>
+      </Panel>
+
+      <Panel>
+        <PanelHeader title="Ventas por tienda y datáfono" icon={<Smartphone size={16} />} />
+        <div style={{ padding: 20 }}><ResumenVentas admin /></div>
       </Panel>
 
       <Panel>

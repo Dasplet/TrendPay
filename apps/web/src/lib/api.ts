@@ -123,7 +123,9 @@ export const datafonosApi = {
   cobrar:     (terminalId: string, monto: number) => api.post('/datafonos/cobros', { terminalId, monto }),
   cobro:      (id: string) => api.get(`/datafonos/cobros/${id}`),
   cobros:     () => api.get('/datafonos/cobros'),
+  resumen:    (periodo: string) => api.get('/datafonos/resumen', { params: { periodo } }),
   admin: {
+    resumen:       (periodo: string) => api.get('/datafonos/admin/resumen', { params: { periodo } }),
     terminales:    () => api.get('/datafonos/admin/terminales'),
     crearTerminal: (data: { serial: string; alias: string; titularId: string; sedeId?: string | null; modelo?: string }) => api.post('/datafonos/admin/terminales', data),
     editarTerminal: (id: string, data: { alias?: string; sedeId?: string | null; activo?: boolean }) => api.put(`/datafonos/admin/terminales/${id}`, data),

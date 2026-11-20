@@ -6,6 +6,7 @@ import { CreditCard, RefreshCw } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { datafonosApi } from '@/lib/api';
 import { InfoDestination, ThemeButton, UserModal, fmtCOP } from '@/components/user/UserTheme';
+import { ResumenVentas } from '@/components/datafonos/ResumenVentas';
 
 interface Terminal { id: string; alias: string; modelo: string; ocupado: boolean }
 interface Cobro {
@@ -146,6 +147,11 @@ export default function DatafonoPage() {
             </ThemeButton>
           </>
         )}
+
+        {/* Ventas por tienda y datáfono */}
+        <hr className="tp-divider" />
+        <p className="tp-modal-label">Ventas con datáfono</p>
+        <ResumenVentas />
 
         {/* Últimos cobros */}
         {(recientes?.length ?? 0) > 0 && (

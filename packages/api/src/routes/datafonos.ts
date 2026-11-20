@@ -120,6 +120,64 @@ router.get('/cobros/:id', authenticate, conCuenta('recargar'), async (req: Reque
   res.json({ ok: true, cobro: mapCobro(cobro) });
 });
 
+// ══ Resumen de ventas por tienda ══
+// Lo cobrado y aprobado en cada tienda (sede) y en cada datáfono. Una sede solo ve lo suyo; la empresa ve todas sus tiendas.
+const DESFASE_COLOMBIA_MS = 5 * 3_600_000; // Colombia es UTC-5 todo el año
+const PERIODOS = ['hoy', '7d', 'mes'] as const;
+type Periodo = typeof PERIODOS[number];
+
+// Inicio del período en hora de Colombia (como instante UTC)
+export function inicioDePeriodo(periodo: Periodo, ahora = Date.now()): Date {
+  const local = new Date(ahora - DESFASE_COLOMBIA_MS); // sus campos UTC son la hora de Colombia
+  const dia = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate());
+  const inicioLocal = periodo === 'hoy' ? dia : periodo === '7d' ? dia - 6 * 86_400_000 : Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), 1);
+  return new Date(inicioLocal + DESFASE_COLOMBIA_MS);
+}
+
+interface FilaResumen { cobros: number; bruto: number; comision: number; neto: number }
+const vacia = (): FilaResumen => ({ cobros: 0, bruto: 0, comision: 0, neto: 0 });
+function sumar(fila: FilaResumen, monto: number, pct: number) {
+  const comision = Math.round((monto * pct) / 100);
+  fila.cobros += 1; fila.bruto += monto; fila.comision += comision; fila.neto += monto - comision;
+}
+
+async function resumenDeCobros(where: object, desde: Date) {
+  const cobros = await prisma.cobroDatafono.findMany({
+    where: { estado: 'aprobado', createdAt: { gte: desde }, ...where },
+    select: { monto: true, comisionPct: true, terminal: { select: { id: true, alias: true, sedeId: true, sede: { select: { nombre: true } }, titular: { select: { id: true, nombre: true } } } } },
+  });
+  const total = vacia();
+  const tiendas = new Map<string, FilaResumen & { empresa: string; sedeId: string | null; nombre: string; terminales: Map<string, FilaResumen & { id: string; alias: string }> }>();
+  for (const c of cobros) {
+    const monto = Number(c.monto);
+    const pct = Number(c.comisionPct);
+    const t = c.terminal;
+    const clave = `${t.titular.id}:${t.sedeId ?? ''}`;
+    let tienda = tiendas.get(clave);
+    if (!tienda) { tienda = { ...vacia(), empresa: t.titular.nombre, sedeId: t.sedeId, nombre: t.sede?.nombre ?? 'Sin tienda asignada', terminales: new Map() }; tiendas.set(clave, tienda); }
+    let term = tienda.terminales.get(t.id);
+    if (!term) { term = { ...vacia(), id: t.id, alias: t.alias }; tienda.terminales.set(t.id, term); }
+    sumar(total, monto, pct); sumar(tienda, monto, pct); sumar(term, monto, pct);
+  }
+  return {
+    total,
+    tiendas: [...tiendas.values()]
+      .sort((a, b) => b.bruto - a.bruto)
+      .map(({ terminales, ...t }) => ({ ...t, terminales: [...terminales.values()].sort((a, b) => b.bruto - a.bruto) })),
+  };
+}
+
+const periodoDe = (req: Request): Periodo => (PERIODOS as readonly string[]).includes(req.query.periodo as string) ? (req.query.periodo as Periodo) : 'hoy';
+
+// GET /api/datafonos/resumen?periodo=hoy|7d|mes
+router.get('/resumen', authenticate, conCuenta('recargar'), async (req: Request, res: Response) => {
+  const periodo = periodoDe(req);
+  const desde = inicioDePeriodo(periodo);
+  const cuenta = req.cuenta!;
+  const r = await resumenDeCobros({ terminal: { titularId: cuenta.titularId }, ...(cuenta.esSubcuenta ? { userId: req.user!.id } : {}) }, desde);
+  res.json({ ok: true, periodo, desde, ...r });
+});
+
 // ══ POST /api/datafonos/webhooks/:token ══
 // Aviso de Kushki One por cada cambio de estado de un cobro. No trae firma: la URL lleva un código secreto, solo se
 // aceptan avisos del terminal al que se le mandó el cobro y la aprobación se confirma siempre con Kushki antes de
@@ -241,6 +299,13 @@ router.put('/admin/config', authenticate, requireAdmin, async (req: Request, res
   await guardarComisionDatafonoPct(parse.data.comisionPct);
   await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'CAMBIAR_COMISION_DATAFONO', tabla: 'configs', registroId: 'comision_datafono_pct', ip: req.ip, datos: { antes: anterior, despues: parse.data.comisionPct } } }).catch(() => {});
   res.json({ ok: true, comisionPct: parse.data.comisionPct });
+});
+
+// GET /api/datafonos/admin/resumen?periodo=hoy|7d|mes  → ventas aprobadas por empresa, tienda y datáfono
+router.get('/admin/resumen', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  const periodo = periodoDe(req);
+  const desde = inicioDePeriodo(periodo);
+  res.json({ ok: true, periodo, desde, ...(await resumenDeCobros({}, desde)) });
 });
 
 // GET /api/datafonos/admin/cobros  → últimos cobros de todos los datáfonos

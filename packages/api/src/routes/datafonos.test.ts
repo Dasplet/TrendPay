@@ -9,6 +9,7 @@ jest.mock('../utils/kushkiOne', () => {
 });
 import { enviarCobroAsync, buscarTransaccion } from '../utils/kushkiOne';
 import { conciliarCobrosDatafono } from '../utils/datafonos';
+import { inicioDePeriodo } from './datafonos';
 
 const TOKEN_URL = 'codigo-secreto-de-prueba';
 const SERIAL = 'TJ54241P20911';
@@ -327,6 +328,73 @@ describe('Cobros con datáfono (Kushki One)', () => {
       expect(ajeno.status).toBe(404);
       const empresa = await request(app).get('/api/datafonos/cobros').set('Authorization', `Bearer ${e.tokenEmpresa}`);
       expect(empresa.body.cobros).toHaveLength(1);
+    });
+  });
+
+  describe('resumen de ventas por tienda', () => {
+    async function tiendas() {
+      const empresa = await crearUsuarioDePrueba({ saldo: 0, nombre: 'Cool Company' });
+      const sanJuan = await crearSubcuentaDePrueba(empresa.id, {});
+      const norte = await crearSubcuentaDePrueba(empresa.id, {});
+      const mk = (serial: string, alias: string, sedeId: string | null) => prisma.terminalKushki.create({ data: { serial, alias, titularId: empresa.id, sedeId } });
+      const [c1, c2, c3, c4] = await Promise.all([mk('SN-RES-0001', 'Caja 1', sanJuan.id), mk('SN-RES-0002', 'Caja 2', sanJuan.id), mk('SN-RES-0003', 'Caja Norte', norte.id), mk('SN-RES-0004', 'Caja libre', null)]);
+      return { empresa, sanJuan, norte, c1, c2, c3, c4 };
+    }
+    const cobro = (terminalId: string, userId: string, monto: number, extra: object = {}) =>
+      prisma.cobroDatafono.create({ data: { terminalId, userId, clientTransactionId: crypto.randomUUID(), monto, comisionPct: 0, estado: 'aprobado', ...extra } });
+    const resumen = (token: string, periodo = 'hoy') => request(app).get(`/api/datafonos/resumen?periodo=${periodo}`).set('Authorization', `Bearer ${token}`);
+
+    it('la empresa ve lo cobrado por cada tienda y por cada datáfono, solo lo aprobado del período', async () => {
+      const { empresa, sanJuan, norte, c1, c2, c3, c4 } = await tiendas();
+      await cobro(c1.id, sanJuan.id, 50000, { comisionPct: 2 });
+      await cobro(c1.id, sanJuan.id, 30000, { comisionPct: 2 });
+      await cobro(c2.id, sanJuan.id, 20000);
+      await cobro(c3.id, norte.id, 10000);
+      await cobro(c4.id, empresa.id, 5000);
+      await cobro(c1.id, sanJuan.id, 99999, { estado: 'rechazado' });                      // no cuenta
+      await cobro(c1.id, sanJuan.id, 88888, { estado: 'pendiente' });                      // no cuenta
+      await cobro(c1.id, sanJuan.id, 77777, { createdAt: new Date(Date.now() - 400 * 86_400_000) }); // fuera del período
+
+      const res = await resumen(tokenPara(empresa));
+      expect(res.status).toBe(200);
+      expect(res.body.total).toEqual({ cobros: 5, bruto: 115000, comision: 1600, neto: 113400 });
+      const [primera, segunda, ...resto] = res.body.tiendas;
+      expect(primera).toMatchObject({ nombre: sanJuan.nombre, cobros: 3, bruto: 100000, comision: 1600, neto: 98400 });
+      expect(primera.terminales.map((t: any) => [t.alias, t.cobros, t.bruto])).toEqual([['Caja 1', 2, 80000], ['Caja 2', 1, 20000]]);
+      expect(segunda).toMatchObject({ nombre: norte.nombre, bruto: 10000 });
+      expect(resto[0]).toMatchObject({ nombre: 'Sin tienda asignada', bruto: 5000 });
+    });
+
+    it('una sede solo ve lo que ella cobró; otra empresa no ve nada ajeno', async () => {
+      const { empresa, sanJuan, norte, c1, c3 } = await tiendas();
+      await cobro(c1.id, sanJuan.id, 50000);
+      await cobro(c3.id, norte.id, 10000);
+      const propia = await resumen(tokenPara(sanJuan));
+      expect(propia.body.total).toMatchObject({ cobros: 1, bruto: 50000 });
+      expect(propia.body.tiendas).toHaveLength(1);
+
+      const ajena = await crearUsuarioDePrueba({ saldo: 0 });
+      expect((await resumen(tokenPara(ajena))).body.total.cobros).toBe(0);
+      expect((await resumen(tokenPara(empresa), '7d')).body.total.cobros).toBe(2);
+    });
+
+    it('el administrador ve todas las empresas con su nombre', async () => {
+      const { sanJuan, c1 } = await tiendas();
+      await cobro(c1.id, sanJuan.id, 40000);
+      const a = await crearUsuarioDePrueba({ rol: 'admin' });
+      const res = await request(app).get('/api/datafonos/admin/resumen?periodo=mes').set('Authorization', `Bearer ${tokenPara(a)}`);
+      expect(res.status).toBe(200);
+      expect(res.body.tiendas[0]).toMatchObject({ empresa: 'Cool Company', bruto: 40000 });
+      expect((await request(app).get('/api/datafonos/admin/resumen').set('Authorization', `Bearer ${tokenPara(sanJuan)}`)).status).toBe(403);
+    });
+
+    it('"hoy" empieza a medianoche de Colombia (UTC-5), no a la de UTC', () => {
+      // 20-nov 03:00 UTC = 19-nov 22:00 en Colombia → el día de hoy empezó el 19-nov 05:00 UTC
+      expect(inicioDePeriodo('hoy', Date.UTC(2026, 10, 20, 3, 0)).toISOString()).toBe('2026-11-19T05:00:00.000Z');
+      // 20-nov 06:00 UTC = 20-nov 01:00 en Colombia
+      expect(inicioDePeriodo('hoy', Date.UTC(2026, 10, 20, 6, 0)).toISOString()).toBe('2026-11-20T05:00:00.000Z');
+      expect(inicioDePeriodo('7d', Date.UTC(2026, 10, 20, 6, 0)).toISOString()).toBe('2026-11-14T05:00:00.000Z');
+      expect(inicioDePeriodo('mes', Date.UTC(2026, 10, 20, 6, 0)).toISOString()).toBe('2026-11-01T05:00:00.000Z');
     });
   });
 
