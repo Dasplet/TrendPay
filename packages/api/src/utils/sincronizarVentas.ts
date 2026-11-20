@@ -42,18 +42,53 @@ export async function buscarTransaccionesPos(llavePrivada: string, desdeMs: numb
   return items;
 }
 
-// Los movimientos que no se pueden atribuir a un aparato concreto van a un datáfono "sin identificar" de la empresa
+// Si todos los datáfonos activos de la empresa pertenecen a la MISMA tienda, una venta sin aparato identificado sí se sabe de qué
+// tienda es. Con varias tiendas no se puede adivinar: queda solo para la cuenta principal.
+async function tiendaUnica(titularId: string): Promise<string | null> {
+  const terminales = await prisma.terminalKushki.findMany({ where: { titularId, activo: true, NOT: { serial: { startsWith: 'SIN-IDENTIFICAR' } } }, select: { sedeId: true } });
+  const sedes = new Set(terminales.map((t) => t.sedeId));
+  const unica = sedes.size === 1 ? [...sedes][0] : null;
+  return unica ?? null;
+}
+
+// Los movimientos que no se pueden atribuir a un aparato concreto van a un datáfono "sin identificar" de la empresa (y a la tienda,
+// si la empresa solo tiene una). Si la tienda se descubre después, también se corrigen los movimientos que ya estaban.
 async function terminalSinIdentificar(titularId: string) {
   const serial = `SIN-IDENTIFICAR-${titularId.slice(0, 8)}`;
-  return prisma.terminalKushki.upsert({
-    where: { serial }, update: {}, create: { serial, alias: 'Datáfono sin identificar', modelo: 'Sunmi', titularId, sedeId: null },
+  const sedeId = await tiendaUnica(titularId);
+  const antes = await prisma.terminalKushki.findUnique({ where: { serial } });
+  const terminal = await prisma.terminalKushki.upsert({
+    where: { serial }, update: { sedeId }, create: { serial, alias: 'Datáfono sin identificar', modelo: 'Sunmi', titularId, sedeId },
   });
+  if (sedeId && (!antes || antes.sedeId !== sedeId)) {
+    await prisma.cobroDatafono.updateMany({ where: { terminalId: terminal.id, userId: titularId }, data: { userId: sedeId } });
+    await prisma.transaction.updateMany({
+      where: { sedeId: null, categoria: { in: ['datafono', 'reembolso_datafono'] }, metadata: { path: ['terminal'], equals: serial } },
+      data: { sedeId, userId: sedeId },
+    });
+  }
+  return terminal;
+}
+
+// Los nombres de los campos que trae la respuesta de Kushki (sin valores), para saber si alguno identifica el aparato
+function nombresDeCampos(item: any): string[] {
+  const nombres: string[] = [];
+  const recorrer = (obj: any, prefijo: string, nivel: number) => {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return;
+    for (const [k, v] of Object.entries(obj)) {
+      nombres.push(`${prefijo}${k}`);
+      if (nivel < 2) recorrer(v, `${prefijo}${k}.`, nivel + 1);
+    }
+  };
+  recorrer(item, '', 0);
+  return nombres.slice(0, 80);
 }
 
 export interface ResumenSincronizacion {
   omitida?: string;
   revisadas: number; ventas: number; reembolsos: number; repetidas: number; ignoradas: number; sinAparato: number; errores: number;
-  conSerial: boolean; // ¿la respuesta de Kushki trae el serial del aparato? (si no, las ventas no se pueden asignar a una tienda)
+  conSerial: boolean; // ¿la respuesta de Kushki trae el serial del aparato? (si no, las ventas no se pueden asignar a un datáfono)
+  campos?: string[];  // nombres de los campos que trae la respuesta (sin valores)
   desde?: string; hasta?: string;
 }
 
@@ -63,6 +98,11 @@ const claveMarca = (titularId: string) => `ventas_pos_desde_${titularId}`;
 export async function sincronizarEmpresa(titularId: string, opciones: { desdeMs?: number } = {}): Promise<ResumenSincronizacion> {
   const llave = await businessCodeDeTitular(titularId);
   if (!llave) return { ...vacio(), omitida: 'la empresa no tiene la llave privada de Kushki guardada' };
+
+  // Si ya hay ventas "sin identificar" de esta empresa, se revisa si ahora se sabe de qué tienda son (aunque no lleguen ventas nuevas)
+  if (await prisma.terminalKushki.findFirst({ where: { titularId, serial: { startsWith: 'SIN-IDENTIFICAR' } }, select: { id: true } })) {
+    await terminalSinIdentificar(titularId);
+  }
 
   const hasta = Date.now();
   const marca = await prisma.config.findUnique({ where: { clave: claveMarca(titularId) } });
@@ -76,6 +116,7 @@ export async function sincronizarEmpresa(titularId: string, opciones: { desdeMs?
   const resumen: ResumenSincronizacion = { ...vacio(), desde: new Date(desde).toISOString(), hasta: new Date(hasta).toISOString() };
   const items = await buscarTransaccionesPos(llave, desde, hasta);
   resumen.revisadas = items.length;
+  if (items.length > 0) resumen.campos = nombresDeCampos(items[0]);
 
   // Primero las más viejas, para que un reembolso encuentre la venta que lo precede
   const ordenadas = [...items].sort((a, b) => Number(a?.created ?? 0) - Number(b?.created ?? 0));
@@ -107,7 +148,7 @@ export async function sincronizarEmpresa(titularId: string, opciones: { desdeMs?
   if (resumen.errores === 0) {
     await prisma.config.upsert({ where: { clave: claveMarca(titularId) }, create: { clave: claveMarca(titularId), valor: String(hasta) }, update: { valor: String(hasta) } });
   }
-  if (resumen.ventas + resumen.reembolsos > 0) logger.info('Ventas de datáfono sincronizadas', { ...resumen });
+  if (resumen.ventas + resumen.reembolsos > 0) logger.info('Ventas de datáfono sincronizadas', { ...resumen, campos: resumen.campos?.join(',') });
   return resumen;
 }
 

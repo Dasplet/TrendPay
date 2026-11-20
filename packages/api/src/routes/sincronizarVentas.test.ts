@@ -69,27 +69,68 @@ describe('Sincronizar las ventas del datáfono con Kushki (sin webhook)', () => 
     expect(await saldoDe(e.id)).toBe(50000);
   });
 
-  it('si la respuesta trae el serial del aparato asigna la venta a su tienda; si no, a un datáfono "sin identificar" que solo ve la principal', async () => {
+  it('si la respuesta trae el serial del aparato asigna la venta a su tienda', async () => {
     const { e, sanJuan } = await empresa();
     await sincronizarEmpresa(e.id);
-    respuesta([
-      item({ pos_details: { terminal_id: 'P3F6P624J0101' } }),
-      item({ approved_transaction_amount: 10000, request_amount: 10000 }), // sin serial
-    ]);
+    respuesta([item({ pos_details: { terminal_id: 'P3F6P624J0101' } })]);
     const r = await sincronizarEmpresa(e.id);
-    expect(r).toMatchObject({ ventas: 2, sinAparato: 1, conSerial: true });
+    expect(r).toMatchObject({ ventas: 1, sinAparato: 0, conSerial: true });
+    expect((await prisma.transaction.findFirstOrThrow({ where: { categoria: 'datafono' } })).sedeId).toBe(sanJuan.id);
+  });
 
-    const ventas = await prisma.transaction.findMany({ where: { categoria: 'datafono' }, orderBy: { montoBruto: 'asc' } });
-    expect(ventas.map((v) => v.sedeId)).toEqual([null, sanJuan.id]);
+  it('sin serial y con UNA sola tienda, la venta es de esa tienda aunque no se sepa la caja', async () => {
+    const { e, sanJuan } = await empresa();
+    await prisma.terminalKushki.create({ data: { serial: 'P3F6P624J0244', alias: 'Caja 4', titularId: e.id, sedeId: sanJuan.id } });
+    await sincronizarEmpresa(e.id);
+    respuesta([item({ approved_transaction_amount: 1000, request_amount: 1000 })]);
+    expect(await sincronizarEmpresa(e.id)).toMatchObject({ ventas: 1, sinAparato: 1 });
+
+    const tx = await prisma.transaction.findFirstOrThrow({ where: { categoria: 'datafono' } });
+    expect(tx).toMatchObject({ sedeId: sanJuan.id, userId: sanJuan.id });
     const huerfano = await prisma.terminalKushki.findFirstOrThrow({ where: { serial: { startsWith: 'SIN-IDENTIFICAR' } } });
-    expect(huerfano).toMatchObject({ alias: 'Datáfono sin identificar', titularId: e.id, sedeId: null });
+    expect(huerfano).toMatchObject({ alias: 'Datáfono sin identificar', titularId: e.id, sedeId: sanJuan.id });
+    // la tienda lo ve en su historial
+    const hist = await request(app).get('/api/wallet/history').set('Authorization', `Bearer ${tokenPara(sanJuan)}`);
+    expect(hist.body.transacciones.filter((t: { categoria: string }) => t.categoria === 'datafono')).toHaveLength(1);
+  });
+
+  it('con varias tiendas no se adivina: la venta queda solo para la cuenta principal', async () => {
+    const { e } = await empresa();
+    const norte = await crearSubcuentaDePrueba(e.id, {});
+    await prisma.terminalKushki.create({ data: { serial: 'P3F6P624J0354', alias: 'Caja Norte', titularId: e.id, sedeId: norte.id } });
+    await sincronizarEmpresa(e.id);
+    respuesta([item()]);
+    await sincronizarEmpresa(e.id);
+    expect((await prisma.transaction.findFirstOrThrow({ where: { categoria: 'datafono' } })).sedeId).toBeNull();
+  });
+
+  it('las ventas que ya estaban "sin identificar" pasan a la tienda cuando se descubre que hay una sola', async () => {
+    const { e, sanJuan } = await empresa();
+    const norte = await crearSubcuentaDePrueba(e.id, {});
+    const cajaNorte = await prisma.terminalKushki.create({ data: { serial: 'P3F6P624J0354', alias: 'Caja Norte', titularId: e.id, sedeId: norte.id } });
+    await sincronizarEmpresa(e.id);
+    respuesta([item()]);
+    await sincronizarEmpresa(e.id);
+    expect((await prisma.transaction.findFirstOrThrow({ where: { categoria: 'datafono' } })).sedeId).toBeNull();
+
+    // el administrador quita la segunda tienda: ahora solo queda San Juan
+    await prisma.terminalKushki.update({ where: { id: cajaNorte.id }, data: { activo: false } });
+    respuesta([item({ approved_transaction_amount: 7000, request_amount: 7000 })]);
+    await sincronizarEmpresa(e.id);
+    const ventas = await prisma.transaction.findMany({ where: { categoria: 'datafono' } });
+    expect(ventas).toHaveLength(2);
+    expect(ventas.every((v) => v.sedeId === sanJuan.id)).toBe(true); // también la anterior
+    expect(await prisma.cobroDatafono.count({ where: { userId: sanJuan.id } })).toBe(2);
   });
 
   it('cuando la respuesta no trae ningún serial lo avisa (para saber que no se puede asignar a una tienda)', async () => {
     const { e } = await empresa();
     await sincronizarEmpresa(e.id);
     respuesta([item()]);
-    expect((await sincronizarEmpresa(e.id)).conSerial).toBe(false);
+    const r = await sincronizarEmpresa(e.id);
+    expect(r.conSerial).toBe(false);
+    // y dice qué campos trae, para poder ver si alguno identifica el aparato
+    expect(r.campos).toEqual(expect.arrayContaining(['transaction_reference', 'transaction_type', 'approved_transaction_amount']));
   });
 
   it('los reembolsos descuentan, se ligan a la venta y no mueven dinero las rechazadas ni las autorizaciones', async () => {

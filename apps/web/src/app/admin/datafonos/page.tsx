@@ -84,7 +84,7 @@ export default function DatafonosAdminPage() {
     onSuccess: ({ e, r }) => {
       refrescar();
       if (r.omitida) { toast(`${e.nombre}: ${r.omitida}`, { duration: 8000 }); return; }
-      toast.success(`${e.nombre}: ${r.revisadas} movimientos revisados · ${r.ventas} ventas nuevas · ${r.reembolsos} reembolsos${r.sinAparato ? ` · ${r.sinAparato} sin identificar el datáfono` : ''}${r.errores ? ` · ${r.errores} con error` : ''}`, { duration: 10000 });
+      toast.success(`${e.nombre}: ${r.revisadas} movimientos revisados · ${r.ventas} ventas nuevas · ${r.reembolsos} reembolsos${r.sinAparato ? ` · ${r.sinAparato} sin identificar el datáfono` : ''}${r.errores ? ` · ${r.errores} con error` : ''}${r.campos ? ` · Kushki trae: ${(r.campos as string[]).join(', ')}` : ''}`, { duration: 20000 });
     },
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo sincronizar con Kushki', { duration: 10000 }),
   });
