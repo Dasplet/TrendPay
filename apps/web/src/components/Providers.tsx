@@ -13,7 +13,14 @@ export function Providers({ children }: Readonly<{ children: React.ReactNode }>)
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 30 * 1000,       // 30s
+        // Tiempo real: el servidor avisa cada cambio (lib/tiempoReal.ts) y todas las pantallas se actualizan al instante.
+        // Estas opciones son el respaldo si el aviso se pierde: cada consulta se renueva sola cada minuto, también con la
+        // pestaña en segundo plano (el panel se deja abierto 24/7), al volver a la pestaña y al recuperar internet.
+        staleTime: 5 * 1000,
+        refetchInterval: 60 * 1000,
+        refetchIntervalInBackground: true,
+        refetchOnWindowFocus: true,
+        refetchOnReconnect: true,
         gcTime:    5 * 60 * 1000,   // 5min
         retry: (count, err: any) => {
           if (err?.response?.status === 401) return false;

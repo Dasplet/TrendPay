@@ -37,6 +37,7 @@ export default function CobrarQrPage() {
     queryFn: () => walletApi.qrPersonal(),
     select: (res) => res.data.qr.token as string,
     staleTime: Infinity,
+    refetchInterval: false,
   });
 
   const generarMutation = useMutation({

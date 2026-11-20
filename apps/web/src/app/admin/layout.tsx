@@ -9,6 +9,7 @@ import {
   Settings, ClipboardList, UserCheck, LogOut, Search, CreditCard, FolderCheck, Smartphone
 } from 'lucide-react';
 import { NotificationBell } from '@/components/admin/NotificationBell';
+import { useTiempoReal, ETIQUETA_ESTADO } from '@/lib/tiempoReal';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 const NAV = [
@@ -58,6 +59,8 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
   const logout   = useAuthStore(s => s.logout);
   const [search, setSearch] = useState('');
   const [hydrated, setHydrated] = useState(false);
+  // Tiempo real: el panel se actualiza solo cada vez que algo cambia en el sistema
+  const enVivo = useTiempoReal(hydrated && !!user && user.rol === 'admin');
 
   // Espera a que zustand rehidrate desde localStorage antes de decidir si redirige.
   // Sin esto, una recarga completa manda al admin ya autenticado a /login.
@@ -164,6 +167,10 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
                 style={{ background:'rgba(var(--adm-card-rgb),.6)', border:'1px solid rgba(133,46,199,.2)', borderRadius:10, padding:'7px 14px 7px 32px', fontSize:12, color:'var(--adm-text)', outline:'none', width:200 }}/>
               <Search size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--adm-muted)' }}/>
             </div>
+            <span title="El panel se actualiza solo cada vez que algo cambia" style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12, fontWeight:600, color:ETIQUETA_ESTADO[enVivo].color, padding:'6px 10px', borderRadius:20, background:`${ETIQUETA_ESTADO[enVivo].color}1f` }}>
+              <span style={{ width:8, height:8, borderRadius:'50%', background:ETIQUETA_ESTADO[enVivo].color, boxShadow: enVivo === 'en-vivo' ? `0 0 0 3px ${ETIQUETA_ESTADO[enVivo].color}33` : 'none' }} />
+              {ETIQUETA_ESTADO[enVivo].texto}
+            </span>
             <ThemeToggle className="adm-icon-button" iconSize={17} />
             <NotificationBell />
             <div style={{ width:34, height:34, borderRadius:10, background:'linear-gradient(135deg,#852EC7,#321168)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800, color:'#fff' }}>

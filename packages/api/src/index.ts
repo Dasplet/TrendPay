@@ -13,7 +13,7 @@ import cookieParser from 'cookie-parser';
 import path from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { logger } from './utils/logger';
-import { apiLimiter } from './middleware/rateLimiter';
+import { apiLimiter, lecturaLimiter } from './middleware/rateLimiter';
 import { errorHandler } from './middleware/errorHandler';
 import { iniciarConciliacionKushki } from './utils/kushkiPayments';
 import { iniciarConciliacionDatafonos } from './utils/datafonos';
@@ -29,6 +29,8 @@ import adminRouter     from './routes/admin';
 import userAuditRouter from './routes/userAudit';
 import kushkiRouter    from './routes/kushki';
 import datafonosRouter from './routes/datafonos';
+import eventosRouter from './routes/eventos';
+import { instalarAvisosDeCambios } from './utils/eventos';
 import bankAccountsRouter from './routes/bankAccounts';
 import vinculacionesRouter from './routes/vinculaciones';
 import vinculacionPublicaRouter from './routes/vinculacionPublica';
@@ -36,6 +38,8 @@ import vinculacionPublicaRouter from './routes/vinculacionPublica';
 export const prisma = new PrismaClient({
   log: process.env.NODE_ENV === 'development' ? ['query', 'error'] : ['error'],
 });
+// Tiempo real: cada escritura relevante en la base de datos avisa a las pantallas conectadas (ver utils/eventos.ts)
+instalarAvisosDeCambios(prisma);
 
 const app = express();
 const PORT = Number.parseInt(process.env.PORT || '3001', 10);
@@ -79,7 +83,8 @@ app.use(cors({
 }));
 
 // ── Compression ──
-app.use(compression());
+// El canal de tiempo real (/api/eventos) no se comprime: la compresión retendría los avisos hasta llenar un bloque
+app.use(compression({ filter: (req, res) => (req.path.startsWith('/api/eventos') ? false : compression.filter(req, res)) }));
 
 // ── Body parsing ──
 // El cuerpo original se conserva para verificar la firma de los webhooks de Kushki,
@@ -98,6 +103,7 @@ if (process.env.NODE_ENV !== 'test') {
 
 // ── Rate limiting ──
 app.use('/api/', apiLimiter);
+app.use('/api/', lecturaLimiter);
 
 // ── Trust proxy (Railway/Render) ──
 app.set('trust proxy', 1);
@@ -115,6 +121,7 @@ app.use('/api/admin',       adminRouter);
 app.use('/api/user-audit',  userAuditRouter);
 app.use('/api/kushki',      kushkiRouter);
 app.use('/api/datafonos',   datafonosRouter);
+app.use('/api/eventos',     eventosRouter);
 
 // ── Serve frontend static files ──
 const publicPath = path.join(__dirname, '../../web/dist');

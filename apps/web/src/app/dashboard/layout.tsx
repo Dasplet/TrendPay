@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { LogOut } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { datafonosApi } from '@/lib/api';
+import { useTiempoReal } from '@/lib/tiempoReal';
 import { useAuthStore, type User } from '@/store/authStore';
 import { BrandLogo, UserAvatar, fmtCOP, userMenu } from '@/components/user/UserTheme';
 import { permisoDeRuta, puede } from '@/lib/permisos';
@@ -21,6 +22,8 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [hydrated, setHydrated] = useState(false);
+  // Tiempo real: saldo, historial y cobros se actualizan solos cada vez que cambia algo en la cuenta
+  useTiempoReal(hydrated && !!user && user.rol !== 'admin');
 
   // Espera a que zustand rehidrate desde localStorage antes de decidir si redirige a /login.
   // Sin esto, una recarga completa (p. ej. abrir un enlace de pago QR compartido en una pestaña nueva)
