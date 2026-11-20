@@ -11,6 +11,7 @@ import { getConfigTransferencias, solicitarTokenBreB, olvidarCacheBreB, AMBIENTE
 import { cifrarLlavePrivada, credencialesDeComercio, terminaEn } from '../utils/comerciosKushki';
 import { modoAlmacenamiento, cifradoDelBucket } from '../utils/storage';
 import { PERMISOS_SEDE } from '../utils/cuentas';
+import { contarDatos, limpiarDatos, limpiezaPermitida, FRASE_LIMPIEZA } from '../utils/limpiarDatos';
 import { solicitarEliminacion, cancelarEliminacion, ErrorEliminacion } from '../utils/eliminarCuentas';
 
 const router = Router();
@@ -181,6 +182,29 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req: Request, res
     if (e instanceof ErrorEliminacion) return res.status(e.status).json({ ok: false, mensaje: e.message });
     res.status(500).json({ ok: false, mensaje: e.message });
   }
+});
+
+// ══ Limpieza de datos de prueba ══
+// Borra el historial financiero y deja las billeteras en $0 (ver utils/limpiarDatos.ts). Irreversible: solo funciona si el
+// servidor tiene PERMITIR_LIMPIEZA=1 y se escribe la frase de confirmación.
+router.get('/limpieza', authenticate, requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    res.json({ ok: true, habilitada: limpiezaPermitida(), frase: FRASE_LIMPIEZA, ...(await contarDatos()) });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
+});
+
+router.post('/limpieza', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  if (!limpiezaPermitida()) {
+    return res.status(403).json({ ok: false, mensaje: 'La limpieza está desactivada en el servidor. Activa la variable PERMITIR_LIMPIEZA=1 en Railway' });
+  }
+  if (req.body?.frase !== FRASE_LIMPIEZA) return res.status(400).json({ ok: false, mensaje: `Escribe exactamente "${FRASE_LIMPIEZA}" para confirmar` });
+  try {
+    const antes = await contarDatos();
+    const despues = await limpiarDatos();
+    // La limpieza borra también la auditoría: la única constancia es quién la ejecutó y cuándo
+    await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'LIMPIAR_DATOS', tabla: 'sistema', ip: req.ip, datos: { saldoBorrado: antes.saldoTotal } } }).catch(() => {});
+    res.json({ ok: true, mensaje: 'Datos de prueba eliminados. Todas las billeteras quedaron en $0', antes, despues });
+  } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 
 // ══ POST /api/admin/users/:id/cancelar-eliminacion ══

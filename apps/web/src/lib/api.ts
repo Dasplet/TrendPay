@@ -185,4 +185,6 @@ export const adminApi = {
   kushkiProbarTokenBreB: (monto?: number) => api.post('/admin/kushki/bre-b/probar-token', monto ? { monto } : {}),
   kushkiProbarWebhook: () => api.post('/admin/kushki/webhooks/probar'),
   kushkiLimpiarWebhooks: () => api.delete('/admin/kushki/webhooks'),
+  limpiezaEstado: () => api.get('/admin/limpieza'),
+  limpiarDatos:   (frase: string) => api.post('/admin/limpieza', { frase }),
 };

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Avatar } from '@/components/admin/ui';
+import { LimpiezaDatos } from '@/components/admin/LimpiezaDatos';
 import toast from 'react-hot-toast';
 import { Settings2, ShieldCheck, Check, Lock } from 'lucide-react';
 
@@ -102,6 +103,8 @@ export default function ConfiguracionPage() {
           {users.length===0 && <div style={{ textAlign:'center', padding:32, color:'rgba(var(--adm-fg-rgb),.3)', fontSize:13 }}>Sin usuarios</div>}
         </div>
       </Panel>
+
+      <LimpiezaDatos />
     </div>
   );
 }
