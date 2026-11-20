@@ -190,12 +190,16 @@ model Transaction {
   saldoDespues  Decimal  @map("saldo_despues") @db.Decimal(18, 2)
   status        String   @default("exitosa") // exitosa | rechazada | procesado | pendiente
   metadata      Json?    // datos adicionales (banco, referencia externa, etc.)
+  // Cobros con datáfono: la sede (tienda) a la que pertenece el movimiento. Lo ven esa sede y la cuenta principal; las
+  // demás sedes de la empresa no.
+  sedeId        String?  @map("sede_id")
   createdAt     DateTime @default(now()) @map("created_at")
 
   wallet Wallet @relation(fields: [walletId], references: [id])
   user   User   @relation(fields: [userId], references: [id])
 
   @@index([userId, createdAt(sort: Desc)])
+  @@index([sedeId])
   @@index([walletId, createdAt(sort: Desc)])
   @@map("transactions")
 }
@@ -439,8 +443,12 @@ model CobroDatafono {
   clientTransactionId  String   @unique @map("client_transaction_id")
   monto                Decimal  @db.Decimal(18, 2)
   comisionPct          Decimal  @default(0) @map("comision_pct") @db.Decimal(5, 2)
-  // pendiente | aprobado | rechazado | cancelado | expirado | revision
+  // pendiente | aprobado | rechazado | cancelado | expirado | revision | reembolsando | reembolsado | error
   estado               String   @default("pendiente")
+  // Reembolso (anulación) del cobro: UUID propio que une los avisos de Kushki de la anulación con este cobro
+  reembolsoClientId    String?  @unique @map("reembolso_client_id")
+  reembolsadoAt        DateTime? @map("reembolsado_at")
+  reembolsadoPor       String?  @map("reembolsado_por")
   estadoTerminal       String?  @map("estado_terminal")
   detalle              String?
   transactionReference String?  @map("transaction_reference")

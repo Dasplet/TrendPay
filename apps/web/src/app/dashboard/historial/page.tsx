@@ -28,7 +28,8 @@ export default function HistorialPage() {
   }), [txs, query, estado, tipo]);
 
   const recibido = filtered.filter((t: any) => Number(t.monto_neto) > 0).reduce((s: number, t: any) => s + Number(t.monto_neto || 0), 0);
-  const retirado = filtered.filter((t: any) => Number(t.monto_neto) < 0).reduce((s: number, t: any) => s + Math.abs(Number(t.monto_neto || 0)), 0);
+  // "Retirado a bancos" cuenta solo los retiros (no envíos ni reembolsos de datáfono)
+  const retirado = filtered.filter((t: any) => Number(t.monto_neto) < 0 && String(t.tipo || '').toLowerCase().includes('retiro')).reduce((s: number, t: any) => s + Math.abs(Number(t.monto_neto || 0)), 0);
 
   return (
     <div className="tp-user-page">
@@ -54,6 +55,7 @@ export default function HistorialPage() {
             <option value="qr">Cobros QR</option>
             <option value="envio">Envíos</option>
             <option value="retiro">Retiros banco</option>
+            <option value="datafono">Datáfono (cobros y reembolsos)</option>
           </select>
           <select value={estado} onChange={(e) => setEstado(e.target.value)}>
             <option value="">Todos los estados</option>

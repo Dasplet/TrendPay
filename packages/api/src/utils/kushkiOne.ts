@@ -64,6 +64,26 @@ export async function enviarCobroAsync(serial: string, orden: OrdenCobro): Promi
   }
 }
 
+export interface OrdenReembolso {
+  transactionReference: string; // la referencia de la venta original (raw_response.transaction_reference)
+  clientTransactionId: string;  // UUID nuevo que une los avisos de la anulación con el cobro
+  eventsWebhookUrl: string;
+}
+
+// Anula la venta (void). El mismo día es una cancelación; desde la medianoche entra al ciclo de devoluciones. Sin pedir
+// la tarjeta otra vez (omit_card). Igual que el cobro: la respuesta solo confirma que el terminal recibió la orden.
+export async function enviarReembolsoAsync(serial: string, orden: OrdenReembolso): Promise<void> {
+  const datos = await llamar(serial, 'async/void', {
+    events_webhook_url: orden.eventsWebhookUrl,
+    transaction_reference: orden.transactionReference,
+    client_transaction_id: orden.clientTransactionId,
+    omit_card: true,
+  });
+  if (datos?.status !== 'TERMINAL_ACKNOWLEDGED') {
+    throw new KushkiError('El datáfono no aceptó la anulación', 502, { respuesta: datos });
+  }
+}
+
 export interface TransaccionTerminal {
   estado: 'aprobada' | 'rechazada' | 'anulada';
   tipo: string;

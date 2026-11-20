@@ -124,6 +124,7 @@ export const datafonosApi = {
   cobro:      (id: string) => api.get(`/datafonos/cobros/${id}`),
   cobros:     () => api.get('/datafonos/cobros'),
   resumen:    (periodo: string) => api.get('/datafonos/resumen', { params: { periodo } }),
+  reembolsar: (id: string) => api.post(`/datafonos/cobros/${id}/reembolsar`),
   admin: {
     resumen:       (periodo: string) => api.get('/datafonos/admin/resumen', { params: { periodo } }),
     terminales:    () => api.get('/datafonos/admin/terminales'),

@@ -61,6 +61,98 @@ export interface ConfirmacionAprobacion {
 
 export type ResultadoCobro = { estado: string; saldo?: number };
 
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+// La tienda a la que pertenece el movimiento: la sede del datáfono; si el datáfono es de toda la empresa, la sede que cobró
+// (si cobró la cuenta principal, queda sin sede y solo la ve la cuenta principal)
+async function sedeDelCobro(tx: Tx, cobro: CobroConTerminal): Promise<string | null> {
+  if (cobro.terminal.sedeId) return cobro.terminal.sedeId;
+  const cajero = await tx.user.findUnique({ where: { id: cobro.userId }, select: { cuentaPadreId: true } });
+  return cajero?.cuentaPadreId ? cobro.userId : null;
+}
+
+// Lo que se le acreditó a la billetera por este cobro (monto menos la comisión que había al cobrar)
+export const netoDelCobro = (cobro: { monto: unknown; comisionPct: unknown }) => {
+  const monto = Number(cobro.monto);
+  return monto - Math.round((monto * Number(cobro.comisionPct)) / 100);
+};
+
+const ESTADOS_REEMBOLSABLES = ['aprobado'];
+
+// El reembolso se confirmó en Kushki: se descuenta de la billetera lo que se había acreditado, una sola vez. Si el cliente ya
+// retiró ese dinero el saldo puede quedar negativo: el dinero ya salió hacia la tarjeta del comprador.
+export async function completarReembolso(cobro: CobroConTerminal, adminId?: string | null): Promise<ResultadoCobro> {
+  const monto = Number(cobro.monto);
+  const pct = Number(cobro.comisionPct);
+  const comision = Math.round((monto * pct) / 100);
+  const neto = monto - comision;
+
+  const resultado = await prisma.$transaction(async (tx): Promise<ResultadoCobro> => {
+    const reclamo = await tx.cobroDatafono.updateMany({
+      where: { id: cobro.id, estado: { in: ['reembolsando', ...ESTADOS_REEMBOLSABLES] } },
+      data: { estado: 'reembolsado', detalle: null, reembolsadoAt: new Date(), ...(adminId ? { reembolsadoPor: adminId } : {}) },
+    });
+    if (reclamo.count === 0) {
+      const actual = await tx.cobroDatafono.findUnique({ where: { id: cobro.id } });
+      return { estado: actual?.estado ?? 'aprobado' };
+    }
+
+    const wallet = await tx.wallet.findUnique({ where: { userId: cobro.terminal.titularId } });
+    if (!wallet) throw new Error('Billetera no encontrada');
+    const actualizada = await tx.wallet.update({ where: { id: wallet.id }, data: { saldo: { decrement: neto } } });
+    const saldoDespues = Number.parseFloat(actualizada.saldo.toString());
+    const sedeId = await sedeDelCobro(tx, cobro);
+
+    await tx.transaction.create({
+      data: {
+        walletId: wallet.id,
+        userId: cobro.userId,
+        sedeId,
+        codigo: genCodigo('RDT'),
+        categoria: 'reembolso_datafono',
+        descripcion: `Reembolso de cobro con datáfono · ${cobro.terminal.alias}`,
+        montoBruto: monto,
+        comisionPct: pct,
+        comisionValor: comision,
+        montoNeto: -neto,
+        saldoAntes: saldoDespues + neto,
+        saldoDespues,
+        status: 'exitosa',
+        metadata: { terminal: cobro.terminal.serial, clientTransactionId: cobro.clientTransactionId, ticketNumber: cobro.ticketNumber ?? null },
+      },
+    });
+
+    for (const userId of new Set([cobro.userId, cobro.terminal.titularId])) {
+      await tx.notification.create({
+        data: { userId, tipo: 'warn', titulo: 'Reembolso de un cobro con datáfono', mensaje: `Se descontaron ${neto.toLocaleString('es-CO')} COP de la billetera por un reembolso en ${cobro.terminal.alias}` },
+      });
+    }
+    return { estado: 'reembolsado', saldo: saldoDespues };
+  });
+
+  if (resultado.saldo !== undefined) {
+    logger.info('Reembolso de datáfono aplicado', { cobroId: cobro.id, neto });
+    if (resultado.saldo < 0) logger.warn('La billetera quedó con saldo negativo por un reembolso de datáfono', { cobroId: cobro.id, titularId: cobro.terminal.titularId });
+  }
+  return resultado;
+}
+
+// El reembolso no se hizo (rechazado, cancelado o sin respuesta): el cobro sigue aprobado y la billetera no cambia
+async function revertirReembolso(cobro: CobroDatafono, motivo: string): Promise<ResultadoCobro> {
+  await prisma.cobroDatafono.updateMany({ where: { id: cobro.id, estado: 'reembolsando' }, data: { estado: 'aprobado', detalle: motivo, reembolsoClientId: null } });
+  return { estado: 'aprobado' };
+}
+
+// Pregunta a Kushki por el reembolso en curso (usa el UUID de la anulación) y lo resuelve
+export async function resolverReembolso(cobro: CobroConTerminal): Promise<ResultadoCobro> {
+  if (!cobro.reembolsoClientId) return { estado: cobro.estado };
+  const t = await buscarTransaccion(cobro.terminal.serial, cobro.reembolsoClientId);
+  if (!t) return { estado: cobro.estado };
+  if (t.estado === 'anulada') return completarReembolso(cobro);
+  if (t.estado === 'rechazada') return revertirReembolso(cobro, 'Kushki rechazó el reembolso');
+  return { estado: cobro.estado };
+}
+
 // Acredita el neto en la billetera de la empresa. Seguro ante llamadas simultáneas (webhook + conciliación + consulta).
 export async function acreditarCobro(cobro: CobroConTerminal, conf: ConfirmacionAprobacion): Promise<ResultadoCobro> {
   const monto = Number(cobro.monto);
@@ -95,10 +187,13 @@ export async function acreditarCobro(cobro: CobroConTerminal, conf: Confirmacion
     const actualizada = await tx.wallet.update({ where: { id: wallet.id }, data: { saldo: { increment: neto } } });
     const saldoDespues = Number.parseFloat(actualizada.saldo.toString());
 
+    const sedeId = await sedeDelCobro(tx, cobro);
+
     await tx.transaction.create({
       data: {
         walletId: wallet.id,
         userId: cobro.userId,
+        sedeId,
         codigo: genCodigo('DTF'),
         categoria: 'datafono',
         descripcion: `Cobro con datáfono · ${cobro.terminal.alias}`,
@@ -166,8 +261,10 @@ export async function procesarEvento(evento: EventoKushkiOne): Promise<Resultado
   const clientId = texto(evento.client_transaction_id, 80);
   if (!eventId || !status || !clientId) return { http: 400, detalle: 'evento inválido' };
 
-  const cobro = await prisma.cobroDatafono.findUnique({ where: { clientTransactionId: clientId }, include: { terminal: true } });
+  // El aviso puede ser del cobro o de su reembolso (cada uno con su propio UUID)
+  const cobro = await prisma.cobroDatafono.findFirst({ where: { OR: [{ clientTransactionId: clientId }, { reembolsoClientId: clientId }] }, include: { terminal: true } });
   if (!cobro) return { http: 200, detalle: 'no coincide con ningún cobro' };
+  const esReembolso = cobro.reembolsoClientId === clientId;
 
   // Solo se aceptan avisos del terminal al que TrendPay mandó el cobro
   const serial = texto(evento.terminal?.serial_number, 80);
@@ -180,6 +277,20 @@ export async function procesarEvento(evento: EventoKushkiOne): Promise<Resultado
   if (await prisma.eventoDatafono.findUnique({ where: { eventId } })) return { http: 200, detalle: 'evento repetido' };
 
   let detalle = status;
+  if (esReembolso) {
+    // Avisos de la anulación: solo la aprobación confirmada por Kushki descuenta saldo; si falla, el cobro sigue aprobado
+    if (status === 'APPROVAL') {
+      const r = await resolverReembolso(cobro);
+      detalle = `Reembolso APPROVAL → ${r.estado}`;
+    } else if (status === 'DECLINED' || status === 'TERMINAL_REJECTED' || status === 'TERMINAL_CANCELED') {
+      await revertirReembolso(cobro, texto(evento.failure_reason?.message, 200) ?? 'El reembolso no se completó');
+      detalle = `Reembolso ${status}`;
+    } else {
+      detalle = `Reembolso ${status}`;
+    }
+    await prisma.eventoDatafono.create({ data: { eventId, cobroId: cobro.id, status } }).catch(() => {});
+    return { http: 200, detalle };
+  }
   if (status === 'APPROVAL') {
     // Si no se puede confirmar con Kushki se lanza el error: responde 500 y Kushki reintenta (la conciliación también lo cubre)
     const r = await resolverCobro(cobro);
@@ -198,7 +309,38 @@ export async function procesarEvento(evento: EventoKushkiOne): Promise<Resultado
 }
 
 // ── Conciliación ──
-export interface ResumenConciliacionDatafonos { revisados: number; aprobados: number; cerrados: number; pendientes: number; errores: number }
+export interface ResumenConciliacionDatafonos { revisados: number; aprobados: number; cerrados: number; pendientes: number; errores: number; reembolsos?: number }
+
+// Reembolsos en curso (se pidieron desde TrendPay y Kushki aún no avisó) y ventas aprobadas que alguien anuló directamente
+// en Kushki o en el terminal: el dinero ya salió hacia el comprador y la billetera debe reflejarlo.
+export async function conciliarReembolsos(opts: { incluirExternos?: boolean } = {}): Promise<number> {
+  const ahora = Date.now();
+  let aplicados = 0;
+
+  const enCurso = await prisma.cobroDatafono.findMany({ where: { estado: 'reembolsando' }, include: { terminal: true }, take: 50 });
+  for (const cobro of enCurso) {
+    try {
+      const r = await resolverReembolso(cobro);
+      if (r.estado === 'reembolsado') aplicados += 1;
+      // Sin rastro de la anulación pasada media hora: se da por no realizada (el cobro sigue aprobado)
+      else if (r.estado === 'reembolsando' && ahora - cobro.updatedAt.getTime() > 30 * 60_000) await revertirReembolso(cobro, 'Sin respuesta de Kushki al reembolso');
+    } catch (err: any) { logger.error('Error conciliando un reembolso de datáfono', { err: err.message, id: cobro.id }); }
+  }
+
+  if (opts.incluirExternos) {
+    const aprobados = await prisma.cobroDatafono.findMany({
+      where: { estado: 'aprobado', createdAt: { gte: new Date(ahora - 3 * 86_400_000), lte: new Date(ahora - 60_000) } },
+      include: { terminal: true }, orderBy: { createdAt: 'desc' }, take: 50,
+    });
+    for (const cobro of aprobados) {
+      try {
+        const t = await buscarTransaccion(cobro.terminal.serial, cobro.clientTransactionId);
+        if (t?.estado === 'anulada') { await completarReembolso(cobro); aplicados += 1; }
+      } catch (err: any) { logger.error('Error buscando anulaciones de datáfono', { err: err.message, id: cobro.id }); }
+    }
+  }
+  return aplicados;
+}
 
 // Revisa los cobros que siguen abiertos: cubre avisos que nunca llegaron. Un cobro sin rastro en Kushki a los 10 minutos
 // se marca "expirado" (libera el terminal), pero si más tarde aparece aprobado todavía se acredita.
@@ -236,8 +378,12 @@ export async function conciliarCobrosDatafono(opts: { minEdadSeg?: number; maxEd
 
 export function iniciarConciliacionDatafonos(): void {
   if (process.env.NODE_ENV === 'test' || !kushkiOneConfigurado()) return;
+  let ciclo = 0;
   const timer = setInterval(() => {
+    ciclo += 1;
     conciliarCobrosDatafono().catch((err: any) => logger.error('Falló la conciliación de datáfonos', { err: err.message }));
+    // La búsqueda de anulaciones externas es más pesada: cada 30 minutos
+    conciliarReembolsos({ incluirExternos: ciclo % 15 === 0 }).catch((err: any) => logger.error('Falló la conciliación de reembolsos', { err: err.message }));
   }, 2 * 60_000);
   timer.unref();
   logger.info('🔁 Conciliación de cobros de datáfono activa (cada 2 minutos)');

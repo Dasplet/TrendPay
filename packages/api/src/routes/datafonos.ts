@@ -7,10 +7,10 @@ import { walletLimiter, webhookLimiter } from '../middleware/rateLimiter';
 import { conCuenta, miembrosDe } from '../utils/cuentas';
 import { logger } from '../utils/logger';
 import { KushkiError } from '../utils/kushki';
-import { enviarCobroAsync, kushkiOneConfigurado } from '../utils/kushkiOne';
+import { enviarCobroAsync, enviarReembolsoAsync, kushkiOneConfigurado } from '../utils/kushkiOne';
 import {
   comisionDatafonoPct, guardarComisionDatafonoPct, webhookDatafonoUrl, tokenWebhookValido,
-  terminalOcupado, procesarEvento, resolverCobro, type CobroConTerminal,
+  terminalOcupado, procesarEvento, resolverCobro, resolverReembolso, netoDelCobro, type CobroConTerminal,
 } from '../utils/datafonos';
 import { registrarWebhook } from '../utils/kushkiWebhookLog';
 
@@ -27,6 +27,7 @@ const mapCobro = (c: CobroConTerminal) => ({
   monto: Number(c.monto),
   terminal: c.terminal.alias,
   ticketNumber: c.ticketNumber,
+  neto: netoDelCobro(c),
   creado: c.createdAt,
 });
 
@@ -101,6 +102,44 @@ router.get('/cobros', authenticate, conCuenta('recargar'), async (req: Request, 
   res.json({ ok: true, cobros: cobros.map(mapCobro) });
 });
 
+// ══ POST /api/datafonos/cobros/:id/reembolsar ══
+// Anula un cobro aprobado: le pide a Kushki la anulación (void) por el terminal y, cuando Kushki la confirma, descuenta de la
+// billetera lo que se había acreditado. Solo la cuenta principal; la billetera debe tener saldo para cubrirlo.
+router.post('/cobros/:id/reembolsar', authenticate, walletLimiter, conCuenta('recargar'), async (req: Request, res: Response) => {
+  const cuenta = req.cuenta!;
+  if (cuenta.esSubcuenta) return res.status(403).json({ ok: false, mensaje: 'Solo la cuenta principal puede hacer reembolsos' });
+
+  const webhookUrl = webhookDatafonoUrl();
+  if (!kushkiOneConfigurado() || !webhookUrl) return res.status(503).json({ ok: false, mensaje: 'El cobro con datáfono todavía no está habilitado' });
+
+  const cobro = await prisma.cobroDatafono.findFirst({ where: { id: req.params.id, terminal: { titularId: cuenta.titularId } }, include: { terminal: true } });
+  if (!cobro) return res.status(404).json({ ok: false, mensaje: 'Cobro no encontrado' });
+  if (cobro.estado !== 'aprobado') return res.status(409).json({ ok: false, mensaje: cobro.estado === 'reembolsando' ? 'Este cobro ya tiene un reembolso en curso' : cobro.estado === 'reembolsado' ? 'Este cobro ya fue reembolsado' : 'Solo se pueden reembolsar cobros aprobados' });
+  if (!cobro.transactionReference) return res.status(409).json({ ok: false, mensaje: 'Este cobro no tiene la referencia de Kushki necesaria para reembolsarlo' });
+  // Kushki pide esperar al menos 1 minuto después del cobro antes de anularlo (se cuenta desde que se inició el cobro)
+  if (Date.now() - cobro.createdAt.getTime() < 90_000) return res.status(409).json({ ok: false, mensaje: 'Espera un minuto después del cobro para reembolsarlo' });
+
+  const neto = netoDelCobro(cobro);
+  const wallet = await prisma.wallet.findUnique({ where: { userId: cuenta.titularId } });
+  if (!wallet || Number(wallet.saldo) < neto) return res.status(409).json({ ok: false, mensaje: 'La billetera no tiene saldo suficiente para cubrir este reembolso' });
+  if (await terminalOcupado(cobro.terminalId)) return res.status(409).json({ ok: false, mensaje: 'Ese datáfono tiene un cobro en curso. Espera a que termine' });
+
+  // Se "reclama" el cobro antes de pedírselo a Kushki: dos clics seguidos no mandan dos anulaciones
+  const reembolsoClientId = randomUUID();
+  const reclamo = await prisma.cobroDatafono.updateMany({ where: { id: cobro.id, estado: 'aprobado' }, data: { estado: 'reembolsando', reembolsoClientId, reembolsadoPor: req.user!.id, detalle: null } });
+  if (reclamo.count === 0) return res.status(409).json({ ok: false, mensaje: 'Este cobro ya tiene un reembolso en curso' });
+
+  try {
+    await enviarReembolsoAsync(cobro.terminal.serial, { transactionReference: cobro.transactionReference, clientTransactionId: reembolsoClientId, eventsWebhookUrl: webhookUrl });
+  } catch (err: any) {
+    const motivo = err instanceof KushkiError ? err.message : 'No se pudo enviar el reembolso';
+    await prisma.cobroDatafono.updateMany({ where: { id: cobro.id, estado: 'reembolsando' }, data: { estado: 'aprobado', reembolsoClientId: null, detalle: motivo.slice(0, 200) } });
+    logger.error('No se pudo enviar el reembolso al datáfono', { err: err.message, codigo: err.codigo, cobroId: cobro.id });
+    return res.status(err instanceof KushkiError && err.status === 409 ? 409 : 502).json({ ok: false, mensaje: `No se pudo enviar el reembolso: ${motivo}` });
+  }
+  res.status(202).json({ ok: true, mensaje: 'Reembolso enviado. La billetera se descuenta cuando Kushki lo confirme', cobro: mapCobro({ ...cobro, estado: 'reembolsando' }) });
+});
+
 // ══ GET /api/datafonos/cobros/:id ══
 // La pantalla lo consulta cada pocos segundos. Si pasaron más de 20 s y sigue pendiente, además se le pregunta a Kushki
 // (por si el aviso se perdió); ese error nunca rompe la respuesta.
@@ -109,9 +148,10 @@ router.get('/cobros/:id', authenticate, conCuenta('recargar'), async (req: Reque
   let cobro = await prisma.cobroDatafono.findFirst({ where: donde, include: { terminal: true } });
   if (!cobro) return res.status(404).json({ ok: false, mensaje: 'Cobro no encontrado' });
 
-  if (cobro.estado === 'pendiente' && Date.now() - cobro.createdAt.getTime() > 20_000) {
+  const enReembolso = cobro.estado === 'reembolsando';
+  if ((cobro.estado === 'pendiente' || enReembolso) && Date.now() - (enReembolso ? cobro.updatedAt : cobro.createdAt).getTime() > 20_000) {
     try {
-      await resolverCobro(cobro);
+      await (enReembolso ? resolverReembolso(cobro) : resolverCobro(cobro));
       cobro = (await prisma.cobroDatafono.findFirst({ where: donde, include: { terminal: true } })) ?? cobro;
     } catch (err: any) {
       logger.warn('No se pudo consultar el cobro de datáfono', { err: err.message, cobroId: cobro.id });

@@ -19,6 +19,8 @@ class ApiError extends Error {
   }
 }
 
+const CATEGORIAS_DATAFONO = ['datafono', 'reembolso_datafono'];
+
 function mapTransaction(t: any) {
   const montoNeto  = Number.parseFloat(t.montoNeto.toString());
   const montoBruto = Number.parseFloat(t.montoBruto.toString());
@@ -47,8 +49,13 @@ router.get('/history', authenticate, conCuenta(), async (req: Request, res: Resp
     const wallet = await prisma.wallet.findUnique({ where: { userId: req.cuenta!.titularId } });
     if (!wallet) return res.json({ ok: true, transacciones: [] });
 
+    // Los cobros con datáfono (y sus reembolsos) los ve la cuenta principal y la sede a la que pertenecen; las demás
+    // sedes de la empresa no. El resto de movimientos de la billetera compartida se ve como siempre.
+    const soloMiTienda = req.cuenta!.esSubcuenta
+      ? { OR: [{ categoria: { notIn: CATEGORIAS_DATAFONO } }, { sedeId: req.user!.id }] }
+      : {};
     const transactions = await prisma.transaction.findMany({
-      where: { walletId: wallet.id },
+      where: { walletId: wallet.id, ...soloMiTienda },
       orderBy: { createdAt: 'desc' },
       take: limit,
       skip: offset,
@@ -106,6 +113,7 @@ router.get('/saldo-mensual', authenticate, conCuenta('verSaldo'), async (req: Re
       const neto = Number.parseFloat(t.montoNeto.toString());
       if (t.status === 'rechazada') continue;
       if (t.categoria === 'retiro') retirado += Math.abs(neto);
+      else if (t.categoria === 'reembolso_datafono') recibido = Math.max(0, recibido - Math.abs(neto)); // un reembolso resta de lo recibido
       else if (neto > 0) recibido += neto;
     }
 

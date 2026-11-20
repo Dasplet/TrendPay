@@ -17,7 +17,7 @@ interface CobroAdmin {
 }
 interface Empresa { userId: string; nombre: string; subcuentas: { id: string; nombre: string }[] }
 
-const COLOR_ESTADO: Record<string, string> = { aprobado: '#6CC998', pendiente: '#d4a017', expirado: '#d4a017', revision: '#d4a017', rechazado: '#C0392B', cancelado: '#C0392B', error: '#C0392B' };
+const COLOR_ESTADO: Record<string, string> = { aprobado: '#6CC998', pendiente: '#d4a017', expirado: '#d4a017', revision: '#d4a017', reembolsando: '#d4a017', reembolsado: '#C0392B', rechazado: '#C0392B', cancelado: '#C0392B', error: '#C0392B' };
 const NUEVO = { serial: '', alias: '', titularId: '', sedeId: '' };
 
 function Etiqueta({ texto, color }: Readonly<{ texto: string; color: string }>) {

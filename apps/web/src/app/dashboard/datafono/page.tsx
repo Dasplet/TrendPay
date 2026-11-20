@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useAuthStore } from '@/store/authStore';
 import toast from 'react-hot-toast';
 import { CreditCard, RefreshCw } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,7 +12,7 @@ import { ResumenVentas } from '@/components/datafonos/ResumenVentas';
 interface Terminal { id: string; alias: string; modelo: string; ocupado: boolean }
 interface Cobro {
   id: string; estado: string; estadoTerminal: string | null; detalle: string | null;
-  monto: number; terminal: string; creado: string;
+  monto: number; neto?: number; terminal: string; creado: string;
 }
 
 // Lo que va pasando en el datáfono mientras el cobro sigue pendiente
@@ -27,11 +28,15 @@ const ESTADO_FINAL: Record<string, { titulo: string; color: string; ayuda: (c: C
   cancelado: { titulo: 'Cobro cancelado',    color: '#c0392b', ayuda: (c) => c.detalle || 'El cobro se canceló.' },
   error:     { titulo: 'No se pudo cobrar',  color: '#c0392b', ayuda: (c) => c.detalle || 'El datáfono no recibió el cobro. Revisa que esté encendido y con internet.' },
   expirado:  { titulo: 'Sin respuesta',      color: '#d4a017', ayuda: () => 'El datáfono no respondió a tiempo. Si el cliente alcanzó a pagar, el cobro se acreditará solo cuando Kushki lo confirme.' },
+  reembolsando: { titulo: 'Reembolsando',  color: '#d4a017', ayuda: () => 'Se pidió la anulación a Kushki. La billetera se descuenta cuando la confirme.' },
+  reembolsado:  { titulo: 'Reembolsado',    color: '#c0392b', ayuda: () => 'El cobro fue reembolsado y se descontó de la billetera.' },
   revision:  { titulo: 'En revisión',        color: '#d4a017', ayuda: () => 'El monto aprobado no coincide con el cobrado. Un administrador lo revisará antes de acreditar.' },
 };
 
 export default function DatafonoPage() {
   const queryClient = useQueryClient();
+  // Solo la cuenta principal (no una sede) puede reembolsar
+  const puedeReembolsar = useAuthStore((s) => !s.user?.cuentaPadre);
   const [terminalId, setTerminalId] = useState('');
   const [monto, setMonto] = useState('');
   const [cobroId, setCobroId] = useState<string | null>(null);
@@ -62,6 +67,12 @@ export default function DatafonoPage() {
       toast.error(err.response?.data?.mensaje || 'No se pudo enviar el cobro');
       queryClient.invalidateQueries({ queryKey: ['datafonos-terminales-pantalla'] });
     },
+  });
+
+  const reembolsar = useMutation({
+    mutationFn: (id: string) => datafonosApi.reembolsar(id),
+    onSuccess: ({ data }) => { toast.success(data.mensaje || 'Reembolso enviado'); queryClient.invalidateQueries({ queryKey: ['datafonos-cobros'] }); },
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo reembolsar'),
   });
 
   function nuevoCobro() {
@@ -161,7 +172,19 @@ export default function DatafonoPage() {
             {recientes!.slice(0, 8).map((c) => (
               <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '6px 0', fontSize: 14 }}>
                 <span>{new Date(c.creado).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · {c.terminal}</span>
-                <strong style={{ color: ESTADO_FINAL[c.estado]?.color }}>{fmtCOP(c.monto)} · {c.estado}</strong>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <strong style={{ color: ESTADO_FINAL[c.estado]?.color }}>{fmtCOP(c.monto)} · {c.estado}</strong>
+                  {puedeReembolsar && c.estado === 'aprobado' && Date.now() - new Date(c.creado).getTime() > 90_000 && (
+                    <button
+                      type="button"
+                      disabled={reembolsar.isPending}
+                      onClick={() => { if (window.confirm(`¿Reembolsar ${fmtCOP(c.monto)} de este cobro? Se descontará de la billetera ${fmtCOP(c.neto ?? c.monto)} cuando Kushki confirme la anulación.`)) reembolsar.mutate(c.id); }}
+                      style={{ padding: '3px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer', border: '1px solid rgba(192,57,43,.5)', background: 'transparent', color: '#c0392b' }}
+                    >
+                      Reembolsar
+                    </button>
+                  )}
+                </span>
               </div>
             ))}
           </>
