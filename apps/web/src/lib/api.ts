@@ -149,10 +149,10 @@ export const notificationsApi = {
 };
 
 export const adminApi = {
-  metrics:      () => api.get('/admin/metrics'),
+  metrics:      (periodo?: string) => api.get('/admin/metrics', { params: { periodo } }),
   users:        (params?: any) => api.get('/admin/users', { params }),
   transactions: (params?: any) => api.get('/admin/transactions', { params }),
-  chart:        (months: string) => api.get(`/admin/dashboard-chart?months=${months}`),
+  chart:        (periodo: string) => api.get('/admin/dashboard-chart', { params: { periodo } }),
   createUser:   (data: any) => api.post('/admin/users', data),
   updateUser:   (id: string, data: any) => api.put(`/admin/users/${id}`, data),
   deleteUser:   (id: string) => api.delete(`/admin/users/${id}`),

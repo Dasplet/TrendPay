@@ -9,7 +9,12 @@ import {
 } from '@/components/admin/dash';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+// Periodos que se pueden ver (los mismos que entiende el servidor)
+const PERIODOS = [
+  { clave: 'hoy', label: 'Hoy' }, { clave: 'ayer', label: 'Ayer' }, { clave: '7d', label: 'Últimos 7 días' }, { clave: '15d', label: 'Últimos 15 días' },
+  { clave: '1m', label: 'Último mes' }, { clave: '3m', label: 'Últimos 3 meses' }, { clave: '6m', label: 'Últimos 6 meses' },
+  { clave: '12m', label: 'Últimos 12 meses (año)' }, { clave: 'todo', label: 'Todas las operaciones' },
+] as const;
 
 const TIPOS = [
   { clave: 'consigna', label: 'Consignaciones', color: ACCENT_L },
@@ -18,16 +23,6 @@ const TIPOS = [
   { clave: 'retiro', label: 'Retiros', color: RED },
   { clave: 'datafono', label: 'Datáfonos', color: AMBER },
 ] as const;
-
-function tipoDe(categoria?: string) {
-  const c = (categoria || '').toLowerCase();
-  if (c.includes('consign')) return 'consigna';
-  if (c.includes('datafono')) return 'datafono';
-  if (c.includes('cobro')) return 'cobro';
-  if (c.includes('envi')) return 'envio';
-  if (c.includes('retiro')) return 'retiro';
-  return 'otros';
-}
 
 // Todas las consultas del dashboard se refrescan solas (tiempo real) y al volver a la pestaña
 const VIVO = { refetchInterval: 15_000, refetchOnWindowFocus: true } as const;
@@ -55,14 +50,15 @@ function diasDesde(fecha: string) {
 }
 
 export default function AdminDashboard() {
-  const [period, setPeriod] = useState('6');
-  const { data: metricsData } = useQuery({ queryKey: ['admin-metrics'], queryFn: () => adminApi.metrics(), select: (d) => d.data, ...VIVO });
-  const { data: txData } = useQuery({ queryKey: ['admin-tx'], queryFn: () => adminApi.transactions({ limit: 300 }), select: (d) => d.data, ...VIVO });
+  const [period, setPeriod] = useState('todo');
+  const periodoLabel = PERIODOS.find((p) => p.clave === period)?.label ?? '';
+  const { data: metricsData } = useQuery({ queryKey: ['admin-metrics', period], queryFn: () => adminApi.metrics(period), select: (d) => d.data, ...VIVO });
+  const { data: txData } = useQuery({ queryKey: ['admin-tx', period], queryFn: () => adminApi.transactions({ limit: 7, periodo: period }), select: (d) => d.data, ...VIVO });
   const { data: usersData } = useQuery({ queryKey: ['admin-users'], queryFn: () => adminApi.users({ limit: 200 }), select: (d) => d.data, ...VIVO });
   const { data: chartData } = useQuery({ queryKey: ['admin-chart', period], queryFn: () => adminApi.chart(period), select: (d) => d.data, ...VIVO });
   const { data: pendData } = useQuery({ queryKey: ['admin-pending'], queryFn: () => adminApi.pending(), select: (d) => d.data, ...VIVO });
   const { data: retirosData } = useQuery({ queryKey: ['admin-retiros-all'], queryFn: () => adminApi.withdrawalsAll(), select: (d) => d.data, ...VIVO });
-  const { data: kushkiData } = useQuery({ queryKey: ['admin-kushki-pagos', ''], queryFn: () => adminApi.kushkiPagos(), select: (d) => d.data, ...VIVO });
+  const { data: kushkiData } = useQuery({ queryKey: ['admin-kushki-pagos', '', period], queryFn: () => adminApi.kushkiPagos({ periodo: period }), select: (d) => d.data, ...VIVO });
 
   const m = metricsData?.metricas || {};
   const txs: any[] = txData?.transacciones || [];
@@ -73,7 +69,8 @@ export default function AdminDashboard() {
   const totalesKushki: Array<{ estado: string; cantidad: number; monto: number }> = kushkiData?.totales || [];
 
   // ── KPIs ──
-  const exitosas = txs.filter((t) => t.status === 'exitosa').length;
+  const operaciones = num(m.operaciones);
+  const exitosas = num(m.operaciones_exitosas);
   const volumen = num(m.total_volumen);
   const comisiones = num(m.total_comisiones);
   const comisionPct = num(m.comision_pct) || 3;
@@ -93,42 +90,15 @@ export default function AdminDashboard() {
   const subcuentas = clientes.length - titulares.length;
 
   // ── Operaciones por tipo ──
-  const porTipo = TIPOS.map((t) => {
-    const lista = txs.filter((x) => tipoDe(x.categoria) === t.clave);
-    return { ...t, cantidad: lista.length, monto: lista.reduce((s, x) => s + num(x.monto_bruto), 0) };
-  });
+  const porTipo = TIPOS.map((t) => ({ ...t, cantidad: num(m.por_tipo?.[t.clave]?.cantidad), monto: num(m.por_tipo?.[t.clave]?.monto) }));
   const maxTipo = Math.max(...porTipo.map((t) => t.monto), 1);
   const topTipo = [...porTipo].sort((a, b) => b.monto - a.monto)[0];
   const consignado = porTipo.find((t) => t.clave === 'consigna')?.monto ?? 0;
 
-  // ── Serie mensual ──
-  const now = new Date();
-  function buildSeries() {
-    if (period === 'current') {
-      const year = now.getFullYear(), month = now.getMonth(), today = now.getDate();
-      const days = new Date(year, month + 1, 0).getDate();
-      const b: any[] = [];
-      for (let d = 1; d <= days; d++) b.push({ name: d === 1 ? `1 ${MESES[month]}` : String(d), vol: 0, com: 0, future: d > today });
-      txs.forEach((t) => {
-        if (!t.created_at) return;
-        const d = new Date(t.created_at);
-        if (d.getFullYear() !== year || d.getMonth() !== month) return;
-        b[d.getDate() - 1].vol += num(t.monto_bruto);
-        b[d.getDate() - 1].com += num(t.comision_valor);
-      });
-      return b.map((x) => ({ ...x, vol: x.future ? null : x.vol, com: x.future ? null : x.com }));
-    }
-    const months = Number.parseInt(period) || 6;
-    const bk: Record<string, any> = {};
-    for (let i = months - 1; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      bk[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`] = { name: `${MESES[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`, vol: 0, com: 0 };
-    }
-    (chartData?.datos || []).forEach((d: any) => { if (bk[d.mes]) { bk[d.mes].vol = d.volumen; bk[d.mes].com = d.comisiones; } });
-    return Object.values(bk);
-  }
-  const serie = buildSeries();
-  const stepX = period === 'current' ? Math.ceil(serie.length / 10) - 1 : 0;
+  // ── Serie de la gráfica (la agrupa el servidor por hora, día, semana o mes según el periodo) ──
+  const serie: { name: string; vol: number; com: number }[] = (chartData?.datos || []).map((d: any) => ({ name: d.etiqueta, vol: d.volumen, com: d.comisiones }));
+  const stepX = Math.max(0, Math.ceil(serie.length / 10) - 1);
+  const agrupadoPor: Record<string, string> = { hora: 'hora', dia: 'día', semana: 'semana', mes: 'mes' };
 
   // ── Consignaciones Kushki por canal ──
   const canales = (['tarjeta', 'pse'] as const).map((metodo) => {
@@ -165,26 +135,24 @@ export default function AdminDashboard() {
   if (alertas.length === 0) alertas.push({ nivel: 'ok', titulo: 'Todo al día', detalle: 'No hay retiros pendientes, pagos por confirmar ni cuentas bloqueadas.' });
 
   const nuevos7d = users.filter((u) => u.createdAt && Date.now() - new Date(u.createdAt).getTime() < 7 * 86_400_000).length;
-  const ticket = txs.length ? txs.reduce((s, t) => s + num(t.monto_bruto), 0) / txs.length : 0;
+  const ticket = operaciones ? volumen / operaciones : 0;
 
   const grid = (min: number) => ({ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`, gap: 14 } as const);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ fontSize: 12, color: 'var(--adm-muted)' }}>Resumen operativo · se actualiza solo cada 15 segundos</div>
-        <select value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Periodo del gráfico"
-          style={{ width: 190, background: 'var(--adm-panel)', border: '1px solid rgba(133,46,199,.3)', borderRadius: 10, padding: '7px 12px', fontSize: 12, color: 'var(--adm-text)', cursor: 'pointer' }}>
-          <option value="6">Últimos 6 meses</option>
-          <option value="12">Últimos 12 meses</option>
-          <option value="current">Mes actual</option>
+        <div style={{ fontSize: 12, color: 'var(--adm-muted)' }}>Resumen operativo · {periodoLabel} · se actualiza solo cada 15 segundos</div>
+        <select value={period} onChange={(e) => setPeriod(e.target.value)} aria-label="Periodo a mostrar"
+          style={{ width: 210, background: 'var(--adm-panel)', border: '1px solid rgba(133,46,199,.3)', borderRadius: 10, padding: '7px 12px', fontSize: 12, color: 'var(--adm-text)', cursor: 'pointer' }}>
+          {PERIODOS.map((p) => <option key={p.clave} value={p.clave}>{p.label}</option>)}
         </select>
       </div>
 
       {/* KPIs */}
       <div className="adm-kpis">
-        <KpiRing title="Volumen procesado" value={fmt(volumen)} ringPct={pct(exitosas, txs.length)} ringLabel={`${Math.round(pct(exitosas, txs.length))}%`}
-          color={ACCENT_L} sub={`${exitosas} de ${txs.length} operaciones exitosas`} />
+        <KpiRing title="Volumen procesado" value={fmt(volumen)} ringPct={pct(exitosas, operaciones)} ringLabel={`${Math.round(pct(exitosas, operaciones))}%`}
+          color={ACCENT_L} sub={`${exitosas} de ${operaciones} operaciones exitosas`} />
         <KpiRing title="Comisiones cobradas" value={fmt(comisiones)} ringPct={pct(tasaEfectiva, comisionPct)} ringLabel={`${tasaEfectiva.toFixed(1)}%`}
           color={GREEN} sub={`Tasa efectiva · general ${comisionPct}% · datáfonos ${m.comision_datafono_pct ?? 0}%`} />
         <KpiRing title="Clientes" value={String(clientes.length)} ringPct={pct(verificados, clientes.length)} ringLabel={`${Math.round(pct(verificados, clientes.length))}%`}
@@ -200,7 +168,7 @@ export default function AdminDashboard() {
       {/* Operaciones, gráfica y canales */}
       <div style={grid(320)}>
         <Panel>
-          <PanelTitle title="Operaciones por tipo" sub={`Volumen de las últimas ${txs.length} transacciones`} />
+          <PanelTitle title="Operaciones por tipo" sub={`Volumen de ${operaciones} transacciones · ${periodoLabel}`} />
           <div style={{ padding: '14px 20px 8px' }}>
             {porTipo.map((t) => (
               <BarRow key={t.clave} label={t.label} value={fmt(t.monto)} pct={pct(t.monto, maxTipo)} color={t.color}
@@ -210,7 +178,7 @@ export default function AdminDashboard() {
         </Panel>
 
         <Panel style={{ gridColumn: 'span 2', minWidth: 0 }}>
-          <PanelTitle title="Volumen vs comisiones" sub="Evolución del dinero movido y de las comisiones cobradas" />
+          <PanelTitle title="Volumen vs comisiones" sub={`Dinero movido y comisiones cobradas · ${periodoLabel} · por ${agrupadoPor[chartData?.granularidad] ?? "día"}`} />
           <div style={{ padding: '8px 14px 10px', height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={serie} margin={{ top: 10, right: 16, left: 6, bottom: 4 }}>
@@ -233,7 +201,7 @@ export default function AdminDashboard() {
 
       <div style={grid(320)}>
         <Panel>
-          <PanelTitle title="Consignaciones por canal" sub={`Tarjeta vs PSE · últimos ${pagos.length} pagos`} action={<LinkPill href="/admin/pagos-kushki">Ver pagos →</LinkPill>} />
+          <PanelTitle title="Consignaciones por canal" sub={`Tarjeta vs PSE · ${periodoLabel}`} action={<LinkPill href="/admin/pagos-kushki">Ver pagos →</LinkPill>} />
           <div style={{ padding: '14px 20px 8px' }}>
             {canales.map((c) => (
               <BarRow key={c.metodo} label={c.metodo === 'pse' ? 'PSE (débito bancario)' : 'Tarjeta'} value={fmt(c.monto)} pct={pct(c.monto, maxCanal)} color={c.color}
@@ -243,7 +211,7 @@ export default function AdminDashboard() {
         </Panel>
 
         <Panel>
-          <PanelTitle title="Estado de los pagos" sub="Distribución de todos los pagos Kushki" />
+          <PanelTitle title="Estado de los pagos" sub={`Distribución de los pagos Kushki · ${periodoLabel}`} />
           <div style={{ padding: '14px 20px 8px' }}>
             <BarRow label="Completados" value={`${Math.round(pct(kOk.cantidad, totalKushki))}%`} pct={pct(kOk.cantidad, totalKushki)} color={GREEN} sub={`${kOk.cantidad} pagos · ${fmt(kOk.monto)}`} />
             <BarRow label="Pendientes" value={`${Math.round(pct(kPend.cantidad, totalKushki))}%`} pct={pct(kPend.cantidad, totalKushki)} color={AMBER} sub={`${kPend.cantidad} pagos · ${fmt(kPend.monto)}`} />
@@ -261,11 +229,11 @@ export default function AdminDashboard() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 14 }}>
         <Panel style={{ gridColumn: 'span 2', minWidth: 0 }}>
-          <PanelTitle title="Transacciones recientes" sub="Los últimos movimientos de toda la plataforma" action={<LinkPill href="/admin/transacciones">Ver todas →</LinkPill>} />
+          <PanelTitle title="Transacciones recientes" sub={`Los últimos movimientos de la plataforma · ${periodoLabel}`} action={<LinkPill href="/admin/transacciones">Ver todas →</LinkPill>} />
           <div style={{ paddingTop: 8 }}>
             <Table headers={['Referencia', 'Descripción', 'Usuario', 'Monto', 'Estado', 'Fecha']}>
               {txs.length === 0 ? (
-                <Tr><Td style={{ textAlign: 'center', padding: 32, color: 'rgba(var(--adm-fg-rgb),.3)' }} colSpan={6 as any}>Sin transacciones</Td></Tr>
+                <Tr><Td style={{ textAlign: 'center', padding: 32, color: 'rgba(var(--adm-fg-rgb),.3)' }} colSpan={6 as any}>Sin transacciones en este periodo</Td></Tr>
               ) : txs.slice(0, 7).map((t) => (
                 <Tr key={t.id}>
                   <Td style={{ fontFamily: 'monospace', fontSize: 11, color: 'rgba(var(--adm-fg-rgb),.4)' }}>{(t.codigo || '—').slice(0, 14)}</Td>

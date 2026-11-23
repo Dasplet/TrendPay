@@ -14,28 +14,46 @@ import { PERMISOS_SEDE } from '../utils/cuentas';
 import { logger } from '../utils/logger';
 import { comisionGeneralPct, guardarComisionGeneralPct, COMISION_MAXIMA } from '../utils/comision';
 import { comisionDatafonoPct } from '../utils/datafonos';
+import { periodoDe, rangoDelPeriodo, filtroDeFecha, construirSerie, tipoDeCategoria } from '../utils/periodos';
 import { contarDatos, limpiarDatos, limpiezaPermitida, FRASE_LIMPIEZA } from '../utils/limpiarDatos';
 import { solicitarEliminacion, cancelarEliminacion, ErrorEliminacion } from '../utils/eliminarCuentas';
 
 const router = Router();
 
 // ══ GET /api/admin/metrics ══
-router.get('/metrics', authenticate, requireAdmin, async (_req: Request, res: Response) => {
+// ?periodo=hoy|ayer|7d|15d|1m|3m|6m|12m|todo (por defecto todo): volumen, comisiones y operaciones se calculan dentro del periodo;
+// el saldo, las billeteras y los retiros pendientes son el estado de ahora y no cambian con el filtro.
+router.get('/metrics', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const [totalUsuarios, txAgg, retirosPend, comisionCfg, saldoAgg, billeteras] = await Promise.all([
+    const rango = rangoDelPeriodo(periodoDe(req.query.periodo));
+    const [totalUsuarios, porCategoria, retirosPend, saldoAgg, billeteras] = await Promise.all([
       prisma.user.count({ where: { eliminadoAt: null } }),
-      prisma.transaction.aggregate({ where: { categoria: { not: 'ajuste' } }, _sum: { montoBruto: true, comisionValor: true } }),
+      prisma.transaction.groupBy({
+        by: ['categoria', 'status'], where: { categoria: { not: 'ajuste' }, createdAt: filtroDeFecha(rango) },
+        _count: { _all: true }, _sum: { montoBruto: true, comisionValor: true },
+      }),
       prisma.withdrawal.count({ where: { status: 'pendiente' } }).catch(() => 0),
-      prisma.config.findUnique({ where: { clave: 'comision_pct' } }),
       // Saldo real de todas las billeteras (no depende de cuántos usuarios cargue la pantalla)
       prisma.wallet.aggregate({ where: { user: { eliminadoAt: null } }, _sum: { saldo: true } }),
       prisma.wallet.count({ where: { user: { eliminadoAt: null } } }),
     ]);
-    const total_volumen    = Number.parseFloat(txAgg._sum.montoBruto?.toString() || '0');
-    const total_comisiones = Number.parseFloat(txAgg._sum.comisionValor?.toString() || '0');
+    const n = (v: unknown) => Number.parseFloat(String(v ?? '0')) || 0;
+    const por_tipo: Record<string, { cantidad: number; monto: number }> = {};
+    let total_volumen = 0, total_comisiones = 0, operaciones = 0, exitosas = 0;
+    for (const g of porCategoria) {
+      const cantidad = g._count._all, monto = n(g._sum.montoBruto);
+      total_volumen += monto; total_comisiones += n(g._sum.comisionValor);
+      operaciones += cantidad; if (g.status === 'exitosa') exitosas += cantidad;
+      const tipo = tipoDeCategoria(g.categoria);
+      por_tipo[tipo] ??= { cantidad: 0, monto: 0 };
+      por_tipo[tipo].cantidad += cantidad; por_tipo[tipo].monto += monto;
+    }
     const comision_pct     = await comisionGeneralPct();
     const comision_datafono_pct = await comisionDatafonoPct();
-    res.json({ ok: true, metricas: { total_usuarios: totalUsuarios, saldo_plataforma: Number.parseFloat(saldoAgg._sum.saldo?.toString() || '0'), billeteras, total_volumen, total_comisiones, retiros_pendientes: retirosPend, comision_pct, comision_datafono_pct } });
+    res.json({ ok: true, metricas: {
+      total_usuarios: totalUsuarios, saldo_plataforma: n(saldoAgg._sum.saldo), billeteras, total_volumen, total_comisiones, retiros_pendientes: retirosPend,
+      comision_pct, comision_datafono_pct, periodo: rango.periodo, periodo_etiqueta: rango.etiqueta, operaciones, operaciones_exitosas: exitosas, por_tipo,
+    } });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 
@@ -300,7 +318,9 @@ router.post('/users/:id/cancelar-eliminacion', authenticate, requireAdmin, async
 router.get('/transactions', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
     const limit = Number.parseInt(req.query.limit as string) || 300;
+    const rango = rangoDelPeriodo(periodoDe(req.query.periodo));
     const txs = await prisma.transaction.findMany({
+      where: { createdAt: filtroDeFecha(rango) },
       take: limit, orderBy: { createdAt: 'desc' },
       include: { user: { select: { nombre: true, cedula: true } } },
     });
@@ -312,22 +332,18 @@ router.get('/transactions', authenticate, requireAdmin, async (req: Request, res
 });
 
 // ══ GET /api/admin/dashboard-chart ══
+// ?periodo=... (o, por compatibilidad, ?months=N). La gráfica se agrupa por hora, día, semana o mes según lo largo que sea el periodo.
 router.get('/dashboard-chart', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
-    const months = Number.parseInt(req.query.months as string) || 6;
-    const from   = new Date(); from.setMonth(from.getMonth() - months);
+    const meses = Number.parseInt(req.query.months as string);
+    const periodo = req.query.periodo === undefined && meses ? (meses >= 12 ? '12m' : meses >= 6 ? '6m' : meses >= 3 ? '3m' : '1m') : periodoDe(req.query.periodo);
+    const rango = rangoDelPeriodo(periodo);
     const txs = await prisma.transaction.findMany({
-      where: { createdAt: { gte: from } },
+      where: { categoria: { not: 'ajuste' }, createdAt: filtroDeFecha(rango) },
       select: { montoBruto: true, comisionValor: true, createdAt: true },
     });
-    const buckets: Record<string, any> = {};
-    txs.forEach(t => {
-      const key = `${t.createdAt.getFullYear()}-${String(t.createdAt.getMonth()+1).padStart(2,'0')}`;
-      if (!buckets[key]) buckets[key] = { mes: key, volumen: 0, comisiones: 0 };
-      buckets[key].volumen    += Number.parseFloat(t.montoBruto.toString());
-      buckets[key].comisiones += Number.parseFloat(t.comisionValor.toString());
-    });
-    res.json({ ok: true, datos: Object.values(buckets).sort((a,b) => a.mes.localeCompare(b.mes)) });
+    const { granularidad, datos } = construirSerie(rango, txs.map((t) => ({ createdAt: t.createdAt, volumen: Number.parseFloat(t.montoBruto.toString()), comisiones: Number.parseFloat(t.comisionValor.toString()) })));
+    res.json({ ok: true, periodo: rango.periodo, granularidad, datos });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });
 
@@ -427,14 +443,15 @@ router.get('/audit', authenticate, requireAdmin, async (_req: Request, res: Resp
 router.get('/kushki/pagos', authenticate, requireAdmin, async (req: Request, res: Response) => {
   try {
     const estado = typeof req.query.estado === 'string' && req.query.estado ? req.query.estado : undefined;
+    const fecha = filtroDeFecha(rangoDelPeriodo(periodoDe(req.query.periodo)));
     const [pagos, totales] = await Promise.all([
       prisma.kushkiPayment.findMany({
-        where: estado ? { estado } : {},
+        where: { createdAt: fecha, ...(estado ? { estado } : {}) },
         orderBy: { createdAt: 'desc' },
         take: 100,
         include: { user: { select: { nombre: true, cedula: true } } },
       }),
-      prisma.kushkiPayment.groupBy({ by: ['estado'], _count: { _all: true }, _sum: { monto: true } }),
+      prisma.kushkiPayment.groupBy({ by: ['estado'], where: { createdAt: fecha }, _count: { _all: true }, _sum: { monto: true } }),
     ]);
 
     res.json({
