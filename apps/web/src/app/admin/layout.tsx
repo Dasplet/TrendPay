@@ -41,7 +41,7 @@ const PAGE_TITLES: Record<string, { title: string; sub: string }> = {
   '/admin/usuarios':           { title: 'Usuarios',            sub: 'Gestion de usuarios registrados'         },
   '/admin/transacciones':      { title: 'Transacciones',       sub: 'Historial global de movimientos'         },
   '/admin/retiros':            { title: 'Retiros pendientes',  sub: 'Cola de aprobacion de retiros'           },
-  '/admin/comisiones':         { title: 'Comisiones',          sub: 'Ingresos por comisiones del 3%'          },
+  '/admin/comisiones':         { title: 'Comisiones',          sub: 'Ingresos por comisiones cobradas'    },
   '/admin/pagos-kushki':       { title: 'Pagos Kushki',        sub: 'Consignaciones con tarjeta y PSE'         },
   '/admin/datafonos':          { title: 'Datáfonos',           sub: 'Terminales Kushki One y cobros con tarjeta' },
   '/admin/vinculaciones':      { title: 'Vinculaciones',       sub: 'Documentos de clientes empresariales'    },

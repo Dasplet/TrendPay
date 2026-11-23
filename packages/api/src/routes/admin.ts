@@ -326,7 +326,7 @@ router.get('/transactions', authenticate, requireAdmin, async (req: Request, res
     });
     res.json({
       ok: true,
-      transacciones: txs.map(t => { const monto_neto = Number.parseFloat(t.montoNeto.toString()); const monto_bruto = Number.parseFloat(t.montoBruto.toString()); const comision_valor = Number.parseFloat(t.comisionValor.toString()); return { id: t.id, codigo: t.codigo, categoria: t.categoria, descripcion: t.descripcion, monto_neto, monto_bruto, comision_valor, status: t.status, created_at: t.createdAt, usuario_nombre: t.user.nombre, usuario_cedula: t.user.cedula }; }),
+      transacciones: txs.map(t => { const monto_neto = Number.parseFloat(t.montoNeto.toString()); const monto_bruto = Number.parseFloat(t.montoBruto.toString()); const comision_valor = Number.parseFloat(t.comisionValor.toString()); return { id: t.id, comision_pct: Number.parseFloat(t.comisionPct.toString()), codigo: t.codigo, categoria: t.categoria, descripcion: t.descripcion, monto_neto, monto_bruto, comision_valor, status: t.status, created_at: t.createdAt, usuario_nombre: t.user.nombre, usuario_cedula: t.user.cedula }; }),
     });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });

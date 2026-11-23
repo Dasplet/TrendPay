@@ -41,7 +41,7 @@ export default function TransaccionesPage() {
         <Td style={{ fontWeight:700, color: Number.parseFloat(t.monto_neto)>0?'#6CC998':'#C0392B' }}>
           {Number.parseFloat(t.monto_neto)>0?'+':''}{fmt(t.monto_neto||0)}
         </Td>
-        <Td style={{ color:'#d4a017', fontWeight:600 }}>{fmt(t.comision_valor||0)}</Td>
+        <Td style={{ color:'#d4a017', fontWeight:600 }}>{fmt(t.comision_valor||0)}{t.comision_valor > 0 && t.comision_pct != null ? <span style={{ marginLeft:6, fontSize:10, fontWeight:500, color:'rgba(var(--adm-fg-rgb),.45)' }}>{Number(t.comision_pct)}%</span> : null}</Td>
         <Td><StatusBadge status={t.status} /></Td>
         <Td style={{ fontSize:11, color:'rgba(var(--adm-fg-rgb),.4)', whiteSpace:'nowrap' }}>{fmtDate(t.created_at)}</Td>
       </Tr>
@@ -71,7 +71,7 @@ export default function TransaccionesPage() {
         ))}
       </div>
 
-      <Table headers={['Referencia','Descripción','Usuario','Monto','Comisión 3%','Estado','Fecha']}>
+      <Table headers={['Referencia','Descripción','Usuario','Monto','Comisión','Estado','Fecha']}>
         {rows}
       </Table>
     </Panel>
