@@ -26,8 +26,15 @@ function listaDe(data: any): any[] {
   return [];
 }
 
-export async function buscarTransaccionesWeb(llavePrivada: string, desdeMs: number, hastaMs: number): Promise<any[]> {
+// Los nombres de lo que Kushki devolvió en el nivel de arriba (sin valores): sirve para entender por qué una consulta viene vacía
+export function formaDeRespuesta(data: any): string[] {
+  if (Array.isArray(data)) return ['(una lista)'];
+  return data && typeof data === 'object' ? Object.keys(data).slice(0, 12) : [typeof data];
+}
+
+export async function buscarTransaccionesWeb(llavePrivada: string, desdeMs: number, hastaMs: number): Promise<{ items: any[]; forma: string[] }> {
   const items: any[] = [];
+  let forma: string[] = [];
   for (let pagina = 0; pagina < MAX_PAGINAS; pagina++) {
     let respuesta;
     try {
@@ -40,11 +47,12 @@ export async function buscarTransaccionesWeb(llavePrivada: string, desdeMs: numb
       const data = err.response?.data;
       throw new KushkiError(data?.message || data?.error || err.message || 'No se pudo consultar a Kushki', err.response?.status ?? 502, { codigo: data?.code, respuesta: data });
     }
+    if (pagina === 0) forma = formaDeRespuesta(respuesta.data);
     const lote = listaDe(respuesta.data);
     items.push(...lote);
     if (lote.length < TAMANO_PAGINA) break;
   }
-  return items;
+  return { items, forma };
 }
 
 const primero = (...valores: unknown[]) => valores.find((v) => v !== undefined && v !== null && v !== '');

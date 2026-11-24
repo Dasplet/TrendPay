@@ -111,6 +111,17 @@ describe('Pagos de la página web (Kushki, tarjeta no presente) en la cuenta de 
       expect(Number(reembolso.montoNeto)).toBe(-50000);
     });
 
+    it('si la consulta viene vacía, dice con qué nombres respondió Kushki (para entender por qué)', async () => {
+      const { web } = await cool();
+      http.get.mockResolvedValue({ data: { mensaje: 'sin datos', paginacion: { total: 0 } } });
+      const r = await sincronizarEmpresa(web.id, { desdeMs: hace1h() });
+      expect(r).toMatchObject({ revisadas: 0, formaRespuesta: ['mensaje', 'paginacion'] });
+      http.get.mockResolvedValue({ data: [] });
+      expect((await sincronizarEmpresa(web.id, { desdeMs: hace1h() })).formaRespuesta).toEqual(['(una lista)']);
+      respuesta([pago()]);
+      expect((await sincronizarEmpresa(web.id, { desdeMs: hace1h() })).formaRespuesta).toBeUndefined();
+    });
+
     it('conserva la hora real del pago', async () => {
       const { web } = await cool();
       const hora = Date.now() - 5 * 3_600_000;

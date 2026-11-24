@@ -84,11 +84,11 @@ export default function DatafonosAdminPage() {
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudieron guardar'),
   });
   const sincronizar = useMutation({
-    mutationFn: (e: { titularId: string; nombre: string }) => datafonosApi.admin.sincronizar(e.titularId).then((r) => ({ e, r: r.data.resumen })),
+    mutationFn: (e: { titularId: string; nombre: string; desde?: string }) => datafonosApi.admin.sincronizar(e.titularId, e.desde).then((r) => ({ e, r: r.data.resumen })),
     onSuccess: ({ e, r }) => {
       refrescar();
       if (r.omitida) { toast(`${e.nombre}: ${r.omitida}`, { duration: 8000 }); return; }
-      toast.success(`${e.nombre}: ${r.revisadas} movimientos revisados · ${r.ventas} ventas nuevas · ${r.reembolsos} reembolsos${r.sinAparato ? ` · ${r.sinAparato} sin identificar el datáfono` : ''}${r.errores ? ` · ${r.errores} con error` : ''}${r.campos ? ` · Kushki trae: ${(r.campos as string[]).join(', ')}` : ''}`, { duration: 20000 });
+      toast.success(`${e.nombre}: ${r.revisadas} movimientos revisados · ${r.ventas} ventas nuevas · ${r.reembolsos} reembolsos${r.repetidas ? ` · ${r.repetidas} ya estaban registradas` : ''}${r.ignoradas ? ` · ${r.ignoradas} ignoradas (rechazadas u otros)` : ''}${r.sinAparato ? ` · ${r.sinAparato} sin identificar el datáfono` : ''}${r.errores ? ` · ${r.errores} con error` : ''}${r.campos ? ` · Kushki trae: ${(r.campos as string[]).join(', ')}` : ''}${r.revisadas === 0 && r.formaRespuesta ? ` · Respuesta de Kushki con: ${(r.formaRespuesta as string[]).join(', ') || '(vacía)'}` : ''}`, { duration: 20000 });
     },
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo sincronizar con Kushki', { duration: 10000 }),
   });
@@ -209,6 +209,7 @@ export default function DatafonosAdminPage() {
                 <Td>{s.configurado ? <Etiqueta texto="Guardada" color="#6CC998" /> : <Etiqueta texto="Sin llave propia" color="#888" />}</Td>
                 <Td>
                   <div style={{ display: 'flex', gap: 6 }}>
+                    {s.configurado && s.canal === 'web' && <Btn disabled={sincronizar.isPending} title="Vuelve a mirar los pagos en línea de los últimos 7 días (los ya registrados no se duplican). Sirve para comprobar que la conexión con Kushki trae datos" onClick={() => sincronizar.mutate({ titularId: s.id, nombre: `${e.nombre} · ${s.nombre}`, desde: new Date(Date.now() - 7 * 86_400_000).toISOString() })}>Revisar últimos 7 días</Btn>}
                     {s.configurado && <Btn disabled={sincronizar.isPending} title="Trae ahora las ventas de esta tienda desde Kushki (se hace solo cada 2 minutos)" onClick={() => sincronizar.mutate({ titularId: s.id, nombre: `${e.nombre} · ${s.nombre}` })}>{sincronizar.isPending && sincronizar.variables?.titularId === s.id ? 'Sincronizando…' : 'Sincronizar ahora'}</Btn>}
                     <Btn onClick={() => { setFirma(''); setCodigo(''); setCanal(s.canal ?? 'datafono'); setCanalOriginal(s.canal ?? 'datafono'); setCodigoModal({ titularId: s.id }); }}>{s.configurado ? 'Cambiar' : 'Asignar llave'}</Btn>
                     {s.configurado && <Btn variant="danger" disabled={quitarCodigo.isPending} onClick={() => { if (window.confirm(`¿Quitar la llave de ${s.nombre}? Sus ventas dejarán de reflejarse en esa tienda por esta vía.`)) quitarCodigo.mutate(s.id); }}>Quitar</Btn>}

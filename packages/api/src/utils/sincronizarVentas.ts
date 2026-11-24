@@ -102,6 +102,7 @@ export interface ResumenSincronizacion {
   revisadas: number; ventas: number; reembolsos: number; repetidas: number; ignoradas: number; sinAparato: number; errores: number;
   conSerial: boolean; // ¿la respuesta de Kushki trae el serial del aparato? (si no, las ventas no se pueden asignar a un datáfono)
   campos?: string[];  // nombres de los campos que trae la respuesta (sin valores)
+  formaRespuesta?: string[]; // pagos en línea: qué trae el nivel de arriba de la respuesta de Kushki (para entender una consulta vacía)
   desde?: string; hasta?: string;
 }
 
@@ -136,7 +137,14 @@ export async function sincronizarEmpresa(duenoId: string, opciones: { desdeMs?: 
   const desde = opciones.desdeMs ?? Number(marca!.valor) - SOLAPE_MS;
 
   const resumen: ResumenSincronizacion = { ...vacio(), desde: new Date(desde).toISOString(), hasta: new Date(hasta).toISOString() };
-  const crudos = canalWeb ? await buscarTransaccionesWeb(llave, desde, hasta) : await buscarTransaccionesPos(llave, desde, hasta);
+  let crudos: any[];
+  if (canalWeb) {
+    const web = await buscarTransaccionesWeb(llave, desde, hasta);
+    crudos = web.items;
+    if (web.items.length === 0) resumen.formaRespuesta = web.forma;
+  } else {
+    crudos = await buscarTransaccionesPos(llave, desde, hasta);
+  }
   resumen.revisadas = crudos.length;
   if (crudos.length > 0) resumen.campos = nombresDeCampos(crudos[0]);
   const items = canalWeb ? crudos.map(itemWebAAviso) : crudos;
