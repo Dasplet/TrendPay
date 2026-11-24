@@ -214,7 +214,6 @@ export const adminApi = {
   kushkiQuitarComercio: (userId: string) => api.delete(`/admin/kushki/comercios/${userId}`),
   kushkiConfigTransferencias: () => api.get('/admin/kushki/config-transferencias'),
   kushkiProbarTokenBreB: (monto?: number) => api.post('/admin/kushki/bre-b/probar-token', monto ? { monto } : {}),
-  kushkiProbarWebhook: () => api.post('/admin/kushki/webhooks/probar'),
   kushkiLimpiarWebhooks: () => api.delete('/admin/kushki/webhooks'),
   comision:       () => api.get('/admin/comision'),
   guardarComision: (comisionPct: number) => api.put('/admin/comision', { comisionPct }),

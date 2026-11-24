@@ -43,12 +43,6 @@ export default function PagosKushkiPage() {
   });
   const avisos: any[] = avisosQ.data?.avisos || [];
 
-  const probar = useMutation({
-    mutationFn: () => adminApi.kushkiProbarWebhook(),
-    onSuccess: () => { toast.success('Prueba firmada aceptada por el webhook'); avisosQ.refetch(); },
-    onError: (err: any) => { toast.error(err.response?.data?.mensaje || 'La prueba falló'); avisosQ.refetch(); },
-  });
-
   const limpiar = useMutation({
     mutationFn: () => adminApi.kushkiLimpiarWebhooks(),
     onSuccess: ({ data: res }) => { toast.success(`Registro limpiado (${res.eliminados} avisos eliminados)`); avisosQ.refetch(); },
@@ -183,10 +177,6 @@ export default function PagosKushkiPage() {
         <PanelHeader title="Avisos de Kushki (webhooks de retiros y consignaciones)" icon={<Webhook size={16} />}
           actions={
             <>
-              <Btn variant="primary" disabled={probar.isPending} onClick={() => probar.mutate()}
-                title="El servidor se envía un aviso firmado con el secreto real, por la misma ruta que usa Kushki">
-                {probar.isPending ? 'Probando...' : 'Enviar prueba firmada'}
-              </Btn>
               <Btn variant="ghost" disabled={limpiar.isPending || avisos.length === 0}
                 onClick={() => { if (window.confirm('¿Vaciar el registro de avisos? Queda constancia en la auditoría.')) limpiar.mutate(); }}
                 title="Elimina todos los avisos registrados">Limpiar registro</Btn>
