@@ -45,12 +45,10 @@ export function CodigoOperacion() {
 
   if (!abierto) return null;
   return (
-    <div className="tp-modal-stage" style={{ zIndex: 1000 }} role="dialog" aria-modal="true" aria-label="Verificación en dos pasos">
-      <div className="tp-modal-blur" aria-hidden="true" />
-      <section className="tp-phone-modal tp-phone-sm">
-        <div className="tp-phone-notch" />
-        <header className="tp-modal-header">
-          <h1><ShieldCheck size={22} style={{ verticalAlign: '-4px', marginRight: 8 }} />Confirma con tu código</h1>
+    <div className="tp-overlay" role="dialog" aria-modal="true" aria-label="Verificación en dos pasos">
+      <section className="tp-dialog">
+        <header>
+          <h1><ShieldCheck size={20} style={{ verticalAlign: '-3px', marginRight: 8, color: '#852EC7' }} />Confirma con tu código</h1>
           <p>Para tu seguridad, esta operación necesita el código que te enviamos al correo.</p>
         </header>
         <div className="tp-modal-content">

@@ -166,22 +166,26 @@ export function OperationCard({
   );
 }
 
+// Contenedor de las pantallas de operación (cobrar, retirar, vincular banco, seguridad…): un panel con título, igual que los del administrador.
+// El botón de cerrar vuelve al inicio.
 export function UserModal({ title, subtitle, children, size = 'md' }: Readonly<{ title: string; subtitle?: string; children: ReactNode; size?: 'sm' | 'md' | 'lg' }>) {
   const router = useRouter();
   return (
-    <div className="tp-modal-stage">
-      <div className="tp-modal-blur" aria-hidden="true" />
-      <section className={`tp-phone-modal tp-phone-${size}`}>
-        <div className="tp-phone-notch" />
-        <button className="tp-modal-close" onClick={() => router.push('/dashboard')} aria-label="Cerrar">
-          <X size={22} />
-        </button>
-        <header className="tp-modal-header">
-          <h1>{title}</h1>
-          {subtitle && <p>{subtitle}</p>}
-        </header>
-        {children}
-      </section>
+    <div className="tp-user-page">
+      <div className={`tp-panel-page tp-panel-${size}`}>
+        <section className="tp-panel">
+          <div className="tp-panel-head">
+            <div>
+              <h2>{title}</h2>
+              {subtitle && <p>{subtitle}</p>}
+            </div>
+            <button className="tp-panel-close" onClick={() => router.push('/dashboard')} aria-label="Cerrar">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="tp-panel-body">{children}</div>
+        </section>
+      </div>
     </div>
   );
 }
@@ -346,24 +350,24 @@ export function EmptyState({ title = 'Sin movimientos', icon = <History size={40
 // soloConDatafonos: el enlace aparece únicamente si la cuenta tiene datáfonos asignados
 export const userMenu: { section: string; items: { href: string; label: string; icon: React.ReactNode; permiso?: Permiso; soloConDatafonos?: boolean }[] }[] = [
   { section: 'Principal', items: [
-    { href: '/dashboard', label: 'Inicio', icon: <Home size={19} /> },
-    { href: '/dashboard/historial', label: 'Historial', icon: <History size={19} /> },
+    { href: '/dashboard', label: 'Inicio', icon: <Home size={15} /> },
+    { href: '/dashboard/historial', label: 'Historial', icon: <History size={15} /> },
   ]},
   { section: 'Operaciones', items: [
-    { href: '/dashboard/cobrar-qr', label: 'Cobrar QR', icon: <QrCode size={19} />, permiso: 'recargar' },
-    { href: '/dashboard/ventas', label: 'Mis ventas', icon: <BarChart3 size={19} />, permiso: 'recargar' },
-    { href: '/dashboard/retirar-banco', label: 'Retirar a banco', icon: <Building2 size={19} />, permiso: 'retirar' },
+    { href: '/dashboard/cobrar-qr', label: 'Cobrar QR', icon: <QrCode size={15} />, permiso: 'recargar' },
+    { href: '/dashboard/ventas', label: 'Mis ventas', icon: <BarChart3 size={15} />, permiso: 'recargar' },
+    { href: '/dashboard/retirar-banco', label: 'Retirar a banco', icon: <Building2 size={15} />, permiso: 'retirar' },
   ]},
   { section: 'Cuenta', items: [
     { href: '/dashboard/perfil', label: 'Mi perfil', icon: <UserIcon /> },
-    { href: '/dashboard/seguridad', label: 'Seguridad', icon: <Lock size={19} /> },
-    { href: '/dashboard/bancos', label: 'Mis bancos', icon: <CreditCard size={19} />, permiso: 'retirar' },
+    { href: '/dashboard/seguridad', label: 'Seguridad', icon: <Lock size={15} /> },
+    { href: '/dashboard/bancos', label: 'Mis bancos', icon: <CreditCard size={15} />, permiso: 'retirar' },
   ]},
 ];
 
 function UserIcon() {
   return (
-    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 21a8 8 0 0 0-16 0" />
       <circle cx="12" cy="7" r="4" />
     </svg>

@@ -6,7 +6,8 @@ import { LogOut, Monitor, Trash2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import { EmptyState, ThemeButton } from '@/components/user/UserTheme';
+import { EmptyState } from '@/components/user/UserTheme';
+import { Btn, Panel, PanelHeader } from '@/components/admin/ui';
 
 function resumenDispositivo(userAgent?: string | null) {
   if (!userAgent) return 'Dispositivo desconocido';
@@ -63,13 +64,13 @@ export default function SesionesPage() {
   } else {
     content = sesiones.map((s) => (
       <article key={s.id} className="tp-profile-option">
-        <span className="tp-op-icon tp-op-purple"><Monitor size={20} /></span>
+        <span className="tp-op-icon tp-op-purple"><Monitor size={16} /></span>
         <div>
           <strong>{resumenDispositivo(s.userAgent)}{s.actual ? ' · Esta sesión' : ''}</strong>
           <small>{s.ip || 'IP desconocida'} · {new Date(s.createdAt).toLocaleString('es-CO')}</small>
         </div>
         <button className="tp-icon-button" aria-label="Cerrar sesión" disabled={revokeMutation.isPending} onClick={() => revokeMutation.mutate(s.id)}>
-          <Trash2 size={18} />
+          <Trash2 size={15} />
         </button>
       </article>
     ));
@@ -77,17 +78,17 @@ export default function SesionesPage() {
 
   return (
     <div className="tp-user-page">
-      <header className="tp-page-header"><h1>Sesiones activas</h1></header>
-
-      {!isLoading && (sesiones?.length || 0) > 1 && (
-        <ThemeButton tone="secondary" disabled={revokeOthersMutation.isPending} onClick={() => revokeOthersMutation.mutate()}>
-          <LogOut size={18} /> Cerrar todas las demás
-        </ThemeButton>
-      )}
-
-      <section className="tp-profile-list" style={{ marginTop: 16 }}>
-        {content}
-      </section>
+      <Panel style={{ maxWidth: 820 }}>
+        <PanelHeader
+          title="Sesiones abiertas"
+          actions={!isLoading && (sesiones?.length || 0) > 1 ? (
+            <Btn variant="danger" disabled={revokeOthersMutation.isPending} onClick={() => revokeOthersMutation.mutate()}><LogOut size={13} /> Cerrar todas las demás</Btn>
+          ) : undefined}
+        />
+        <section className="tp-profile-list">
+          {content}
+        </section>
+      </Panel>
     </div>
   );
 }

@@ -1,10 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Download, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { walletApi } from '@/lib/api';
-import { EmptyState, compactCOP, fmtCOP } from '@/components/user/UserTheme';
+import { EmptyState, fmtCOP } from '@/components/user/UserTheme';
+import { Panel, StatusBadge, Table, Td, Tr, Btn, fmtDate } from '@/components/admin/ui';
 
 export default function HistorialPage() {
   const [query, setQuery] = useState('');
@@ -18,8 +19,8 @@ export default function HistorialPage() {
     retry: false,
   });
 
-  const txs = data?.transacciones || [];
-  const filtered = useMemo(() => txs.filter((tx: any) => {
+  const txs: any[] = data?.transacciones || [];
+  const filtered = useMemo(() => txs.filter((tx) => {
     const text = `${tx.descripcion || ''} ${tx.codigo || ''} ${tx.tipo || ''}`.toLowerCase();
     const matchesText = !query || text.includes(query.toLowerCase());
     const matchesEstado = !estado || String(tx.estado || '').toLowerCase() === estado.toLowerCase();
@@ -27,66 +28,62 @@ export default function HistorialPage() {
     return matchesText && matchesEstado && matchesTipo;
   }), [txs, query, estado, tipo]);
 
-  const recibido = filtered.filter((t: any) => Number(t.monto_neto) > 0).reduce((s: number, t: any) => s + Number(t.monto_neto || 0), 0);
+  const recibido = filtered.filter((t) => Number(t.monto_neto) > 0).reduce((s, t) => s + Number(t.monto_neto || 0), 0);
   // "Retirado a bancos" cuenta solo los retiros (no envíos ni reembolsos de datáfono)
-  const retirado = filtered.filter((t: any) => Number(t.monto_neto) < 0 && String(t.tipo || '').toLowerCase().includes('retiro')).reduce((s: number, t: any) => s + Math.abs(Number(t.monto_neto || 0)), 0);
+  const retirado = filtered.filter((t) => Number(t.monto_neto) < 0 && String(t.tipo || '').toLowerCase().includes('retiro')).reduce((s, t) => s + Math.abs(Number(t.monto_neto || 0)), 0);
+  const hayFiltros = !!(query || tipo || estado);
 
   return (
     <div className="tp-user-page">
-      <header className="tp-page-header">
-        <h1>Historial</h1>
-        <button className="tp-icon-button"><Download size={22} /></button>
-      </header>
+      <div className="tp-kpis">
+        <div className="tp-kpi"><span>Recibido</span><strong className="tp-success">{fmtCOP(recibido)}</strong><small>En los movimientos que se ven abajo</small></div>
+        <div className="tp-kpi"><span>Retirado a bancos</span><strong className="tp-danger">{fmtCOP(retirado)}</strong><small>Solo retiros</small></div>
+      </div>
 
-      <section className="tp-stat-row">
-        <article className="tp-stat-card"><span>Recibido</span><strong className="tp-success">{fmtCOP(recibido)}</strong></article>
-        <article className="tp-stat-card"><span>Retirado a bancos</span><strong className="tp-danger">{fmtCOP(retirado)}</strong></article>
-      </section>
-
-      <section className="tp-filter-card">
-        <label className="tp-search-box">
-          <Search size={20} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por nombre, banco, monto o código" />
-        </label>
-        <div className="tp-filter-row">
-          <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+      <Panel>
+        <div className="tp-filter-card">
+          <label className="tp-search-box">
+            <Search size={14} />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por descripción o código" />
+          </label>
+          <select value={tipo} onChange={(e) => setTipo(e.target.value)} style={{ width: 220 }}>
             <option value="">Todas las operaciones</option>
-            <option value="consignacion">Consignaciones</option>
             <option value="qr">Cobros QR</option>
-            <option value="envio">Envíos</option>
             <option value="retiro">Retiros banco</option>
             <option value="datafono">Datáfono (cobros y reembolsos)</option>
             <option value="web">Página web (pagos y reembolsos)</option>
+            <option value="consigna">Consignaciones</option>
+            <option value="envio">Envíos</option>
           </select>
-          <select value={estado} onChange={(e) => setEstado(e.target.value)}>
+          <select value={estado} onChange={(e) => setEstado(e.target.value)} style={{ width: 180 }}>
             <option value="">Todos los estados</option>
-            <option value="completada">Completada</option>
+            <option value="exitosa">Exitosa</option>
             <option value="pendiente">Pendiente</option>
             <option value="rechazada">Rechazada</option>
           </select>
+          <span className="tp-filter-count">{filtered.length} movimientos</span>
+          {hayFiltros && <Btn variant="ghost" onClick={() => { setQuery(''); setTipo(''); setEstado(''); }}>Limpiar filtros</Btn>}
         </div>
-        <p>{filtered.length} movimientos encontrados</p>
-        <button className="tp-clear-link" onClick={() => { setQuery(''); setTipo(''); setEstado(''); }}>Limpiar filtros</button>
-      </section>
 
-      <div className="tp-tab-row">
-        {['Todo', 'Cobros QR', 'Retiros banco'].map((tab) => <button key={tab}>{tab}</button>)}
-      </div>
-
-      {filtered.length === 0 ? <EmptyState /> : (
-        <section className="tp-transaction-list">
-          {filtered.map((tx: any) => (
-            <article key={tx.id} className="tp-transaction-item">
-              <span className={Number(tx.monto_neto) > 0 ? 'income' : 'expense'}>{Number(tx.monto_neto) > 0 ? '+' : '-'}</span>
-              <div>
-                <strong>{tx.descripcion || 'Movimiento TrendPay'}</strong>
-                <small>{new Date(tx.created_at).toLocaleString('es-CO')} · {tx.estado || 'completada'}</small>
-              </div>
-              <b className={Number(tx.monto_neto) > 0 ? 'tp-success' : 'tp-danger'}>{Number(tx.monto_neto) > 0 ? '+' : '-'}{compactCOP(Math.abs(Number(tx.monto_neto || 0)))}</b>
-            </article>
-          ))}
-        </section>
-      )}
+        {filtered.length === 0 ? <EmptyState /> : (
+          <Table headers={['Descripción', 'Código', 'Fecha', 'Estado', 'Monto']}>
+            {filtered.map((tx) => {
+              const entra = Number(tx.monto_neto) > 0;
+              return (
+                <Tr key={tx.id}>
+                  <Td style={{ fontSize: 13, maxWidth: 340, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.descripcion || 'Movimiento TrendPay'}</Td>
+                  <Td style={{ fontFamily: 'monospace', fontSize: 11, color: 'rgba(var(--adm-fg-rgb),.4)' }}>{(tx.codigo || '—').slice(0, 16)}</Td>
+                  <Td style={{ fontSize: 11, color: 'rgba(var(--adm-fg-rgb),.45)', whiteSpace: 'nowrap' }}>{fmtDate(tx.created_at)}</Td>
+                  <Td><StatusBadge status={tx.estado || 'exitosa'} /></Td>
+                  <Td style={{ fontWeight: 700, whiteSpace: 'nowrap', color: entra ? 'var(--tp-success)' : 'var(--tp-danger)' }}>
+                    {entra ? '+' : '-'}{fmtCOP(Math.abs(Number(tx.monto_neto || 0)))}
+                  </Td>
+                </Tr>
+              );
+            })}
+          </Table>
+        )}
+      </Panel>
     </div>
   );
 }

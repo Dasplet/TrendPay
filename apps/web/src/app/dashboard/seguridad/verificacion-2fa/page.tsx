@@ -48,8 +48,8 @@ export default function Verificacion2faPage() {
           <>
             <p className="tp-modal-label">
               {activo
-                ? 'Al iniciar sesión, enviar dinero, retirar o cambiar el PIN te pedimos un código de 6 dígitos que llega a tu correo. Para apagarla confirma tu PIN.'
-                : 'Cuando la actives, al iniciar sesión y en las operaciones sensibles (enviar dinero, retirar, cambiar el PIN y manejar tus cuentas de banco) te pediremos un código de 6 dígitos que llega a tu correo.'}
+                ? 'Al iniciar sesión, retirar, pagar con QR o cambiar el PIN te pedimos un código de 6 dígitos que llega a tu correo. Para apagarla confirma tu PIN.'
+                : 'Cuando la actives, al iniciar sesión y en las operaciones sensibles (retirar, pagar con QR, cambiar el PIN y manejar tus cuentas de banco) te pediremos un código de 6 dígitos que llega a tu correo.'}
             </p>
             {estadoQ.data?.correo && <p className="tp-modal-label">Correo de la cuenta: <strong>{estadoQ.data.correo}</strong></p>}
             <label className="tp-form-field">

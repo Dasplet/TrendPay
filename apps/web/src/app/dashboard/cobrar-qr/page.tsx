@@ -100,7 +100,7 @@ export default function CobrarQrPage() {
   const qrUrl = shareUrlFor(qr?.token);
 
   return (
-    <UserModal title="Cobrar" subtitle="El dinero llega a tu billetera virtual" size="lg">
+    <UserModal title="Cobrar con QR" subtitle="El dinero llega a tu billetera virtual" size="lg">
       <div className="tp-modal-content">
         <p className="tp-modal-label">QR de TrendPay · tu QR personal, siempre el mismo y sin vencimiento</p>
         {cargandoPersonal ? (

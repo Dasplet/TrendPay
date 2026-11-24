@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Fingerprint, KeyRound, Lock, ShieldCheck } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+import { Panel } from '@/components/admin/ui';
 
 function sesionesLabel(count: number | null | undefined) {
   if (count == null) return '...';
@@ -30,7 +31,7 @@ export default function SeguridadPage() {
 
   return (
     <div className="tp-user-page">
-      <header className="tp-page-header"><h1>Seguridad</h1></header>
+      <Panel style={{ maxWidth: 820 }}>
       <section className="tp-profile-list">
         {items.map((item) =>
           item.href ? (
@@ -48,6 +49,7 @@ export default function SeguridadPage() {
           )
         )}
       </section>
+      </Panel>
     </div>
   );
 }

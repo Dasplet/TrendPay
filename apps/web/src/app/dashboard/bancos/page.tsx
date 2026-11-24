@@ -6,7 +6,8 @@ import toast from 'react-hot-toast';
 import { Building2, Check, Plus, Trash2 } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { bankAccountsApi } from '@/lib/api';
-import { EmptyState, ThemeButton } from '@/components/user/UserTheme';
+import { EmptyState } from '@/components/user/UserTheme';
+import { Panel, PanelHeader } from '@/components/admin/ui';
 
 export default function BancosPage() {
   const queryClient = useQueryClient();
@@ -57,11 +58,11 @@ export default function BancosPage() {
             onClick={() => onEliminarClick(c.id)}
             style={{ color: '#C0392B' }}
           >
-            <Check size={18} />
+            <Check size={15} />
           </button>
         ) : (
           <button className="tp-icon-button" aria-label="Eliminar banco" onClick={() => onEliminarClick(c.id)}>
-            <Trash2 size={18} />
+            <Trash2 size={15} />
           </button>
         )}
       </article>
@@ -70,16 +71,15 @@ export default function BancosPage() {
 
   return (
     <div className="tp-user-page">
-      <header className="tp-page-header">
-        <h1>Mis bancos</h1>
-        <Link href="/dashboard/bancos/nuevo" className="tp-icon-button" aria-label="Vincular nuevo banco"><Plus size={22} /></Link>
-      </header>
-
-      <section className="tp-profile-list">
-        {content}
-      </section>
-
-      <ThemeButton href="/dashboard/bancos/nuevo"><Building2 size={18} /> Vincular nuevo banco</ThemeButton>
+      <Panel style={{ maxWidth: 820 }}>
+        <PanelHeader
+          title="Cuentas para tus retiros"
+          actions={<Link href="/dashboard/bancos/nuevo" className="tp-button tp-button-primary" style={{ minHeight: 34, fontSize: 12 }}><Plus size={14} /> Vincular banco</Link>}
+        />
+        <section className="tp-profile-list">
+          {content}
+        </section>
+      </Panel>
     </div>
   );
 }
