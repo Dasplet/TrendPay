@@ -300,15 +300,18 @@ router.put('/:id/contrato', async (req: Request, res: Response) => {
 });
 
 // ══ DELETE /api/admin/vinculaciones/:id ══
-// Solo para solicitudes que nunca se enviaron o ya terminaron; borra también los archivos.
+// Borra la solicitud y todos sus archivos (irreversible). Una solicitud EN REVISIÓN tiene documentos reales de un cliente que alguien
+// del equipo puede estar revisando: solo se borra si se confirma de forma expresa con ?confirmar=revision.
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const v = await prisma.vinculacion.findUnique({ where: { id: req.params.id }, include: { documentos: true } });
     if (!v) return res.status(404).json({ ok: false, mensaje: 'Solicitud no encontrada' });
-    if (v.estado === 'en_revision') return res.status(409).json({ ok: false, mensaje: 'No se puede eliminar una solicitud en revisión' });
+    if (v.estado === 'en_revision' && req.query.confirmar !== 'revision') {
+      return res.status(409).json({ ok: false, requiereConfirmacion: true, mensaje: 'Esta solicitud está en revisión. Confirma que quieres eliminarla con todos sus documentos' });
+    }
     await Promise.all(v.documentos.map(d => borrarObjeto(d.storageKey).catch(e => logger.warn('Vinculación: archivo no borrado', { error: e.message }))));
     await prisma.vinculacion.delete({ where: { id: v.id } });
-    await auditar(req, 'ELIMINAR_VINCULACION', v.id, { razonSocial: v.razonSocial });
+    await auditar(req, 'ELIMINAR_VINCULACION', v.id, { razonSocial: v.razonSocial, estado: v.estado, documentos: v.documentos.length });
     res.json({ ok: true });
   } catch (e: any) { res.status(500).json({ ok: false, mensaje: e.message }); }
 });

@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { FolderCheck, Plus, Eye, Link2, Copy, Check, X, FileText, ExternalLink } from 'lucide-react';
+import { FolderCheck, Plus, Eye, Link2, Copy, Check, X, FileText, ExternalLink, Trash2 } from 'lucide-react';
 import { adminApi } from '@/lib/api';
 import { Panel, PanelHeader, Table, Tr, Td, StatusBadge, Btn, Modal, Input, fmtDate } from '@/components/admin/ui';
 
@@ -55,6 +55,21 @@ export default function VinculacionesPage() {
   function refrescar() {
     qc.invalidateQueries({ queryKey: ['admin-vinculaciones'] });
     qc.invalidateQueries({ queryKey: ['admin-vinculacion'] });
+  }
+
+  // Eliminar una solicitud (y todos sus documentos). Irreversible: se pide confirmación, y una solicitud en revisión pide una segunda.
+  const eliminarMut = useMutation({
+    mutationFn: ({ id, enRevision }: { id: string; enRevision: boolean }) => adminApi.eliminarVinculacion(id, enRevision),
+    onSuccess: () => { refrescar(); toast.success('Solicitud eliminada'); },
+    onError: (e: any) => toast.error(mensajeError(e, 'No se pudo eliminar la solicitud')),
+  });
+  function eliminarSolicitud(v: any) {
+    const docs = v.documentosSubidos ?? 0;
+    const base = `¿Eliminar la solicitud de ${v.razonSocial}${v.nit ? ` (NIT ${v.nit})` : ''}?\n\nSe borran también todos sus documentos. Esta acción no se puede deshacer.`;
+    if (!window.confirm(base)) return;
+    const enRevision = v.estado === 'en_revision';
+    if (enRevision && !window.confirm(`ATENCIÓN: esta solicitud está EN REVISIÓN${docs ? ` con ${docs} documentos cargados` : ''}. Pueden ser documentos reales de un cliente.\n\n¿Seguro que quieres eliminarla definitivamente?`)) return;
+    eliminarMut.mutate({ id: v.id, enRevision });
   }
 
   const crearMut = useMutation({
@@ -185,6 +200,7 @@ export default function VinculacionesPage() {
                   {(v.estado === 'invitada' || v.estado === 'requiere_correccion' || (v.estado === 'aprobada' && (v.contratoEstado === 'enviado' || v.contratoEstado === 'rechazado'))) && (
                     <Btn variant="ghost" title="Reenviar el enlace al cliente por correo" disabled={enlaceMut.isPending} onClick={() => enlaceMut.mutate(v.id)} style={{ padding:'5px 8px' }}><Link2 size={14} /></Btn>
                   )}
+                  <Btn variant="danger" title="Eliminar la solicitud y sus documentos" disabled={eliminarMut.isPending} onClick={() => eliminarSolicitud(v)} style={{ padding:'5px 8px' }}><Trash2 size={14} /></Btn>
                 </div>
               </Td>
             </Tr>

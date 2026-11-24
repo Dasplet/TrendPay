@@ -260,6 +260,47 @@ describe('Vinculación de clientes', () => {
     });
   });
 
+  describe('Eliminar solicitudes', () => {
+    it('elimina una solicitud con sus documentos y archivos, y queda en la auditoría', async () => {
+      const { admin, auth, id, token } = await crearSolicitud();
+      expect((await subir(token, 'cedula_rep_legal')).status).toBe(200);
+      jest.clearAllMocks();
+      const res = await request(app).delete(`/api/admin/vinculaciones/${id}`).set(auth);
+      expect(res.status).toBe(200);
+      expect(await prisma.vinculacion.count()).toBe(0);
+      expect(await prisma.vinculacionDocumento.count()).toBe(0);
+      expect(storage.borrarObjeto).toHaveBeenCalledTimes(1);
+      const log = await prisma.auditLog.findFirstOrThrow({ where: { accion: 'ELIMINAR_VINCULACION', userId: admin.id } });
+      expect(log.datos).toMatchObject({ razonSocial: datosEmpresa.razonSocial, documentos: 1 });
+    });
+
+    it('una solicitud EN REVISIÓN no se borra sin confirmación expresa; con ella sí', async () => {
+      const { auth, id, token } = await crearSolicitud();
+      await subirTodos(token);
+      await request(app).post(`/api/vinculacion/${token}/enviar`);
+
+      const sinConfirmar = await request(app).delete(`/api/admin/vinculaciones/${id}`).set(auth);
+      expect(sinConfirmar.status).toBe(409);
+      expect(sinConfirmar.body.requiereConfirmacion).toBe(true);
+      expect(await prisma.vinculacion.count()).toBe(1);
+      expect(storage.borrarObjeto).not.toHaveBeenCalled();
+
+      const confirmada = await request(app).delete(`/api/admin/vinculaciones/${id}?confirmar=revision`).set(auth);
+      expect(confirmada.status).toBe(200);
+      expect(await prisma.vinculacion.count()).toBe(0);
+      expect(storage.borrarObjeto).toHaveBeenCalledTimes(5);
+    });
+
+    it('solo un administrador puede eliminar, y una solicitud inexistente da 404', async () => {
+      const { id, auth } = await crearSolicitud();
+      const cliente = await crearUsuarioDePrueba({ saldo: 0 });
+      expect((await request(app).delete(`/api/admin/vinculaciones/${id}`).set({ Authorization: `Bearer ${tokenPara(cliente)}` })).status).toBe(403);
+      expect((await request(app).delete(`/api/admin/vinculaciones/${id}`)).status).toBe(401);
+      expect((await request(app).delete('/api/admin/vinculaciones/00000000-0000-4000-8000-000000000000').set(auth)).status).toBe(404);
+      expect(await prisma.vinculacion.count()).toBe(1);
+    });
+  });
+
   describe('Portal del cliente', () => {
     it('muestra los 5 documentos con sus reglas', async () => {
       const { token } = await crearSolicitud();

@@ -202,7 +202,7 @@ export const adminApi = {
     return api.post(`/admin/vinculaciones/${id}/contrato`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
   revisarContrato:      (id: string, data: { decision: 'aprobar' | 'rechazar'; motivo?: string }) => api.put(`/admin/vinculaciones/${id}/contrato`, data),
-  eliminarVinculacion:  (id: string) => api.delete(`/admin/vinculaciones/${id}`),
+  eliminarVinculacion:  (id: string, confirmarRevision = false) => api.delete(`/admin/vinculaciones/${id}`, { params: confirmarRevision ? { confirmar: 'revision' } : {} }),
   kushkiPagos:     (params?: any) => api.get('/admin/kushki/pagos', { params }),
   kushkiConciliar: () => api.post('/admin/kushki/conciliar'),
   kushkiWebhooks:  () => api.get('/admin/kushki/webhooks'),
