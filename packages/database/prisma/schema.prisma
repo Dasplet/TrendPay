@@ -433,6 +433,8 @@ model ComercioKushkiOne {
   user User @relation(fields: [userId], references: [id])
 
   @@map("comercios_kushki_one")
+  // Qué consulta se hace con esta llave: datafono (card present, POS) o web (pagos en línea de la tienda, card not present)
+  canal String @default("datafono")
 }
 
 // Un datáfono (SmartPOS Sunmi) pertenece a una empresa (cuenta padre, dueña de la billetera) y puede estar asignado

@@ -22,7 +22,8 @@ class ApiError extends Error {
   }
 }
 
-const CATEGORIAS_DATAFONO = ['datafono', 'reembolso_datafono'];
+// Movimientos que entran por una venta (datáfono o página web): una tienda solo ve los suyos
+const CATEGORIAS_DATAFONO = ['datafono', 'reembolso_datafono', 'pago_web', 'reembolso_web'];
 
 function mapTransaction(t: any) {
   const montoNeto  = Number.parseFloat(t.montoNeto.toString());
@@ -122,7 +123,7 @@ router.get('/saldo-mensual', authenticate, conCuenta('verSaldo'), async (req: Re
       const neto = Number.parseFloat(t.montoNeto.toString());
       if (t.status === 'rechazada') continue;
       if (t.categoria === 'retiro') retirado += Math.abs(neto);
-      else if (t.categoria === 'reembolso_datafono') recibido = Math.max(0, recibido - Math.abs(neto)); // un reembolso resta de lo recibido
+      else if (t.categoria === 'reembolso_datafono' || t.categoria === 'reembolso_web') recibido = Math.max(0, recibido - Math.abs(neto)); // un reembolso resta de lo recibido
       else if (neto > 0) recibido += neto;
     }
 

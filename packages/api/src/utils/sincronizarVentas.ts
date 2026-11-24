@@ -4,6 +4,7 @@ import { logger } from './logger';
 import { AMBIENTES_KUSHKI, KushkiError } from './kushki';
 import { businessCodeDeTitular } from './kushkiOne';
 import { procesarAvisoTerminal, terminalDelAviso, serialesDelAviso } from './ventasTerminal';
+import { buscarTransaccionesWeb, itemWebAAviso, terminalWeb } from './ventasWeb';
 
 // ══════════════════════════════════════
 // SINCRONIZAR LAS VENTAS DEL DATÁFONO (sin webhook)
@@ -75,7 +76,7 @@ export async function terminalSinIdentificar(titularId: string, sedeFija?: { id:
   if (sedeId && (!antes || antes.sedeId !== sedeId)) {
     await prisma.cobroDatafono.updateMany({ where: { terminalId: terminal.id, userId: titularId }, data: { userId: sedeId } });
     await prisma.transaction.updateMany({
-      where: { sedeId: null, categoria: { in: ['datafono', 'reembolso_datafono'] }, metadata: { path: ['terminal'], equals: serial } },
+      where: { sedeId: null, categoria: { in: ['datafono', 'reembolso_datafono', 'pago_web', 'reembolso_web'] }, metadata: { path: ['terminal'], equals: serial } },
       data: { sedeId, userId: sedeId },
     });
   }
@@ -117,9 +118,11 @@ export async function sincronizarEmpresa(duenoId: string, opciones: { desdeMs?: 
   if (!dueno) return { ...vacio(), omitida: 'la cuenta no existe' };
   const titularId = dueno.cuentaPadreId ?? dueno.id;
   const sedeFija = dueno.cuentaPadreId ? { id: dueno.id, nombre: dueno.nombre } : undefined;
+  // Canal de la llave: datáfonos (card present) o la página web (pagos en línea, card not present)
+  const canalWeb = (await prisma.comercioKushkiOne.findUnique({ where: { userId: duenoId }, select: { canal: true } }))?.canal === 'web';
 
   // Si ya hay ventas "sin identificar" de esta empresa, se revisa si ahora se sabe de qué tienda son (aunque no lleguen ventas nuevas)
-  if (!sedeFija && await prisma.terminalKushki.findFirst({ where: { titularId, serial: { startsWith: 'SIN-IDENTIFICAR' } }, select: { id: true } })) {
+  if (!canalWeb && !sedeFija && await prisma.terminalKushki.findFirst({ where: { titularId, serial: { startsWith: 'SIN-IDENTIFICAR' } }, select: { id: true } })) {
     await terminalSinIdentificar(titularId);
   }
 
@@ -133,9 +136,10 @@ export async function sincronizarEmpresa(duenoId: string, opciones: { desdeMs?: 
   const desde = opciones.desdeMs ?? Number(marca!.valor) - SOLAPE_MS;
 
   const resumen: ResumenSincronizacion = { ...vacio(), desde: new Date(desde).toISOString(), hasta: new Date(hasta).toISOString() };
-  const items = await buscarTransaccionesPos(llave, desde, hasta);
-  resumen.revisadas = items.length;
-  if (items.length > 0) resumen.campos = nombresDeCampos(items[0]);
+  const crudos = canalWeb ? await buscarTransaccionesWeb(llave, desde, hasta) : await buscarTransaccionesPos(llave, desde, hasta);
+  resumen.revisadas = crudos.length;
+  if (crudos.length > 0) resumen.campos = nombresDeCampos(crudos[0]);
+  const items = canalWeb ? crudos.map(itemWebAAviso) : crudos;
 
   // Primero las más viejas, para que un reembolso encuentre la venta que lo precede
   const ordenadas = [...items].sort((a, b) => Number(a?.created ?? 0) - Number(b?.created ?? 0));
@@ -144,9 +148,9 @@ export async function sincronizarEmpresa(duenoId: string, opciones: { desdeMs?: 
   for (const item of ordenadas) {
     try {
       if (serialesDelAviso(item).length > 0) resumen.conSerial = true;
-      let terminal = await terminalDelAviso(item);
+      let terminal = canalWeb ? await (huerfano.terminal ??= await terminalWeb(titularId, sedeFija)) : await terminalDelAviso(item);
       // Con llave de sede solo vale un aparato de esa misma sede; cualquier otra cosa queda en la sede de la llave
-      if (sedeFija && terminal && terminal.sedeId !== sedeFija.id) terminal = null;
+      if (!canalWeb && sedeFija && terminal && terminal.sedeId !== sedeFija.id) terminal = null;
       if (!terminal) {
         resumen.sinAparato += 1;
         huerfano.terminal ??= await terminalSinIdentificar(titularId, sedeFija);

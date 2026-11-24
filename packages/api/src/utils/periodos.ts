@@ -105,8 +105,9 @@ export function construirSerie(
 }
 
 // Clasifica la categoría de una transacción en uno de los tipos que muestra el dashboard
-export function tipoDeCategoria(categoria?: string | null): 'consigna' | 'cobro' | 'envio' | 'retiro' | 'datafono' | 'otros' {
+export function tipoDeCategoria(categoria?: string | null): 'consigna' | 'cobro' | 'envio' | 'retiro' | 'datafono' | 'web' | 'otros' {
   const c = (categoria || '').toLowerCase();
+  if (c.includes('web')) return 'web';
   if (c.includes('consign')) return 'consigna';
   if (c.includes('datafono')) return 'datafono';
   if (c.includes('cobro')) return 'cobro';

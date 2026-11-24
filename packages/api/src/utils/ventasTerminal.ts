@@ -94,6 +94,9 @@ export interface ResultadoAviso { http: number; detalle: string }
 
 const esDuplicado = (err: any) => err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 
+// La "terminal" WEB es la página web de la tienda: mismos movimientos que un datáfono, con otra categoría y otros textos
+const esWeb = (t: TerminalKushki) => t.modelo === 'WEB';
+
 // ── Venta aprobada en el datáfono: acredita el neto en la billetera de la empresa ──
 async function registrarVenta(terminal: TerminalKushki, b: Aviso, clave: string, monto: number, opciones: OpcionesAviso = {}): Promise<ResultadoAviso> {
   const pct = opciones.comisionPct ?? await comisionDatafonoPct();
@@ -117,14 +120,14 @@ async function registrarVenta(terminal: TerminalKushki, b: Aviso, clave: string,
       const saldoDespues = Number.parseFloat(actualizada.saldo.toString());
       await tx.transaction.create({
         data: {
-          walletId: wallet.id, userId, sedeId: terminal.sedeId, createdAt: fecha, codigo: genCodigo('DTF'), categoria: 'datafono',
-          descripcion: `Cobro con datáfono · ${terminal.alias}`, montoBruto: monto, comisionPct: pct, comisionValor: comision, montoNeto: neto,
+          walletId: wallet.id, userId, sedeId: terminal.sedeId, createdAt: fecha, codigo: genCodigo(esWeb(terminal) ? 'WEB' : 'DTF'), categoria: esWeb(terminal) ? 'pago_web' : 'datafono',
+          descripcion: esWeb(terminal) ? `Pago en la página web · ${terminal.alias}` : `Cobro con datáfono · ${terminal.alias}`, montoBruto: monto, comisionPct: pct, comisionValor: comision, montoNeto: neto,
           saldoAntes: saldoDespues - neto, saldoDespues, status: 'exitosa',
           metadata: { terminal: terminal.serial, cobroId: cobro.id, referencia: clave, ticketNumber: texto(b.ticket_number, 40) ?? null, origen: 'terminal' },
         },
       });
       for (const destino of new Set([terminal.sedeId, terminal.titularId].filter((x): x is string => !!x))) {
-        await tx.notification.create({ data: { userId: destino, tipo: 'ok', titulo: 'Cobro con datáfono aprobado', mensaje: `Se acreditaron ${neto.toLocaleString('es-CO')} COP por un cobro en ${terminal.alias}` } });
+        await tx.notification.create({ data: { userId: destino, tipo: 'ok', titulo: esWeb(terminal) ? 'Pago web aprobado' : 'Cobro con datáfono aprobado', mensaje: `Se acreditaron ${neto.toLocaleString('es-CO')} COP por ${esWeb(terminal) ? 'un pago en' : 'un cobro en'} ${terminal.alias}` } });
       }
     });
   } catch (err) {
@@ -171,14 +174,14 @@ async function registrarReembolso(terminal: TerminalKushki, b: Aviso, clave: str
       const despues = Number.parseFloat(actualizada.saldo.toString());
       await tx.transaction.create({
         data: {
-          walletId: wallet.id, userId, sedeId: terminal.sedeId, createdAt: fecha, codigo: genCodigo('RDT'), categoria: 'reembolso_datafono',
-          descripcion: `Reembolso de cobro con datáfono · ${terminal.alias}`, montoBruto: monto, comisionPct: pct, comisionValor: comision, montoNeto: -neto,
+          walletId: wallet.id, userId, sedeId: terminal.sedeId, createdAt: fecha, codigo: genCodigo(esWeb(terminal) ? 'RWB' : 'RDT'), categoria: esWeb(terminal) ? 'reembolso_web' : 'reembolso_datafono',
+          descripcion: esWeb(terminal) ? `Reembolso de pago en la página web · ${terminal.alias}` : `Reembolso de cobro con datáfono · ${terminal.alias}`, montoBruto: monto, comisionPct: pct, comisionValor: comision, montoNeto: -neto,
           saldoAntes: despues + neto, saldoDespues: despues, status: 'exitosa',
           metadata: { terminal: terminal.serial, cobroId: cobro.id, referencia: clave, ligadoA: ligado ? original!.id : null, origen: 'terminal' },
         },
       });
       for (const destino of new Set([terminal.sedeId, terminal.titularId].filter((x): x is string => !!x))) {
-        await tx.notification.create({ data: { userId: destino, tipo: 'warn', titulo: 'Reembolso de un cobro con datáfono', mensaje: `Se descontaron ${neto.toLocaleString('es-CO')} COP de la billetera por un reembolso en ${terminal.alias}` } });
+        await tx.notification.create({ data: { userId: destino, tipo: 'warn', titulo: esWeb(terminal) ? 'Reembolso de un pago web' : 'Reembolso de un cobro con datáfono', mensaje: `Se descontaron ${neto.toLocaleString('es-CO')} COP de la billetera por un reembolso en ${terminal.alias}` } });
       }
       return despues;
     });

@@ -22,6 +22,7 @@ const TIPOS = [
   { clave: 'envio', label: 'Envíos', color: BLUE },
   { clave: 'retiro', label: 'Retiros', color: RED },
   { clave: 'datafono', label: 'Datáfonos', color: AMBER },
+  { clave: 'web', label: 'Página web', color: ACCENT },
 ] as const;
 
 // Todas las consultas del dashboard se refrescan solas (tiempo real) y al volver a la pestaña

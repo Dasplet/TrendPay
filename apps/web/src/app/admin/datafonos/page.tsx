@@ -16,7 +16,7 @@ interface CobroAdmin {
   terminal: string; empresa: string; cajero: string; tipo: string; origen: string; ticketNumber: string | null; creado: string;
 }
 interface Empresa { userId: string; nombre: string; subcuentas: { id: string; nombre: string }[] }
-interface SedeLlave { id: string; nombre: string; configurado: boolean; termina: string; terminales: number }
+interface SedeLlave { id: string; nombre: string; configurado: boolean; termina: string; terminales: number; canal: 'datafono' | 'web' }
 interface EmpresaCodigo { titularId: string; nombre: string; configurado: boolean; termina: string; firma: boolean; terminales: number; sedes: SedeLlave[] }
 
 const COLOR_ESTADO: Record<string, string> = { aprobado: '#6CC998', pendiente: '#d4a017', expirado: '#d4a017', revision: '#d4a017', reembolsando: '#d4a017', reembolsado: '#C0392B', rechazado: '#C0392B', cancelado: '#C0392B', error: '#C0392B' };
@@ -35,6 +35,7 @@ export default function DatafonosAdminPage() {
   const [codigoModal, setCodigoModal] = useState<{ titularId: string } | null>(null);
   const [firma, setFirma] = useState('');
   const [codigo, setCodigo] = useState('');
+  const [canal, setCanal] = useState<'datafono' | 'web'>('datafono');
 
   const terminalesQ = useQuery({
     queryKey: ['admin-datafonos'],
@@ -76,7 +77,7 @@ export default function DatafonosAdminPage() {
   });
 
   const guardarCredenciales = useMutation({
-    mutationFn: () => datafonosApi.admin.guardarCredenciales(codigoModal!.titularId, { ...(firma.trim() && !esTienda ? { webhookSecret: firma.trim() } : {}), ...(codigo.trim() ? { businessCode: codigo.trim() } : {}) }),
+    mutationFn: () => datafonosApi.admin.guardarCredenciales(codigoModal!.titularId, { ...(firma.trim() && !esTienda ? { webhookSecret: firma.trim() } : {}), ...(codigo.trim() ? { businessCode: codigo.trim() } : {}), ...(esTienda && codigo.trim() ? { canal } : {}) }),
     onSuccess: () => { toast.success('Credenciales guardadas'); setCodigoModal(null); setFirma(''); setCodigo(''); refrescar(); },
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudieron guardar'),
   });
@@ -160,14 +161,14 @@ export default function DatafonosAdminPage() {
             </Tr>,
             ...e.sedes.map((s) => (
               <Tr key={s.id}>
-                <Td style={{ paddingLeft: 28 }}>↳ {s.nombre}<div style={{ fontSize: 11, opacity: 0.6 }}>Llave propia de esta tienda</div></Td>
+                <Td style={{ paddingLeft: 28 }}>↳ {s.nombre}<div style={{ fontSize: 11, opacity: 0.6 }}>{s.canal === 'web' ? 'Pagos de la página web (en línea)' : 'Llave propia de esta tienda (datáfonos)'}</div></Td>
                 <Td>{s.terminales}</Td>
                 <Td><span style={{ opacity: 0.5 }}>—</span></Td>
                 <Td>{s.configurado ? <Etiqueta texto={`Guardada ${s.termina}`} color="#6CC998" /> : <Etiqueta texto="Sin llave propia" color="#888" />}</Td>
                 <Td>
                   <div style={{ display: 'flex', gap: 6 }}>
                     {s.configurado && <Btn disabled={sincronizar.isPending} title="Trae ahora las ventas de esta tienda desde Kushki (se hace solo cada 2 minutos)" onClick={() => sincronizar.mutate({ titularId: s.id, nombre: `${e.nombre} · ${s.nombre}` })}>{sincronizar.isPending && sincronizar.variables?.titularId === s.id ? 'Sincronizando…' : 'Sincronizar ahora'}</Btn>}
-                    <Btn onClick={() => { setFirma(''); setCodigo(''); setCodigoModal({ titularId: s.id }); }}>{s.configurado ? 'Cambiar' : 'Asignar llave'}</Btn>
+                    <Btn onClick={() => { setFirma(''); setCodigo(''); setCanal(s.canal ?? 'datafono'); setCodigoModal({ titularId: s.id }); }}>{s.configurado ? 'Cambiar' : 'Asignar llave'}</Btn>
                     {s.configurado && <Btn variant="danger" disabled={quitarCodigo.isPending} onClick={() => { if (window.confirm(`¿Quitar la llave de ${s.nombre}? Sus ventas dejarán de reflejarse en esa tienda por esta vía.`)) quitarCodigo.mutate(s.id); }}>Quitar</Btn>}
                   </div>
                 </Td>
@@ -268,7 +269,19 @@ export default function DatafonosAdminPage() {
             <p style={{ fontSize: 12, opacity: 0.7, marginTop: -6 }}>Consola de Kushki, cuenta de card present → Desarrolladores → Webhooks: aparece arriba de la página. No se vuelve a mostrar.</p>
           </>
         )}
-        {esTienda && <p style={{ fontSize: 12, opacity: 0.7 }}>Con la llave del Branch de esta tienda, todo lo que Kushki registre en ese Branch queda en esta tienda, sin importar el datáfono.</p>}
+        {esTienda && (
+          <>
+            <Select label="¿Qué cobra el Branch de esta llave?" value={canal} onChange={(e) => setCanal(e.target.value as 'datafono' | 'web')}>
+              <option value="datafono">Datáfonos de la tienda (tarjeta presente)</option>
+              <option value="web">Página web (pagos en línea: tarjeta, PSE, efectivo)</option>
+            </Select>
+            <p style={{ fontSize: 12, opacity: 0.7, marginTop: -6 }}>
+              {canal === 'web'
+                ? 'Cada pago aprobado en ese Branch de pagos en línea queda en esta cuenta con la comisión de datáfonos; los reembolsos se descuentan completos.'
+                : 'Todo lo que Kushki registre en el Branch de esta tienda queda en esta tienda, sin importar el datáfono.'}
+            </p>
+          </>
+        )}
         <Input label={esTienda ? 'Llave privada del Branch de esta tienda (Private Merchant ID)' : 'Llave privada de la Branch de card present (Business-Code): para la sincronización cada 2 minutos'} type="password" autoComplete="off" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
         {!codigoOk && <p style={{ color: '#C0392B', fontSize: 12, marginTop: -8 }}>Solo letras, números, guion y guion bajo (8 a 128 caracteres).</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

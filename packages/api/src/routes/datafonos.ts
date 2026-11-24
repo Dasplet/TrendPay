@@ -348,7 +348,7 @@ router.get('/admin/terminales', authenticate, requireAdmin, async (_req: Request
   });
   // Business-Code por empresa: las que tienen datáfonos (y las que ya tienen código aunque aún no tengan datáfonos)
   const codigos = await prisma.comercioKushkiOne.findMany({ include: { user: { select: { nombre: true } } } });
-  type SedeLlave = { id: string; nombre: string; configurado: boolean; termina: string; terminales: number };
+  type SedeLlave = { id: string; nombre: string; configurado: boolean; termina: string; terminales: number; canal: string };
   const empresas = new Map<string, { titularId: string; nombre: string; configurado: boolean; termina: string; firma: boolean; terminales: number; sedes: SedeLlave[] }>();
   for (const t of terminales) {
     const e = empresas.get(t.titularId) ?? { titularId: t.titularId, nombre: t.titular.nombre, configurado: false, termina: '', firma: false, terminales: 0, sedes: [] };
@@ -376,7 +376,7 @@ router.get('/admin/terminales', authenticate, requireAdmin, async (_req: Request
   const sedesDe = await prisma.user.findMany({ where: { cuentaPadreId: { in: [...empresas.keys()] }, eliminadoAt: null }, select: { id: true, nombre: true, cuentaPadreId: true }, orderBy: { nombre: 'asc' } });
   for (const s of sedesDe) {
     const codigo = await businessCodeDeTitular(s.id);
-    empresas.get(s.cuentaPadreId!)!.sedes.push({ id: s.id, nombre: s.nombre, configurado: !!codigo, termina: codigo ? terminaEn(codigo) : '', terminales: terminales.filter((t) => t.sedeId === s.id).length });
+    empresas.get(s.cuentaPadreId!)!.sedes.push({ id: s.id, nombre: s.nombre, configurado: !!codigo, termina: codigo ? terminaEn(codigo) : '', terminales: terminales.filter((t) => t.sedeId === s.id && t.modelo !== 'WEB').length, canal: codigos.find((c) => c.userId === s.id)?.canal ?? 'datafono' });
   }
   res.json({
     ok: true,
@@ -399,6 +399,8 @@ const credencialesSchema = z.object({
   businessCode: z.string().trim().regex(/^[A-Za-z0-9_-]{8,128}$/, 'El Business-Code solo lleva letras, números, guion y guion bajo (8 a 128 caracteres)').optional(),
   // La "Webhook signature" de la consola de Kushki (Desarrolladores > Webhooks): con ella se comprueba que cada aviso viene de Kushki
   webhookSecret: z.string().trim().regex(/^\S{8,300}$/, 'La firma de webhooks no puede tener espacios (8 a 300 caracteres)').optional(),
+  // datafono = ventas de los datáfonos (card present); web = pagos en línea de la página web (card not present)
+  canal: z.enum(['datafono', 'web']).optional(),
 }).refine((d) => d.businessCode !== undefined || d.webhookSecret !== undefined, { message: 'Envía la firma de webhooks o el Business-Code' });
 
 async function empresaValida(titularId: string) {
@@ -419,13 +421,14 @@ router.put('/admin/empresas/:titularId/business-code', authenticate, requireAdmi
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: parse.error.errors[0].message });
   const dueno = await duenoDeLlaveValido(req.params.titularId);
   if (!dueno) return res.status(404).json({ ok: false, mensaje: 'Cuenta no encontrada' });
-  const { businessCode, webhookSecret } = parse.data;
+  const { businessCode, webhookSecret, canal } = parse.data;
   // La firma de los avisos es de la cuenta de Kushki de la empresa, no de cada tienda
   if (dueno.cuentaPadreId && webhookSecret !== undefined) return res.status(400).json({ ok: false, mensaje: 'La firma de webhooks se guarda en la cuenta principal de la empresa; en una tienda solo va su llave privada' });
   if (dueno.cuentaPadreId && businessCode === undefined) return res.status(400).json({ ok: false, mensaje: 'Envía la llave privada de la tienda' });
   const cambios = {
     ...(businessCode !== undefined ? { businessCodeCif: encrypt(businessCode) } : {}),
     ...(webhookSecret !== undefined ? { webhookSecretCif: encrypt(webhookSecret) } : {}),
+    ...(canal !== undefined ? { canal } : {}),
   };
   await prisma.comercioKushkiOne.upsert({ where: { userId: req.params.titularId }, create: { userId: req.params.titularId, ...cambios }, update: { ...cambios, activo: true } });
   // La auditoría guarda solo qué se cambió y el final del código, nunca el valor

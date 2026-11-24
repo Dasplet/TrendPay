@@ -56,6 +56,7 @@ export default function HistorialPage() {
             <option value="envio">Envíos</option>
             <option value="retiro">Retiros banco</option>
             <option value="datafono">Datáfono (cobros y reembolsos)</option>
+            <option value="web">Página web (pagos y reembolsos)</option>
           </select>
           <select value={estado} onChange={(e) => setEstado(e.target.value)}>
             <option value="">Todos los estados</option>
