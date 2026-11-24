@@ -17,7 +17,7 @@ interface CobroAdmin {
 }
 interface Empresa { userId: string; nombre: string; subcuentas: { id: string; nombre: string }[] }
 interface SedeLlave { id: string; nombre: string; configurado: boolean; termina: string; terminales: number; canal: 'datafono' | 'web' }
-interface EmpresaCodigo { titularId: string; nombre: string; configurado: boolean; termina: string; firma: boolean; terminales: number; sedes: SedeLlave[] }
+interface EmpresaCodigo { titularId: string; nombre: string; configurado: boolean; termina: string; firma: boolean; terminales: number; sedes: SedeLlave[]; comisionPropia?: number | null }
 
 const COLOR_ESTADO: Record<string, string> = { aprobado: '#6CC998', pendiente: '#d4a017', expirado: '#d4a017', revision: '#d4a017', reembolsando: '#d4a017', reembolsado: '#C0392B', rechazado: '#C0392B', cancelado: '#C0392B', error: '#C0392B' };
 const NUEVO = { serial: '', alias: '', titularId: '', sedeId: '' };
@@ -32,6 +32,7 @@ export default function DatafonosAdminPage() {
   const [form, setForm] = useState(NUEVO);
   const [comision, setComision] = useState<string | null>(null);
   // Conexión con Kushki por empresa: a quién se le asigna (vacío = elegir), la firma de webhooks y el Business-Code (opcional)
+  const [buscar, setBuscar] = useState('');
   const [codigoModal, setCodigoModal] = useState<{ titularId: string } | null>(null);
   const [firma, setFirma] = useState('');
   const [codigo, setCodigo] = useState('');
@@ -105,15 +106,32 @@ export default function DatafonosAdminPage() {
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo importar el archivo', { duration: 10000 }),
   });
 
+  // Comisión de datáfonos propia de una empresa (lo pactado con ella); vacía = usa la general
+  const [comisionEmpresa, setComisionEmpresa] = useState<{ titularId: string; nombre: string } | null>(null);
+  const [comisionEmpresaTexto, setComisionEmpresaTexto] = useState('');
+  const guardarComisionEmpresa = useMutation({
+    mutationFn: (v: { titularId: string; pct: number | null }) => datafonosApi.admin.guardarComisionEmpresa(v.titularId, v.pct),
+    onSuccess: ({ data }) => {
+      toast.success(data.comisionPropia === null ? `Ahora usa la comisión general (${data.efectiva}%)` : `Comisión de esa empresa: ${data.comisionPropia}%`);
+      setComisionEmpresa(null);
+      refrescar();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo guardar la comisión'),
+  });
+
   const quitarCodigo = useMutation({
     mutationFn: (titularId: string) => datafonosApi.admin.quitarBusinessCode(titularId),
     onSuccess: () => { toast.success('Credenciales quitadas'); refrescar(); },
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo quitar'),
   });
 
-  const terminales = terminalesQ.data?.terminales ?? [];
-  const empresasCodigo = terminalesQ.data?.empresas ?? [];
-  const sinFirma = empresasCodigo.filter((e) => e.terminales > 0 && !e.firma);
+  const q = buscar.trim().toLowerCase();
+  const todasLasTerminales = terminalesQ.data?.terminales ?? [];
+  const todasLasEmpresas = terminalesQ.data?.empresas ?? [];
+  // Con muchas empresas se busca por nombre de empresa, de tienda, alias o serial
+  const terminales = q ? todasLasTerminales.filter((t) => `${t.alias} ${t.serial} ${t.titular} ${t.sede ?? ''}`.toLowerCase().includes(q)) : todasLasTerminales;
+  const empresasCodigo = q ? todasLasEmpresas.filter((e) => e.nombre.toLowerCase().includes(q) || e.sedes.some((x) => x.nombre.toLowerCase().includes(q))) : todasLasEmpresas;
+  const sinFirma = todasLasEmpresas.filter((e) => e.terminales > 0 && !e.firma);
   const esTienda = !!codigoModal?.titularId && (empresasQ.data ?? []).some((e) => (e.subcuentas ?? []).some((s) => s.id === codigoModal.titularId));
   const firmaOk = firma.trim() === '' || /^\S{8,300}$/.test(firma.trim());
   const codigoOk = codigo.trim() === '' || /^[A-Za-z0-9_-]{8,128}$/.test(codigo.trim());
@@ -134,7 +152,7 @@ export default function DatafonosAdminPage() {
       )}
       {sinFirma.length > 0 && (
         <Panel style={{ padding: '14px 20px', borderColor: 'rgba(212,160,23,.45)' }}>
-          <strong style={{ color: '#d4a017' }}>Falta la firma de webhooks de Kushki</strong> para: {sinFirma.map((e) => e.nombre).join(', ')}. Sin ella, las ventas que se hagan en sus datáfonos no se reflejan en TrendPay (Kushki las reintenta unas horas y luego las descarta).
+          <strong style={{ color: '#d4a017' }}>Falta la firma de webhooks de Kushki</strong> para: {sinFirma.slice(0, 6).map((e) => e.nombre).join(', ')}{sinFirma.length > 6 ? ` y ${sinFirma.length - 6} más` : ''}. Sin ella, las ventas que se hagan en sus datáfonos no se reflejan en TrendPay (Kushki las reintenta unas horas y luego las descarta).
         </Panel>
       )}
 
@@ -159,16 +177,23 @@ export default function DatafonosAdminPage() {
             <li>Copia la <strong>Webhook signature</strong> que sale arriba de esa misma página y pégala aquí para la empresa (se guarda cifrada y no se vuelve a mostrar).</li>
           </ol>
         </div>
-        <Table headers={['Empresa', 'Datáfonos', 'Firma de webhooks (opcional)', 'Llave privada (Business-Code)', '']} empty="Aún no hay empresas con datáfonos">
+        <div style={{ padding: '4px 20px 12px' }}>
+          <Input label="" placeholder="Buscar empresa, tienda, datáfono o serial…" value={buscar} onChange={(e) => setBuscar(e.target.value)} style={{ maxWidth: 360 }} />
+        </div>
+        <Table headers={['Empresa', 'Datáfonos', 'Comisión datáfonos', 'Firma de webhooks (opcional)', 'Llave privada (Business-Code)', '']} empty="Aún no hay empresas con datáfonos">
           {empresasCodigo.flatMap((e) => [
             <Tr key={e.titularId}>
               <Td><strong>{e.nombre}</strong></Td>
               <Td>{e.terminales}</Td>
+              <Td>
+                {e.comisionPropia != null ? <Etiqueta texto={`${e.comisionPropia}% propia`} color="#c088f0" /> : <span style={{ fontSize: 12, opacity: 0.7 }}>General ({configQ.data ?? 0}%)</span>}
+              </Td>
               <Td><Etiqueta texto={e.firma ? 'Configurada' : 'Falta'} color={e.firma ? '#6CC998' : '#d4a017'} /></Td>
               <Td>{e.configurado ? <Etiqueta texto={`Guardada ${e.termina}`} color="#6CC998" /> : <Etiqueta texto="Falta" color="#d4a017" />}</Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {e.configurado && <Btn disabled={sincronizar.isPending} title="Trae ahora las ventas del datáfono desde Kushki (se hace solo cada 2 minutos)" onClick={() => sincronizar.mutate(e)}>{sincronizar.isPending && sincronizar.variables?.titularId === e.titularId ? 'Sincronizando…' : 'Sincronizar ahora'}</Btn>}
+                  <Btn title="Comisión de datáfonos de esta empresa" onClick={() => { setComisionEmpresaTexto(e.comisionPropia != null ? String(e.comisionPropia) : ''); setComisionEmpresa({ titularId: e.titularId, nombre: e.nombre }); }}>Comisión</Btn>
                   <Btn onClick={() => { setFirma(''); setCodigo(''); setCodigoModal({ titularId: e.titularId }); }}>{e.firma ? 'Cambiar' : 'Asignar'}</Btn>
                   {(e.firma || e.configurado) && <Btn variant="danger" disabled={quitarCodigo.isPending} onClick={() => { if (window.confirm(`¿Quitar las credenciales de ${e.nombre}? Sus datáfonos dejarán de reflejarse en TrendPay.`)) quitarCodigo.mutate(e.titularId); }}>Quitar</Btn>}
                 </div>
@@ -178,6 +203,7 @@ export default function DatafonosAdminPage() {
               <Tr key={s.id}>
                 <Td style={{ paddingLeft: 28 }}>↳ {s.nombre}<div style={{ fontSize: 11, opacity: 0.6 }}>{s.canal === 'web' ? 'Pagos de la página web (en línea)' : 'Llave propia de esta tienda (datáfonos)'}</div></Td>
                 <Td>{s.terminales}</Td>
+                <Td><span style={{ opacity: 0.5 }}>—</span></Td>
                 <Td><span style={{ opacity: 0.5 }}>—</span></Td>
                 <Td>{s.configurado ? <Etiqueta texto={`Guardada ${s.termina}`} color="#6CC998" /> : <Etiqueta texto="Sin llave propia" color="#888" />}</Td>
                 <Td>
@@ -305,10 +331,25 @@ export default function DatafonosAdminPage() {
         </div>
       </Modal>
 
+      <Modal open={!!comisionEmpresa} onClose={() => setComisionEmpresa(null)} title={`Comisión de datáfonos · ${comisionEmpresa?.nombre ?? ''}`}>
+        <p style={{ fontSize: 12, opacity: 0.75, marginTop: 0 }}>
+          Es lo que TrendPay descuenta a esta empresa en cada venta de datáfono o de su página web. Si la dejas vacía usa la comisión general (<strong>{configQ.data ?? 0}%</strong>).
+          Aplica a las ventas nuevas; las ya registradas no cambian.
+        </p>
+        <Input label="Comisión propia (%)" type="number" min={0} max={20} step={0.1} placeholder={`Vacío = general (${configQ.data ?? 0}%)`} value={comisionEmpresaTexto} onChange={(e) => setComisionEmpresaTexto(e.target.value)} />
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Btn variant="ghost" onClick={() => setComisionEmpresa(null)}>Cancelar</Btn>
+          <Btn variant="primary" disabled={guardarComisionEmpresa.isPending || (comisionEmpresaTexto.trim() !== '' && (Number.isNaN(Number(comisionEmpresaTexto)) || Number(comisionEmpresaTexto) < 0 || Number(comisionEmpresaTexto) > 20))}
+            onClick={() => guardarComisionEmpresa.mutate({ titularId: comisionEmpresa!.titularId, pct: comisionEmpresaTexto.trim() === '' ? null : Number(comisionEmpresaTexto) })}>
+            {guardarComisionEmpresa.isPending ? 'Guardando…' : 'Guardar'}
+          </Btn>
+        </div>
+      </Modal>
+
       <Modal open={importarModal} onClose={() => setImportarModal(false)} title="Importar reporte de Kushki">
         <p style={{ fontSize: 12, opacity: 0.75, marginTop: 0 }}>
           Sube el archivo .csv de transacciones de la consola de Kushki. Las filas de datáfono y las de pagos en línea (tarjeta no presente, PSE, efectivo) se reconocen solas.
-          Se acredita con la comisión de datáfonos vigente (<strong>{configQ.data ?? 0}%</strong>) y cada movimiento conserva su fecha real. Lo que ya esté registrado no se duplica; los rechazados no se cuentan.
+          Se acredita con la comisión de datáfonos de esa empresa (la propia, o la general de <strong>{configQ.data ?? 0}%</strong>) y cada movimiento conserva su fecha real. Lo que ya esté registrado no se duplica; los rechazados no se cuentan.
         </p>
         <Select label="¿A qué cuenta se acredita?" value={importCuenta} onChange={(e) => setImportCuenta(e.target.value)}>
           <option value="">Elige la cuenta…</option>

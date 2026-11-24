@@ -177,14 +177,32 @@ export async function sincronizarEmpresa(duenoId: string, opciones: { desdeMs?: 
   return resumen;
 }
 
-export async function sincronizarTodas(): Promise<void> {
-  const llaves = await prisma.comercioKushkiOne.findMany({ where: { activo: true, businessCodeCif: { not: null } }, select: { userId: true, user: { select: { cuentaPadreId: true } } } });
-  // Primero las llaves de las sedes y al final las de las empresas: si la llave de una empresa también devolviera ventas de sus
-  // tiendas, ya estarían registradas en la tienda correcta (una venta nunca se registra dos veces)
-  llaves.sort((a, b) => Number(!!b.user.cuentaPadreId) - Number(!!a.user.cuentaPadreId));
-  for (const { userId } of llaves) {
-    try { await sincronizarEmpresa(userId); }
-    catch (err: any) { logger.warn('No se pudieron sincronizar las ventas de datáfono de una cuenta', { err: err.message, status: err.status }); }
+const MAX_EN_PARALELO = 5; // con muchas empresas, varias a la vez sin saturar a Kushki ni a la base de datos
+let sincronizando = false;
+
+export async function sincronizarTodas(): Promise<{ cuentas: number; fallidas: number; omitida?: boolean }> {
+  // Si la vuelta anterior todavía no termina (muchas empresas o Kushki lento), no se empieza otra encima: duplicaría consultas
+  if (sincronizando) return { cuentas: 0, fallidas: 0, omitida: true };
+  sincronizando = true;
+  try {
+    const llaves = await prisma.comercioKushkiOne.findMany({ where: { activo: true, businessCodeCif: { not: null } }, select: { userId: true, user: { select: { cuentaPadreId: true } } } });
+    // Primero las llaves de las sedes y al final las de las empresas: si la llave de una empresa también devolviera ventas de sus
+    // tiendas, ya estarían registradas en la tienda correcta (una venta nunca se registra dos veces)
+    const sedes = llaves.filter((l) => l.user.cuentaPadreId);
+    const empresas = llaves.filter((l) => !l.user.cuentaPadreId);
+    let fallidas = 0;
+    for (const grupo of [sedes, empresas]) {
+      // Cada grupo termina antes de empezar el siguiente; dentro del grupo, de a MAX_EN_PARALELO. Una empresa que falla no frena a las demás.
+      for (let i = 0; i < grupo.length; i += MAX_EN_PARALELO) {
+        await Promise.all(grupo.slice(i, i + MAX_EN_PARALELO).map(async ({ userId }) => {
+          try { await sincronizarEmpresa(userId); }
+          catch (err: any) { fallidas += 1; logger.warn('No se pudieron sincronizar las ventas de una cuenta', { err: err.message, status: err.status }); }
+        }));
+      }
+    }
+    return { cuentas: llaves.length, fallidas };
+  } finally {
+    sincronizando = false;
   }
 }
 

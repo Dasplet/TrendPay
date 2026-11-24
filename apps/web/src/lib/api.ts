@@ -162,6 +162,7 @@ export const datafonosApi = {
       datos.append('archivo', archivo);
       return api.post(`/datafonos/admin/empresas/${cuentaId}/importar-ventas`, datos, { headers: { 'Content-Type': 'multipart/form-data' } });
     },
+    guardarComisionEmpresa: (titularId: string, comisionPct: number | null) => api.put(`/datafonos/admin/empresas/${titularId}/comision`, { comisionPct }),
     quitarBusinessCode: (titularId: string) => api.delete(`/datafonos/admin/empresas/${titularId}/business-code`),
     cobros:        () => api.get('/datafonos/admin/cobros'),
   },

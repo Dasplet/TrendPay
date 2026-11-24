@@ -9,7 +9,7 @@ import { logger } from '../utils/logger';
 import { KushkiError } from '../utils/kushki';
 import { enviarCobroAsync, enviarReembolsoAsync, businessCodeDeTitular, infoTerminal } from '../utils/kushkiOne';
 import {
-  comisionDatafonoPct, guardarComisionDatafonoPct, webhookDatafonoUrl, tokenWebhookValido, datafonosListosParaEmpresa, urlPublicaApi,
+  comisionDatafonoPct, comisionDatafonoDeEmpresa, comisionesPropias, guardarComisionDatafonoEmpresa, guardarComisionDatafonoPct, webhookDatafonoUrl, tokenWebhookValido, datafonosListosParaEmpresa, urlPublicaApi,
   terminalOcupado, procesarEvento, resolverCobro, resolverReembolso, netoDelCobro, type CobroConTerminal,
 } from '../utils/datafonos';
 import { registrarWebhook } from '../utils/kushkiWebhookLog';
@@ -88,7 +88,7 @@ router.post('/cobros', authenticate, walletLimiter, conCuenta('recargar'), async
   if (await terminalOcupado(terminal.id)) return res.status(409).json({ ok: false, mensaje: 'Ese datáfono tiene un cobro en curso. Espera a que termine' });
 
   const cobro = await prisma.cobroDatafono.create({
-    data: { terminalId: terminal.id, userId: req.user!.id, clientTransactionId: randomUUID(), monto, comisionPct: await comisionDatafonoPct() },
+    data: { terminalId: terminal.id, userId: req.user!.id, clientTransactionId: randomUUID(), monto, comisionPct: await comisionDatafonoDeEmpresa(terminal.titularId) },
     include: { terminal: true },
   });
 
@@ -356,7 +356,7 @@ router.get('/admin/terminales', authenticate, requireAdmin, async (_req: Request
   // Business-Code por empresa: las que tienen datáfonos (y las que ya tienen código aunque aún no tengan datáfonos)
   const codigos = await prisma.comercioKushkiOne.findMany({ include: { user: { select: { nombre: true } } } });
   type SedeLlave = { id: string; nombre: string; configurado: boolean; termina: string; terminales: number; canal: string };
-  const empresas = new Map<string, { titularId: string; nombre: string; configurado: boolean; termina: string; firma: boolean; terminales: number; sedes: SedeLlave[] }>();
+  const empresas = new Map<string, { titularId: string; nombre: string; configurado: boolean; termina: string; firma: boolean; terminales: number; sedes: SedeLlave[]; comisionPropia?: number | null }>();
   for (const t of terminales) {
     const e = empresas.get(t.titularId) ?? { titularId: t.titularId, nombre: t.titular.nombre, configurado: false, termina: '', firma: false, terminales: 0, sedes: [] };
     e.terminales += 1;
@@ -385,6 +385,8 @@ router.get('/admin/terminales', authenticate, requireAdmin, async (_req: Request
     const codigo = await businessCodeDeTitular(s.id);
     empresas.get(s.cuentaPadreId!)!.sedes.push({ id: s.id, nombre: s.nombre, configurado: !!codigo, termina: codigo ? terminaEn(codigo) : '', terminales: terminales.filter((t) => t.sedeId === s.id && t.modelo !== 'WEB').length, canal: codigos.find((c) => c.userId === s.id)?.canal ?? 'datafono' });
   }
+  const propias = await comisionesPropias([...empresas.keys()]);
+  for (const [id, e] of empresas) e.comisionPropia = propias.get(id) ?? null;
   res.json({
     ok: true,
     urlPublica: !!urlPublicaApi(),
@@ -564,6 +566,18 @@ router.put('/admin/config', authenticate, requireAdmin, async (req: Request, res
   await guardarComisionDatafonoPct(parse.data.comisionPct);
   await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'CAMBIAR_COMISION_DATAFONO', tabla: 'configs', registroId: 'comision_datafono_pct', ip: req.ip, datos: { antes: anterior, despues: parse.data.comisionPct } } }).catch(() => {});
   res.json({ ok: true, comisionPct: parse.data.comisionPct });
+});
+
+// PUT /api/datafonos/admin/empresas/:titularId/comision  { comisionPct: 0-20 | null }  → comisión de datáfonos propia de esa empresa
+// (null = vuelve a usar la general). Aplica a las ventas nuevas; las ya registradas no cambian.
+router.put('/admin/empresas/:titularId/comision', authenticate, requireAdmin, async (req: Request, res: Response) => {
+  const parse = z.object({ comisionPct: z.number().min(0).max(20).nullable() }).safeParse(req.body);
+  if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'La comisión debe estar entre 0% y 20% (o vacía para usar la general)' });
+  if (!(await empresaValida(req.params.titularId))) return res.status(404).json({ ok: false, mensaje: 'Empresa no encontrada' });
+  const anterior = (await comisionesPropias([req.params.titularId])).get(req.params.titularId) ?? null;
+  await guardarComisionDatafonoEmpresa(req.params.titularId, parse.data.comisionPct);
+  await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'CAMBIAR_COMISION_DATAFONO_EMPRESA', tabla: 'configs', registroId: req.params.titularId, ip: req.ip, datos: { antes: anterior ?? 'general', despues: parse.data.comisionPct ?? 'general' } } }).catch(() => {});
+  res.json({ ok: true, comisionPropia: parse.data.comisionPct, efectiva: await comisionDatafonoDeEmpresa(req.params.titularId) });
 });
 
 // GET /api/datafonos/admin/resumen?periodo=hoy|7d|mes  → ventas aprobadas por empresa, tienda y datáfono

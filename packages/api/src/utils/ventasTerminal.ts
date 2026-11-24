@@ -3,7 +3,7 @@ import type { TerminalKushki } from '@prisma/client';
 import { prisma } from '../index';
 import { genCodigo, decrypt } from './security';
 import { logger } from './logger';
-import { comisionDatafonoPct } from './datafonos';
+import { comisionDatafonoDeEmpresa } from './datafonos';
 
 // ══════════════════════════════════════
 // VENTAS HECHAS EN EL DATÁFONO
@@ -99,7 +99,7 @@ const esWeb = (t: TerminalKushki) => t.modelo === 'WEB';
 
 // ── Venta aprobada en el datáfono: acredita el neto en la billetera de la empresa ──
 async function registrarVenta(terminal: TerminalKushki, b: Aviso, clave: string, monto: number, opciones: OpcionesAviso = {}): Promise<ResultadoAviso> {
-  const pct = opciones.comisionPct ?? await comisionDatafonoPct();
+  const pct = opciones.comisionPct ?? await comisionDatafonoDeEmpresa(terminal.titularId);
   const fecha = fechaDelAviso(b);
   const comision = Math.round((monto * pct) / 100);
   const neto = monto - comision;

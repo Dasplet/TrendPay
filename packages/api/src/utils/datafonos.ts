@@ -25,6 +25,32 @@ export async function comisionDatafonoPct(): Promise<number> {
   return Number.isFinite(pct) && pct >= 0 ? pct : 0;
 }
 
+// Cada empresa puede tener su PROPIA comisión de datáfonos (lo pactado con ella); si no tiene, se usa la general.
+const claveComisionEmpresa = (titularId: string) => `${CLAVE_COMISION}:${titularId}`;
+const pctValido = (v: string | undefined | null): number | null => {
+  if (v === undefined || v === null) return null;
+  const n = Number.parseFloat(v);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
+
+export async function comisionDatafonoDeEmpresa(titularId: string): Promise<number> {
+  const propia = await prisma.config.findUnique({ where: { clave: claveComisionEmpresa(titularId) } });
+  return pctValido(propia?.valor) ?? (await comisionDatafonoPct());
+}
+
+// Comisiones propias de varias empresas de una vez (null = usa la general)
+export async function comisionesPropias(titularIds: string[]): Promise<Map<string, number | null>> {
+  const filas = titularIds.length ? await prisma.config.findMany({ where: { clave: { in: titularIds.map(claveComisionEmpresa) } } }) : [];
+  const porClave = new Map(filas.map((f) => [f.clave, pctValido(f.valor)]));
+  return new Map(titularIds.map((id) => [id, porClave.get(claveComisionEmpresa(id)) ?? null]));
+}
+
+export async function guardarComisionDatafonoEmpresa(titularId: string, pct: number | null): Promise<void> {
+  const clave = claveComisionEmpresa(titularId);
+  if (pct === null) await prisma.config.deleteMany({ where: { clave } });
+  else await prisma.config.upsert({ where: { clave }, create: { clave, valor: String(pct) }, update: { valor: String(pct) } });
+}
+
 export async function guardarComisionDatafonoPct(pct: number): Promise<void> {
   await prisma.config.upsert({ where: { clave: CLAVE_COMISION }, create: { clave: CLAVE_COMISION, valor: String(pct) }, update: { valor: String(pct) } });
 }
