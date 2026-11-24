@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { Logo } from '@/components/Logo';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import Link from 'next/link';
@@ -312,7 +313,7 @@ export default function RegisterPage() {
         {/* Header */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24 }}>
           <button onClick={() => step > 1 ? setStep(step-1) : router.push('/login')} style={{ width:38, height:38, borderRadius:11, background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.15)', color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}><ArrowLeft size={16}/></button>
-          <img src="/tp_icon.png" alt="TrendPay" width={36} height={36} style={{ borderRadius:10 }} />
+          <Logo height={26} />
           <Link href="/login" style={{ width:38, height:38, borderRadius:11, background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.15)', color:'rgba(255,255,255,.7)', display:'flex', alignItems:'center', justifyContent:'center' }}><X size={16}/></Link>
         </div>
 

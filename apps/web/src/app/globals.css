@@ -34,6 +34,8 @@
   --adm-muted:     #a19cab;
   --adm-muted-rgb: 161,156,171;
 
+  --logo-color:    #ffffff;
+
   color-scheme: dark;
 }
 
@@ -58,6 +60,8 @@
   --adm-fg-rgb:    26,8,64;
   --adm-muted:     #6b5b78;
   --adm-muted-rgb: 107,91,120;
+
+  --logo-color:    #852EC7;
 
   color-scheme: light;
 }
@@ -188,6 +192,15 @@ input::placeholder { color: rgba(174,147,170,.5); }
   background: var(--adm-bg);
   color: var(--adm-text);
   overflow-x: hidden;
+}
+
+/* Logo de TrendPay: imagen transparente pintada con el color del tema (blanco en oscuro, morado en claro) */
+.tp-logo-mark {
+  display: inline-block;
+  flex: 0 0 auto;
+  background-color: var(--logo-color);
+  -webkit-mask: url(/trendpay-logo.png) center / contain no-repeat;
+  mask: url(/trendpay-logo.png) center / contain no-repeat;
 }
 
 /* ── Barra lateral ── */

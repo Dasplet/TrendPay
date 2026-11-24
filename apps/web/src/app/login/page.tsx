@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { Logo } from '@/components/Logo';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { AlertCircle } from 'lucide-react';
@@ -68,7 +69,7 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <img src="/tp_icon.png" alt="TrendPay" width={64} height={64} style={{ borderRadius: 18, margin: '0 auto 10px' }} />
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}><Logo height={40} /></div>
           <div className="text-sm text-[var(--tp-muted)]">Billetera virtual segura</div>
         </div>
 

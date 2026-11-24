@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { Logo } from '@/components/Logo';
 
 export function SplashScreen({ onDone }: Readonly<{ onDone: () => void }>) {
   const [progress, setProgress] = useState(0);
@@ -19,7 +20,7 @@ export function SplashScreen({ onDone }: Readonly<{ onDone: () => void }>) {
   return (
     <div style={{ position:'fixed', inset:0, zIndex:9999, background:'linear-gradient(160deg,#0a0a0d 0%,#1a1620 55%,#131316 100%)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
       <div style={{ marginBottom:48, textAlign:'center' }}>
-        <img src="/tp_icon.png" alt="TrendPay" width={88} height={88} style={{ borderRadius:24, display:'block', margin:'0 auto' }} />
+        <div style={{ display:'flex', justifyContent:'center' }}><Logo height={44} color="#ffffff" /></div>
         <div style={{ fontSize:13, color:'rgba(255,255,255,.4)', marginTop:14, letterSpacing:'2px', textTransform:'uppercase' }}>Billetera Virtual</div>
       </div>
       <div style={{ width:240, marginBottom:16 }}>

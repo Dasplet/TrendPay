@@ -35,6 +35,7 @@ import {
 import type { ReactNode } from 'react';
 import type { User } from '@/store/authStore';
 import { banksApi } from '@/lib/api';
+import { Logo } from '@/components/Logo';
 
 export function fmtCOP(value?: number | string | null) {
   const n = Number(value || 0);
@@ -72,10 +73,9 @@ export function maskPhone(phone?: string | null) {
 }
 
 export function BrandLogo({ compact = false }: Readonly<{ compact?: boolean }>) {
-  const size = compact ? 28 : 36;
   return (
-    <div className="tp-logo" aria-label="TrendPay">
-      <img src="/tp_icon.png" alt="TrendPay" width={size} height={size} style={{ borderRadius: size * 0.28 }} />
+    <div className="tp-logo">
+      <Logo height={compact ? 20 : 24} />
     </div>
   );
 }

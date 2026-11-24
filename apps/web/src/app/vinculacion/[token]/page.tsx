@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Logo } from '@/components/Logo';
 import { useParams } from 'next/navigation';
 import { ShieldCheck, Lock, FileText, UploadCloud, CheckCircle2, AlertCircle, Clock, RefreshCw, Send, FileCheck2, XCircle } from 'lucide-react';
 
@@ -440,7 +441,7 @@ export default function VinculacionPage() {
       <style dangerouslySetInnerHTML={{ __html: ESTILOS }} />
       <header className="vc-top">
         <div className="vc-top-in">
-          <div className="vc-brand"><img src="/tp_icon.png" alt="" /> TrendPay</div>
+          <div className="vc-brand"><Logo height={26} color="#5a1a8a" /></div>
           <div className="vc-secure"><ShieldCheck size={16} color="#1e8a55" /> <span>Portal de vinculación · Conexión segura</span></div>
         </div>
       </header>

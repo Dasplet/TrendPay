@@ -11,6 +11,7 @@ import {
 import { NotificationBell } from '@/components/admin/NotificationBell';
 import { useTiempoReal, ETIQUETA_ESTADO } from '@/lib/tiempoReal';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { Logo } from '@/components/Logo';
 
 const NAV = [
   { section: 'GENERAL', items: [
@@ -94,7 +95,7 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
 
         {/* Logo */}
         <div style={{ padding:'18px 18px 14px', borderBottom:'1px solid rgba(133,46,199,.12)' }}>
-          <img src="/tp_icon.png" alt="TrendPay" width={32} height={32} style={{ borderRadius:9 }} />
+          <Logo height={24} />
           <div style={{ marginTop:6 }}>
             <span style={{ fontSize:10, fontWeight:700, background:'rgba(133,46,199,.2)', color:'#c088f0', padding:'3px 10px', borderRadius:20, border:'1px solid rgba(133,46,199,.3)' }}>
               ADMIN PANEL
