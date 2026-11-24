@@ -70,7 +70,7 @@ export default function HistorialPage() {
       </section>
 
       <div className="tp-tab-row">
-        {['Todo', 'Consignaciones', 'Cobros QR', 'Envíos', 'Retiros banco'].map((tab) => <button key={tab}>{tab}</button>)}
+        {['Todo', 'Cobros QR', 'Retiros banco'].map((tab) => <button key={tab}>{tab}</button>)}
       </div>
 
       {filtered.length === 0 ? <EmptyState /> : (

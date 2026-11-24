@@ -349,10 +349,8 @@ export const userMenu: { section: string; items: { href: string; label: string; 
     { href: '/dashboard/historial', label: 'Historial', icon: <History size={19} /> },
   ]},
   { section: 'Operaciones', items: [
-    { href: '/dashboard/consignar', label: 'Consignar', icon: <QrCode size={19} />, permiso: 'recargar' },
     { href: '/dashboard/cobrar-qr', label: 'Cobrar QR', icon: <QrCode size={19} />, permiso: 'recargar' },
     { href: '/dashboard/datafono', label: 'Datáfonos', icon: <CreditCard size={19} />, permiso: 'recargar', soloConDatafonos: true },
-    { href: '/dashboard/enviar', label: 'Enviar', icon: <Send size={19} />, permiso: 'enviar' },
     { href: '/dashboard/retirar-banco', label: 'Retirar a banco', icon: <Building2 size={19} />, permiso: 'retirar' },
   ]},
   { section: 'Cuenta', items: [

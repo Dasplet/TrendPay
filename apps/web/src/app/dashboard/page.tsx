@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, BellRing, CreditCard, Download, Eye, EyeOff, QrCode, Send, Trash2, TrendingUp, Wallet, Building2, CheckCheck, X } from 'lucide-react';
+import { Bell, BellRing, Download, Eye, EyeOff, QrCode, Send, Trash2, TrendingUp, Wallet, Building2, CheckCheck, X } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { notificationsApi, walletApi } from '@/lib/api';
 import { EmptyState, StatusPill, UserAvatar, compactCOP, firstName, fmtCOP } from '@/components/user/UserTheme';
@@ -87,10 +87,7 @@ export default function DashboardPage() {
   const variacion: number | null = typeof mensual?.variacionPct === 'number' ? mensual.variacionPct : null;
 
   const allActions: { label: string; icon: React.ReactNode; href: string; tone: string; permiso: Permiso }[] = [
-    { label: 'Consignar', icon: <QrCode size={30} />, href: '/dashboard/consignar', tone: 'purple', permiso: 'recargar' },
     { label: 'Cobrar QR', icon: <QrCode size={30} />, href: '/dashboard/cobrar-qr', tone: 'green', permiso: 'recargar' },
-    { label: 'Enviar', icon: <Send size={30} />, href: '/dashboard/enviar', tone: 'pink', permiso: 'enviar' },
-    { label: 'Recargar', icon: <CreditCard size={30} />, href: '/dashboard/consignar', tone: 'green', permiso: 'recargar' },
     { label: 'Retirar', icon: <Building2 size={30} />, href: '/dashboard/retirar-banco', tone: 'red', permiso: 'retirar' },
   ];
   const actions = allActions.filter((a) => puede(user, a.permiso));
