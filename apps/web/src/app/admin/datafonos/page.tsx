@@ -190,7 +190,7 @@ export default function DatafonosAdminPage() {
                 {e.comisionPropia != null ? <Etiqueta texto={`${e.comisionPropia}% propia`} color="#c088f0" /> : <span style={{ fontSize: 12, opacity: 0.7 }}>General ({configQ.data ?? 0}%)</span>}
               </Td>
               <Td><Etiqueta texto={e.firma ? 'Configurada' : 'Falta'} color={e.firma ? '#6CC998' : '#d4a017'} /></Td>
-              <Td>{e.configurado ? <Etiqueta texto={`Guardada ${e.termina}`} color="#6CC998" /> : <Etiqueta texto="Falta" color="#d4a017" />}</Td>
+              <Td>{e.configurado ? <Etiqueta texto="Guardada" color="#6CC998" /> : <Etiqueta texto="Falta" color="#d4a017" />}</Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {e.configurado && <Btn disabled={sincronizar.isPending} title="Trae ahora las ventas del datáfono desde Kushki (se hace solo cada 2 minutos)" onClick={() => sincronizar.mutate(e)}>{sincronizar.isPending && sincronizar.variables?.titularId === e.titularId ? 'Sincronizando…' : 'Sincronizar ahora'}</Btn>}
@@ -206,7 +206,7 @@ export default function DatafonosAdminPage() {
                 <Td>{s.terminales}</Td>
                 <Td><span style={{ opacity: 0.5 }}>—</span></Td>
                 <Td><span style={{ opacity: 0.5 }}>—</span></Td>
-                <Td>{s.configurado ? <Etiqueta texto={`Guardada ${s.termina}`} color="#6CC998" /> : <Etiqueta texto="Sin llave propia" color="#888" />}</Td>
+                <Td>{s.configurado ? <Etiqueta texto="Guardada" color="#6CC998" /> : <Etiqueta texto="Sin llave propia" color="#888" />}</Td>
                 <Td>
                   <div style={{ display: 'flex', gap: 6 }}>
                     {s.configurado && <Btn disabled={sincronizar.isPending} title="Trae ahora las ventas de esta tienda desde Kushki (se hace solo cada 2 minutos)" onClick={() => sincronizar.mutate({ titularId: s.id, nombre: `${e.nombre} · ${s.nombre}` })}>{sincronizar.isPending && sincronizar.variables?.titularId === s.id ? 'Sincronizando…' : 'Sincronizar ahora'}</Btn>}
