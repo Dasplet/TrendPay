@@ -15,8 +15,10 @@ export function puede(user: Pick<User, 'permisos'> | null | undefined, permiso: 
 const PERMISO_POR_RUTA: [string, Permiso][] = [
   ['/dashboard/cobrar-qr', 'recargar'],
   ['/dashboard/datafono', 'recargar'],
+  ['/dashboard/ventas', 'recargar'],
   ['/dashboard/pagar-qr', 'enviar'],
   ['/dashboard/retirar-banco', 'retirar'],
+  ['/dashboard/bancos', 'retirar'],
 ];
 
 export function permisoDeRuta(pathname: string): Permiso | undefined {

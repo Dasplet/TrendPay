@@ -44,6 +44,7 @@ const mapCobro = (c: CobroConTerminal) => ({
   neto: netoDelCobro(c),
   tipo: c.tipo,       // cobro | reembolso
   origen: c.origen,   // terminal (digitado en el datáfono) | trendpay
+  canal: c.terminal.modelo === 'WEB' ? 'web' : 'datafono', // de dónde vino: un datáfono o el pago en línea de la página web
   creado: c.createdAt,
 });
 
@@ -207,18 +208,21 @@ async function resumenDeCobros(where: object, desde: Date) {
   const cobros = await prisma.cobroDatafono.findMany({
     where: {
       createdAt: { gte: desde },
-      OR: [
-        { tipo: 'cobro', estado: 'aprobado' },
-        // una venta hecha en el datáfono y luego reembolsada sigue contando; su reembolso (abajo) la resta: el resumen coincide con la billetera
-        { tipo: 'cobro', estado: 'reembolsado', origen: 'terminal' },
-        { tipo: 'reembolso', estado: 'aprobado' },
+      AND: [
+        { OR: [
+          { tipo: 'cobro', estado: 'aprobado' },
+          // una venta hecha en el datáfono y luego reembolsada sigue contando; su reembolso (abajo) la resta: el resumen coincide con la billetera
+          { tipo: 'cobro', estado: 'reembolsado', origen: 'terminal' },
+          { tipo: 'reembolso', estado: 'aprobado' },
+        ] },
+        where,
       ],
-      ...where,
     },
-    select: { tipo: true, monto: true, comisionPct: true, terminal: { select: { id: true, alias: true, sedeId: true, sede: { select: { nombre: true } }, titular: { select: { id: true, nombre: true } } } } },
+    select: { tipo: true, monto: true, comisionPct: true, terminal: { select: { id: true, alias: true, modelo: true, sedeId: true, sede: { select: { nombre: true } }, titular: { select: { id: true, nombre: true } } } } },
   });
   const total = vacia();
-  const tiendas = new Map<string, FilaResumen & { empresa: string; sedeId: string | null; nombre: string; terminales: Map<string, FilaResumen & { id: string; alias: string }> }>();
+  const porCanal = { datafono: vacia(), web: vacia() };
+  const tiendas = new Map<string, FilaResumen & { empresa: string; sedeId: string | null; nombre: string; terminales: Map<string, FilaResumen & { id: string; alias: string; canal: 'datafono' | 'web' }> }>();
   for (const c of cobros) {
     const signo = c.tipo === 'reembolso' ? -1 : 1;
     const monto = Number(c.monto) * signo;
@@ -228,11 +232,12 @@ async function resumenDeCobros(where: object, desde: Date) {
     let tienda = tiendas.get(clave);
     if (!tienda) { tienda = { ...vacia(), empresa: t.titular.nombre, sedeId: t.sedeId, nombre: t.sede?.nombre ?? 'Sin tienda asignada', terminales: new Map() }; tiendas.set(clave, tienda); }
     let term = tienda.terminales.get(t.id);
-    if (!term) { term = { ...vacia(), id: t.id, alias: t.alias }; tienda.terminales.set(t.id, term); }
-    sumar(total, monto, pct, signo); sumar(tienda, monto, pct, signo); sumar(term, monto, pct, signo);
+    if (!term) { term = { ...vacia(), id: t.id, alias: t.alias, canal: t.modelo === 'WEB' ? 'web' : 'datafono' }; tienda.terminales.set(t.id, term); }
+    sumar(total, monto, pct, signo); sumar(tienda, monto, pct, signo); sumar(term, monto, pct, signo); sumar(porCanal[term.canal], monto, pct, signo);
   }
   return {
     total,
+    porCanal,
     tiendas: [...tiendas.values()]
       .sort((a, b) => b.bruto - a.bruto)
       .map(({ terminales, ...t }) => ({ ...t, terminales: [...terminales.values()].sort((a, b) => b.bruto - a.bruto) })),
@@ -244,11 +249,10 @@ const periodoDe = (req: Request): Periodo => (PERIODOS as readonly string[]).inc
 // GET /api/datafonos/resumen?periodo=hoy|7d|mes
 router.get('/resumen', authenticate, conCuenta('recargar'), async (req: Request, res: Response) => {
   const cuenta = req.cuenta!;
-  // Las ventas por tienda son de la cuenta principal: una sede (que no ve el saldo) no las ve
-  if (cuenta.esSubcuenta) return res.status(403).json({ ok: false, mensaje: 'Las ventas por tienda las ve la cuenta principal' });
+  // La cuenta principal ve las ventas de todas sus tiendas; una tienda (que no ve el saldo) solo las suyas
   const periodo = periodoDe(req);
   const desde = inicioDePeriodo(periodo);
-  const r = await resumenDeCobros({ terminal: { titularId: cuenta.titularId } }, desde);
+  const r = await resumenDeCobros(visibilidadCobros(req), desde);
   res.json({ ok: true, periodo, desde, ...r });
 });
 

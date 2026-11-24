@@ -363,12 +363,17 @@ describe('Cobros con datáfono (Kushki One)', () => {
       expect(resto[0]).toMatchObject({ nombre: 'Sin tienda asignada', bruto: 5000 });
     });
 
-    it('una sede no ve las ventas por tienda; otra empresa no ve nada ajeno', async () => {
+    it('una tienda ve solo sus propias ventas (no las de otra tienda); otra empresa no ve nada ajeno', async () => {
       const { empresa, sanJuan, norte, c1, c3 } = await tiendas();
       await cobro(c1.id, sanJuan.id, 50000);
       await cobro(c3.id, norte.id, 10000);
-      // una sede no ve las ventas por tienda: son de la cuenta principal
-      expect((await resumen(tokenPara(sanJuan))).status).toBe(403);
+      // una tienda ve únicamente lo suyo
+      const propia = await resumen(tokenPara(sanJuan));
+      expect(propia.status).toBe(200);
+      expect(propia.body.total).toMatchObject({ cobros: 1, bruto: 50000 });
+      expect(propia.body.tiendas).toHaveLength(1);
+      expect(propia.body.tiendas[0].sedeId).toBe(sanJuan.id);
+      expect((await resumen(tokenPara(norte))).body.total).toMatchObject({ cobros: 1, bruto: 10000 });
 
       const ajena = await crearUsuarioDePrueba({ saldo: 0 });
       expect((await resumen(tokenPara(ajena))).body.total.cobros).toBe(0);

@@ -5,9 +5,9 @@ import { useQuery } from '@tanstack/react-query';
 import { datafonosApi } from '@/lib/api';
 
 interface Fila { cobros: number; bruto: number; comision: number; neto: number }
-interface Terminal extends Fila { id: string; alias: string }
+interface Terminal extends Fila { id: string; alias: string; canal?: 'datafono' | 'web' }
 interface Tienda extends Fila { empresa: string; sedeId: string | null; nombre: string; terminales: Terminal[] }
-interface Resumen { total: Fila; tiendas: Tienda[] }
+interface Resumen { total: Fila; porCanal?: { datafono: Fila; web: Fila }; tiendas: Tienda[] }
 
 const PERIODOS = [
   { clave: 'hoy', etiqueta: 'Hoy' },
@@ -57,6 +57,19 @@ export function ResumenVentas({ admin = false }: Readonly<{ admin?: boolean }>) 
             <span style={{ opacity: 0.7 }}>· {data.total.cobros} cobro{data.total.cobros === 1 ? '' : 's'} aprobado{data.total.cobros === 1 ? '' : 's'}</span>
             {hayComision && <span style={{ opacity: 0.7 }}> · comisión {cop(data.total.comision)} · neto {cop(data.total.neto)}</span>}
           </p>
+
+          {/* De dónde vienen las ventas: los datáfonos y los pagos en línea de la página web */}
+          {data.porCanal && (data.porCanal.datafono.cobros > 0 || data.porCanal.web.cobros > 0) && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 12 }}>
+              {([['Datáfonos', data.porCanal.datafono], ['Página web', data.porCanal.web]] as const).map(([nombre, f]) => (
+                <div key={nombre} style={{ border: '1px solid rgba(128,128,128,.25)', borderRadius: 12, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 12, opacity: 0.7 }}>{nombre}</div>
+                  <strong style={{ fontSize: 17 }}>{cop(f.bruto)}</strong>
+                  <div style={{ fontSize: 12, opacity: 0.7 }}>{f.cobros} cobro{f.cobros === 1 ? '' : 's'}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {data.tiendas.length === 0 && <p style={{ opacity: 0.7 }}>Todavía no hay cobros aprobados en este período.</p>}
 

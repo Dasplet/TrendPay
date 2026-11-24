@@ -176,6 +176,35 @@ describe('Pagos de la página web (Kushki, tarjeta no presente) en la cuenta de 
     });
   });
 
+  it('"Mis ventas": el resumen separa datáfonos y página web, y cada cuenta ve solo lo suyo', async () => {
+    const { e, sanJuan, web } = await cool();
+    respuesta([pago({ approved_transaction_amount: 10000 }), pago({ approved_transaction_amount: 5000 })]);
+    await sincronizarEmpresa(web.id, { desdeMs: hace1h() });
+    // una venta de datáfono en San Juan
+    const caja = await prisma.terminalKushki.create({ data: { serial: 'P3F6P624J0101', alias: 'Caja 1', titularId: e.id, sedeId: sanJuan.id } });
+    await prisma.cobroDatafono.create({ data: { terminalId: caja.id, userId: sanJuan.id, clientTransactionId: 'terminal:x1', monto: 20000, comisionPct: 0, estado: 'aprobado', origen: 'terminal' } });
+    const ver = (u: any, ruta: string) => request(app).get(`/api/datafonos/${ruta}`).set('Authorization', `Bearer ${tokenPara(u)}`);
+
+    const principal = (await ver(e, 'resumen?periodo=7d')).body;
+    expect(principal.total).toMatchObject({ cobros: 3, bruto: 35000 });
+    expect(principal.porCanal.web).toMatchObject({ cobros: 2, bruto: 15000 });
+    expect(principal.porCanal.datafono).toMatchObject({ cobros: 1, bruto: 20000 });
+    expect(principal.tiendas.flatMap((t: any) => t.terminales).map((t: any) => t.canal).sort()).toEqual(['datafono', 'web']);
+
+    const cuentaWeb = (await ver(web, 'resumen?periodo=7d')).body;
+    expect(cuentaWeb.total).toMatchObject({ cobros: 2, bruto: 15000 });
+    expect(cuentaWeb.porCanal.datafono.cobros).toBe(0);
+    const cuentaSanJuan = (await ver(sanJuan, 'resumen?periodo=7d')).body;
+    expect(cuentaSanJuan.total).toMatchObject({ cobros: 1, bruto: 20000 });
+    expect(cuentaSanJuan.porCanal.web.cobros).toBe(0);
+
+    // la lista de movimientos dice de dónde vino cada uno
+    const movs = (await ver(web, 'cobros')).body.cobros as { canal: string }[];
+    expect(movs).toHaveLength(2);
+    expect(movs.every((m) => m.canal === 'web')).toBe(true);
+    expect((await ver(e, 'cobros')).body.cobros.map((m: any) => m.canal).sort()).toEqual(['datafono', 'web', 'web']);
+  });
+
   it('el dashboard del administrador cuenta los pagos web aparte de los datáfonos', async () => {
     const { web } = await cool();
     respuesta([pago({ approved_transaction_amount: 10000 })]);

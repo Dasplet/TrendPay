@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, BellRing, Download, Eye, EyeOff, QrCode, Send, Trash2, TrendingUp, Wallet, Building2, CheckCheck, X } from 'lucide-react';
+import { Bell, BellRing, BarChart3, History, ShieldCheck, Download, Eye, EyeOff, QrCode, Send, Trash2, TrendingUp, Wallet, Building2, CheckCheck, X } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { notificationsApi, walletApi } from '@/lib/api';
 import { EmptyState, StatusPill, UserAvatar, compactCOP, firstName, fmtCOP } from '@/components/user/UserTheme';
@@ -86,11 +86,15 @@ export default function DashboardPage() {
   const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
   const variacion: number | null = typeof mensual?.variacionPct === 'number' ? mensual.variacionPct : null;
 
-  const allActions: { label: string; icon: React.ReactNode; href: string; tone: string; permiso: Permiso }[] = [
+  const allActions: { label: string; icon: React.ReactNode; href: string; tone: string; permiso?: Permiso }[] = [
+    { label: 'Mis ventas', icon: <BarChart3 size={30} />, href: '/dashboard/ventas', tone: 'purple', permiso: 'recargar' },
     { label: 'Cobrar QR', icon: <QrCode size={30} />, href: '/dashboard/cobrar-qr', tone: 'green', permiso: 'recargar' },
     { label: 'Retirar', icon: <Building2 size={30} />, href: '/dashboard/retirar-banco', tone: 'red', permiso: 'retirar' },
+    { label: 'Historial', icon: <History size={30} />, href: '/dashboard/historial', tone: 'pink' },
+    { label: 'Mis bancos', icon: <Building2 size={30} />, href: '/dashboard/bancos', tone: 'pink', permiso: 'retirar' },
+    { label: 'Seguridad', icon: <ShieldCheck size={30} />, href: '/dashboard/seguridad', tone: 'purple' },
   ];
-  const actions = allActions.filter((a) => puede(user, a.permiso));
+  const actions = allActions.filter((a) => !a.permiso || puede(user, a.permiso));
 
   return (
     <div className="tp-user-page">

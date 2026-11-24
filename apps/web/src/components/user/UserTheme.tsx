@@ -9,6 +9,7 @@ import type { Permiso } from '@/lib/permisos';
 import {
   ArrowRight,
   Banknote,
+  BarChart3,
   Building2,
   Camera,
   Check,
@@ -350,13 +351,13 @@ export const userMenu: { section: string; items: { href: string; label: string; 
   ]},
   { section: 'Operaciones', items: [
     { href: '/dashboard/cobrar-qr', label: 'Cobrar QR', icon: <QrCode size={19} />, permiso: 'recargar' },
-    { href: '/dashboard/datafono', label: 'Datáfonos', icon: <CreditCard size={19} />, permiso: 'recargar', soloConDatafonos: true },
+    { href: '/dashboard/ventas', label: 'Mis ventas', icon: <BarChart3 size={19} />, permiso: 'recargar' },
     { href: '/dashboard/retirar-banco', label: 'Retirar a banco', icon: <Building2 size={19} />, permiso: 'retirar' },
   ]},
   { section: 'Cuenta', items: [
     { href: '/dashboard/perfil', label: 'Mi perfil', icon: <UserIcon /> },
     { href: '/dashboard/seguridad', label: 'Seguridad', icon: <Lock size={19} /> },
-    { href: '/dashboard/bancos', label: 'Mis bancos', icon: <CreditCard size={19} /> },
+    { href: '/dashboard/bancos', label: 'Mis bancos', icon: <CreditCard size={19} />, permiso: 'retirar' },
   ]},
 ];
 
