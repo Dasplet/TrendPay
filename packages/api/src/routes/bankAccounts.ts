@@ -4,6 +4,8 @@ import { prisma } from '../index';
 import { authenticate } from '../middleware/auth';
 import { encrypt, decrypt, maskAccount } from '../utils/security';
 import { logger } from '../utils/logger';
+import { exigir2fa } from '../utils/verificacion2fa';
+
 
 const router = Router();
 
@@ -46,7 +48,7 @@ const crearSchema = z.object({
   alias: z.string().max(60).optional(),
 });
 
-router.post('/', authenticate, async (req: Request, res: Response) => {
+router.post('/', authenticate, exigir2fa, async (req: Request, res: Response) => {
   const parse = crearSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Datos de la cuenta bancaria incompletos o inválidos' });
   const { bancoId, bancoNombre, tipoCuenta, numeroCuenta, cedulaTitular, nombreTitular, alias } = parse.data;
@@ -74,7 +76,7 @@ router.post('/', authenticate, async (req: Request, res: Response) => {
 });
 
 // ══ DELETE /api/bank-accounts/:id ══
-router.delete('/:id', authenticate, async (req: Request, res: Response) => {
+router.delete('/:id', authenticate, exigir2fa, async (req: Request, res: Response) => {
   try {
     const cuenta = await prisma.bankAccount.findUnique({ where: { id: req.params.id } });
     if (cuenta?.userId !== req.user!.id) {

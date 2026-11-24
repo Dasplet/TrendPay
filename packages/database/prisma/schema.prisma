@@ -68,6 +68,8 @@ model User {
   terminalesTitular TerminalKushki[] @relation("TerminalesTitular")
   terminalesSede    TerminalKushki[] @relation("TerminalesSede")
   cobrosDatafono    CobroDatafono[]
+  codigosVerificacion CodigoVerificacion[]
+  llavesBreb      LlaveBreb[]
 
   @@index([cuentaPadreId])
   @@index([correo])
@@ -555,4 +557,44 @@ model UserAuditLog {
 
   @@index([userId, createdAt(sort: Desc)])
   @@map("user_audit_log")
+}
+
+// ══════════════════════════════════════
+// VERIFICACIÓN EN DOS PASOS (2FA)
+// ══════════════════════════════════════
+// Código de 6 dígitos que se envía al correo. Solo se guarda su huella (HMAC), vence a los 10 minutos, se puede
+// intentar 5 veces y se borra al usarse. proposito: login | activar | desactivar | operacion
+model CodigoVerificacion {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  proposito  String
+  codigoHash String   @map("codigo_hash")
+  intentos   Int      @default(0)
+  expiraAt   DateTime @map("expira_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, proposito])
+  @@map("codigos_verificacion")
+}
+
+// ══════════════════════════════════════
+// LLAVES BRE-B
+// ══════════════════════════════════════
+// Llaves Bre-B que el cliente guarda en TrendPay para, más adelante, cobrar con ellas. tipo: celular | correo | documento | alfanumerica
+model LlaveBreb {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tipo      String
+  valor     String
+  alias     String?
+  estado    String   @default("guardada") // guardada | activa (cuando se pueda cobrar con ella)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tipo, valor])
+  @@index([userId])
+  @@map("llaves_breb")
 }

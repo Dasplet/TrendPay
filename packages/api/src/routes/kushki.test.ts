@@ -361,16 +361,25 @@ describe('Kushki routes', () => {
       (brebHabilitado as jest.Mock).mockResolvedValue(true);
 
       // sin Branch: nunca, aunque el comercio de TrendPay lo tuviera
-      expect((await request(app).get('/api/kushki/metodos').set(auth)).body).toEqual({ ok: true, breb: false });
+      expect((await request(app).get('/api/kushki/metodos').set(auth)).body).toMatchObject({ ok: true, breb: false });
       expect(brebHabilitado).not.toHaveBeenCalled();
 
       await crearBranch(user.id);
-      expect((await request(app).get('/api/kushki/metodos').set(auth)).body).toEqual({ ok: true, breb: true });
+      expect((await request(app).get('/api/kushki/metodos').set(auth)).body).toMatchObject({ ok: true, breb: true });
       expect(brebHabilitado).toHaveBeenCalledWith(CRED_BRANCH);
 
       (brebHabilitado as jest.Mock).mockResolvedValue(false);
       expect((await request(app).get('/api/kushki/metodos').set(auth)).body.breb).toBe(false);
       expect((await request(app).get('/api/kushki/metodos')).status).toBe(401);
+    });
+
+    it('GET /metodos dice con qué llave pública y en qué ambiente se cobra (pruebas = sin dinero real)', async () => {
+      const user = await crearUsuarioDePrueba();
+      const r = await request(app).get('/api/kushki/metodos').set({ Authorization: `Bearer ${tokenPara(user)}` });
+      expect(typeof r.body.pruebas).toBe('boolean');
+      expect(typeof r.body.publicMerchantId).toBe('string');
+      // la llave PRIVADA nunca sale del servidor
+      expect(JSON.stringify(r.body)).not.toMatch(/private/i);
     });
 
     it('un Branch desactivado no ofrece Bre-B', async () => {

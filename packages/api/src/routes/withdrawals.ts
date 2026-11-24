@@ -5,6 +5,8 @@ import { authenticate, requireAdmin } from '../middleware/auth';
 import { walletLimiter } from '../middleware/rateLimiter';
 import { encrypt, decrypt, maskAccount, genCodigo } from '../utils/security';
 import { logger } from '../utils/logger';
+import { exigir2fa } from '../utils/verificacion2fa';
+
 import { conCuenta, miembrosDe, saldoVisible } from '../utils/cuentas';
 import { dispersionHabilitada, iniciarDispersion, getPayoutDetalle, mensajeKushki, KushkiError } from '../utils/kushki';
 import { anexarRespuesta, completarRetiro, revertirRetiro, resolverRetiroEnProceso, EstadoRetiro } from '../utils/retiros';
@@ -41,7 +43,7 @@ const crearSchema = z.object({
   monto: z.number().int().positive(),
 });
 
-router.post('/', authenticate, walletLimiter, conCuenta('retirar'), async (req: Request, res: Response) => {
+router.post('/', authenticate, walletLimiter, conCuenta('retirar'), exigir2fa, async (req: Request, res: Response) => {
   const parse = crearSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Datos de retiro incompletos o inválidos' });
   const { bancoNombre, tipoCuenta, numeroCuenta, cedulaTitular, nombreTitular, monto } = parse.data;

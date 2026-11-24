@@ -9,6 +9,7 @@ import { authLimiter } from '../middleware/rateLimiter';
 import { logger } from '../utils/logger';
 import { INCLUDE_BILLETERA, datosBilletera } from '../utils/cuentas';
 import { sendOtpEmail } from '../utils/email';
+import { emitirCodigo, verificarCodigo, exigir2fa } from '../utils/verificacion2fa';
 import { maskEmail } from '../utils/security';
 
 const router = Router();
@@ -63,13 +64,10 @@ async function completeLogin(req: Request, res: Response, user: any) {
 
   logger.info('Login exitoso', { userId: user.id, cedula: user.cedula });
 
-  res.json({ ok: true, accessToken, refreshToken /* también en body para móvil */, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, ...datosBilletera(user) } });
+  res.json({ ok: true, accessToken, refreshToken /* también en body para móvil */, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, requiere2fa: user.requiere2fa, ...datosBilletera(user) } });
 }
 
-// ── 2FA de login (paso extra por correo para cuentas marcadas como sensibles) ──
-const login2faStore = new Map<string, { otp: string; expires: Date; userId: string }>();
-const LOGIN_2FA_TTL_MS = 10 * 60 * 1000;
-
+// ── 2FA de login: si la cuenta la tiene encendida, después del PIN se pide un código que llega al correo ──
 function checkAccountBlocked(user: { bloqueado: boolean; bloqueadoHasta: Date | null }): string | null {
   if (!user.bloqueado || !user.bloqueadoHasta || user.bloqueadoHasta <= new Date()) return null;
   const mins = Math.ceil((user.bloqueadoHasta.getTime() - Date.now()) / 60000);
@@ -91,21 +89,10 @@ async function registerFailedPinAttempt(userId: string, intentosPinActual: numbe
 
 type Login2faStart = { ok: true; otp: string } | { ok: false; status: number; mensaje: string };
 
-async function startLogin2fa(cedula: string, user: { id: string; correo: string | null }): Promise<Login2faStart> {
-  if (!user.correo) {
-    return { ok: false, status: 500, mensaje: 'Esta cuenta requiere verificación en dos pasos pero no tiene un correo configurado' };
-  }
-  const otp = String(randomInt(100000, 1000000));
-  login2faStore.set(cedula, { otp, expires: new Date(Date.now() + LOGIN_2FA_TTL_MS), userId: user.id });
-  try {
-    const enviado = await sendOtpEmail(user.correo, otp);
-    if (!enviado) logger.info(`2FA login para ${cedula}: ${otp} (correo no configurado, modo debug)`);
-  } catch (err: any) {
-    login2faStore.delete(cedula);
-    logger.error('Error enviando código 2FA de login', { err: err.message, cedula });
-    return { ok: false, status: 500, mensaje: 'No pudimos enviar el código de verificación. Intenta de nuevo.' };
-  }
-  return { ok: true, otp };
+async function startLogin2fa(user: { id: string; correo: string | null }): Promise<Login2faStart> {
+  const r = await emitirCodigo(user, 'login');
+  if (!r.ok) return { ok: false, status: r.status === 422 ? 500 : r.status, mensaje: r.status === 422 ? 'Esta cuenta requiere verificación en dos pasos pero no tiene un correo configurado' : r.mensaje };
+  return { ok: true, otp: r.codigo };
 }
 
 // ══ POST /api/auth/login ══
@@ -147,7 +134,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
     });
 
     if (user.requiere2fa) {
-      const result = await startLogin2fa(cedula, user);
+      const result = await startLogin2fa(user);
       if (!result.ok) return res.status(result.status).json({ ok: false, mensaje: result.mensaje });
       return res.json({
         ok: true,
@@ -176,15 +163,10 @@ router.post('/login/verify-2fa', authLimiter, async (req: Request, res: Response
   const { cedula, otp } = parse.data;
 
   try {
-    const stored = login2faStore.get(cedula);
-    if (!stored) return res.status(400).json({ ok: false, mensaje: 'Código no encontrado. Inicia sesión de nuevo.' });
-    if (new Date() > stored.expires) { login2faStore.delete(cedula); return res.status(400).json({ ok: false, mensaje: 'Código expirado. Inicia sesión de nuevo.' }); }
-    if (stored.otp !== otp) return res.status(400).json({ ok: false, mensaje: 'Código incorrecto' });
-
-    login2faStore.delete(cedula);
-
-    const user = await prisma.user.findUnique({ where: { id: stored.userId }, include: INCLUDE_BILLETERA });
-    if (!user) return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado' });
+    const user = await prisma.user.findUnique({ where: { cedula }, include: INCLUDE_BILLETERA });
+    if (!user?.requiere2fa) return res.status(400).json({ ok: false, mensaje: 'Código no encontrado. Inicia sesión de nuevo.' });
+    const r = await verificarCodigo(user.id, 'login', otp);
+    if (!r.ok) return res.status(400).json({ ok: false, mensaje: r.mensaje });
 
     await completeLogin(req, res, user);
   } catch (err: any) {
@@ -404,7 +386,7 @@ router.post('/verify-pin', authenticate, async (req: Request, res: Response) => 
 });
 
 // ══ PUT /api/auth/change-pin ══
-router.put('/change-pin', authenticate, async (req: Request, res: Response) => {
+router.put('/change-pin', authenticate, exigir2fa, async (req: Request, res: Response) => {
   const schema = z.object({
     pin_actual:   z.string().length(4).regex(/^\d{4}$/),
     pin_nuevo:    z.string().length(4).regex(/^\d{4}$/),
@@ -448,12 +430,81 @@ router.get('/me', authenticate, async (req: Request, res: Response) => {
       include: INCLUDE_BILLETERA,
     });
     if (!user) return res.status(404).json({ ok: false });
-    res.json({ ok: true, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, ...datosBilletera(user) } });
+    res.json({ ok: true, usuario: { id: user.id, cedula: user.cedula, nombre: user.nombre, correo: user.correo, celular: user.celular, ciudad: user.ciudad, rol: user.rol, subRol: user.subRol, kycVerificado: user.kycVerificado, requiere2fa: user.requiere2fa, ...datosBilletera(user) } });
   } catch {
     res.status(500).json({ ok: false });
   }
 });
 
+
+// ══ Verificación en dos pasos (2FA): encender, apagar y pedir códigos ══
+// GET  /api/auth/2fa/estado
+// POST /api/auth/2fa/solicitar   { proposito: 'activar' | 'desactivar' | 'operacion', pin }   → envía el código al correo
+// POST /api/auth/2fa/activar     { codigo }
+// POST /api/auth/2fa/desactivar  { pin, codigo }
+const pinSchema = z.string().length(4).regex(/^\d{4}$/);
+
+router.get('/2fa/estado', authenticate, async (req: Request, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { requiere2fa: true, correo: true } });
+    if (!user) return res.status(404).json({ ok: false });
+    res.json({ ok: true, activo: user.requiere2fa, correo: user.correo ? maskEmail(user.correo) : null });
+  } catch { res.status(500).json({ ok: false }); }
+});
+
+// Comprueba el PIN contando los fallos igual que el login (5 fallos bloquean la cuenta 30 minutos)
+async function pinValido(userId: string, pin: unknown): Promise<{ ok: true } | { ok: false; status: number; mensaje: string }> {
+  const parse = pinSchema.safeParse(pin);
+  if (!parse.success) return { ok: false, status: 400, mensaje: 'Ingresa tu PIN de 4 dígitos' };
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return { ok: false, status: 404, mensaje: 'Usuario no encontrado' };
+  const bloqueo = checkAccountBlocked(user);
+  if (bloqueo) return { ok: false, status: 423, mensaje: bloqueo };
+  if (!(await bcrypt.compare(parse.data, user.pinHash))) return { ok: false, status: 401, mensaje: await registerFailedPinAttempt(user.id, user.intentosPin) };
+  if (user.intentosPin > 0) await prisma.user.update({ where: { id: user.id }, data: { intentosPin: 0 } });
+  return { ok: true };
+}
+
+router.post('/2fa/solicitar', authenticate, authLimiter, async (req: Request, res: Response) => {
+  const proposito = req.body?.proposito;
+  if (proposito !== 'activar' && proposito !== 'desactivar' && proposito !== 'operacion') return res.status(400).json({ ok: false, mensaje: 'Propósito inválido' });
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    if (!user) return res.status(404).json({ ok: false, mensaje: 'Usuario no encontrado' });
+    if (proposito === 'activar' && user.requiere2fa) return res.status(400).json({ ok: false, mensaje: 'La verificación en dos pasos ya está activa' });
+    if (proposito !== 'activar' && !user.requiere2fa) return res.status(400).json({ ok: false, mensaje: 'La verificación en dos pasos no está activa' });
+    if (proposito !== 'operacion') {
+      const pin = await pinValido(user.id, req.body?.pin);
+      if (!pin.ok) return res.status(pin.status).json({ ok: false, mensaje: pin.mensaje });
+    }
+    const r = await emitirCodigo(user, proposito);
+    if (!r.ok) return res.status(r.status).json({ ok: false, mensaje: r.mensaje });
+    res.json({ ok: true, mensaje: `Código enviado a ${r.correo}`, correo: r.correo, vigenciaMinutos: 10, ...(process.env.NODE_ENV !== 'production' ? { otp_debug: r.codigo } : {}) });
+  } catch (err: any) {
+    logger.error('Error solicitando código 2FA', { err: err.message, userId: req.user?.id });
+    res.status(500).json({ ok: false, mensaje: 'No se pudo enviar el código' });
+  }
+});
+
+async function cambiarEstado2fa(req: Request, res: Response, activar: boolean) {
+  try {
+    const userId = req.user!.id;
+    if (!activar) {
+      const pin = await pinValido(userId, req.body?.pin);
+      if (!pin.ok) return res.status(pin.status).json({ ok: false, mensaje: pin.mensaje });
+    }
+    const r = await verificarCodigo(userId, activar ? 'activar' : 'desactivar', req.body?.codigo);
+    if (!r.ok) return res.status(400).json({ ok: false, mensaje: r.mensaje });
+    await prisma.user.update({ where: { id: userId }, data: { requiere2fa: activar } });
+    await prisma.userAuditLog.create({ data: { userId, accion: activar ? 'ACTIVAR_2FA' : 'DESACTIVAR_2FA', campo: 'requiere2fa', valorAntes: String(!activar), valorDespues: String(activar), ip: req.ip } }).catch(() => {});
+    res.json({ ok: true, activo: activar, mensaje: activar ? 'Verificación en dos pasos activada' : 'Verificación en dos pasos desactivada' });
+  } catch (err: any) {
+    logger.error('Error cambiando la verificación en dos pasos', { err: err.message, userId: req.user?.id });
+    res.status(500).json({ ok: false, mensaje: 'No se pudo completar el cambio' });
+  }
+}
+router.post('/2fa/activar', authenticate, authLimiter, (req: Request, res: Response) => cambiarEstado2fa(req, res, true));
+router.post('/2fa/desactivar', authenticate, authLimiter, (req: Request, res: Response) => cambiarEstado2fa(req, res, false));
 
 // ══ OTP store (memory — usar Redis en producción) ══
 const otpStore = new Map<string, { otp: string; expires: Date }>();

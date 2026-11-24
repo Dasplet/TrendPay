@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Fingerprint, KeyRound, Lock, ShieldCheck } from 'lucide-react';
 import { authApi } from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
 
 function sesionesLabel(count: number | null | undefined) {
   if (count == null) return '...';
@@ -12,6 +13,7 @@ function sesionesLabel(count: number | null | undefined) {
 }
 
 export default function SeguridadPage() {
+  const dosPasos = useAuthStore((s) => s.user?.requiere2fa);
   const { data: sesionesCount } = useQuery({
     queryKey: ['auth-sessions-count'],
     queryFn: () => authApi.sessions(),
@@ -21,7 +23,7 @@ export default function SeguridadPage() {
 
   const items = [
     { icon: <KeyRound size={24} />, title: 'Cambiar PIN', desc: 'Actualiza tus 4 dígitos de seguridad', status: 'Editar', href: '/dashboard/seguridad/cambiar-pin' },
-    { icon: <ShieldCheck size={24} />, title: 'Verificación 2FA', desc: 'Código adicional para operaciones sensibles', status: 'Próximamente' },
+    { icon: <ShieldCheck size={24} />, title: 'Verificación 2FA', desc: 'Código al correo al entrar y en operaciones sensibles', status: dosPasos ? 'Activa' : 'Activar', href: '/dashboard/seguridad/verificacion-2fa' },
     { icon: <Fingerprint size={24} />, title: 'Biometría', desc: 'Disponible en la app móvil', status: 'Próximamente' },
     { icon: <Lock size={24} />, title: 'Sesiones activas', desc: 'Controla dónde está abierta tu cuenta', status: sesionesLabel(sesionesCount), href: '/dashboard/seguridad/sesiones' },
   ];

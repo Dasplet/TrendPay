@@ -18,6 +18,7 @@ export interface User {
   eliminacionProgramadaAt?: string | null; // la cuenta se elimina ese día: hasta entonces solo puede retirar su saldo
   cuentaPadre?: { id: string; nombre: string } | null;
   kycVerificado: boolean;
+  requiere2fa?: boolean; // verificación en dos pasos encendida
   avatarDataUrl?: string | null;
 }
 

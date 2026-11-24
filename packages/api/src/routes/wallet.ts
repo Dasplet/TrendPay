@@ -5,6 +5,8 @@ import { authenticate } from '../middleware/auth';
 import { walletLimiter } from '../middleware/rateLimiter';
 import { genCodigo, genQrToken } from '../utils/security';
 import { logger } from '../utils/logger';
+import { exigir2fa } from '../utils/verificacion2fa';
+
 import { comisionGeneralPct, calcularComision } from '../utils/comision';
 import { conCuenta, saldoVisible } from '../utils/cuentas';
 
@@ -150,7 +152,7 @@ const enviarSchema = z.object({
   nota: z.string().max(200).optional(),
 });
 
-router.post('/enviar', authenticate, walletLimiter, conCuenta('enviar'), async (req: Request, res: Response) => {
+router.post('/enviar', authenticate, walletLimiter, conCuenta('enviar'), exigir2fa, async (req: Request, res: Response) => {
   const parse = enviarSchema.safeParse(req.body);
   if (!parse.success) {
     return res.status(400).json({ ok: false, mensaje: 'Destino y monto (mínimo $1.000) son requeridos' });
@@ -343,7 +345,7 @@ const qrPagarSchema = z.object({
   monto: z.number().int().positive().optional(),
 });
 
-router.post('/qr/:token/pagar', authenticate, walletLimiter, conCuenta('enviar'), async (req: Request, res: Response) => {
+router.post('/qr/:token/pagar', authenticate, walletLimiter, conCuenta('enviar'), exigir2fa, async (req: Request, res: Response) => {
   const parse = qrPagarSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: 'Monto inválido' });
 

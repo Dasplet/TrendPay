@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { pedirCodigo2fa } from './codigo2fa';
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -28,6 +29,16 @@ api.interceptors.response.use(
   response => response,
   async (error: AxiosError) => {
     const original = error.config as any;
+    // Operación sensible con la verificación en dos pasos encendida: se pide el código del correo y se repite la operación
+    const datos = error.response?.data as { requiere2fa?: boolean; mensaje?: string } | undefined;
+    if (error.response?.status === 403 && datos?.requiere2fa && (original._intentos2fa ?? 0) < 3) {
+      const codigo = await pedirCodigo2fa(original._intentos2fa ? datos.mensaje : undefined);
+      if (codigo) {
+        original._intentos2fa = (original._intentos2fa ?? 0) + 1;
+        original.headers['x-codigo-2fa'] = codigo;
+        return api(original);
+      }
+    }
     if (error.response?.status === 401 && !original._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -74,6 +85,16 @@ export const authApi = {
   sessions:            () => api.get('/auth/sessions'),
   revokeSession:       (id: string) => api.delete(`/auth/sessions/${id}`),
   revokeOtherSessions: () => api.post('/auth/sessions/revoke-others'),
+  twofaEstado:     () => api.get('/auth/2fa/estado'),
+  twofaSolicitar:  (data: { proposito: 'activar' | 'desactivar' | 'operacion'; pin?: string }) => api.post('/auth/2fa/solicitar', data),
+  twofaActivar:    (data: { codigo: string }) => api.post('/auth/2fa/activar', data),
+  twofaDesactivar: (data: { pin: string; codigo: string }) => api.post('/auth/2fa/desactivar', data),
+};
+
+export const llavesBrebApi = {
+  listar: () => api.get('/llaves-breb'),
+  crear:  (data: { tipo: string; valor: string; alias?: string }) => api.post('/llaves-breb', data),
+  quitar: (id: string) => api.delete(`/llaves-breb/${id}`),
 };
 
 export const usersApi = {

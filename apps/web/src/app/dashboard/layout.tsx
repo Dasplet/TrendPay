@@ -10,6 +10,7 @@ import { useTiempoReal } from '@/lib/tiempoReal';
 import { useAuthStore, type User } from '@/store/authStore';
 import { BrandLogo, UserAvatar, fmtCOP, userMenu } from '@/components/user/UserTheme';
 import { permisoDeRuta, puede } from '@/lib/permisos';
+import { CodigoOperacion } from '@/components/user/CodigoOperacion';
 
 function subtituloCuenta(user: User) {
   if (puede(user, 'verSaldo')) return `${fmtCOP(user.saldo)} disponible`;
@@ -119,6 +120,7 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
         )}
         {children}
       </main>
+      <CodigoOperacion />
     </div>
   );
 }

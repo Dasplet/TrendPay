@@ -5,7 +5,7 @@ import { authenticate } from '../middleware/auth';
 import { walletLimiter, webhookLimiter } from '../middleware/rateLimiter';
 import { registrarWebhook } from '../utils/kushkiWebhookLog';
 import { genCodigo } from '../utils/security';
-import { chargeCardToken, initTransfer, iniciarPagoBreB, cancelarPagoBreB, brebHabilitado, KushkiError } from '../utils/kushki';
+import { chargeCardToken, initTransfer, iniciarPagoBreB, cancelarPagoBreB, brebHabilitado, credencialesGlobales, AMBIENTES_KUSHKI, KushkiError } from '../utils/kushki';
 import { resolverPagoPse } from '../utils/kushkiPayments';
 import { comercioDeTitular, credencialesDePago } from '../utils/comerciosKushki';
 import { anexarRespuesta, resolverRetiroEnProceso } from '../utils/retiros';
@@ -311,9 +311,18 @@ router.post('/consignar/pse/confirmar', authenticate, walletLimiter, conCuenta('
 // ══ GET /api/kushki/metodos ══
 // Qué métodos de consignación se pueden ofrecer hoy. Bre-B solo aparece si la cuenta (padre) tiene su propio
 // Branch de Kushki asignado y Kushki tiene Bre-B activo en él.
+// También dice con qué llave pública y en qué ambiente cobra TrendPay con tarjeta y PSE: la pantalla de consignar usa
+// estos datos (y no su propia configuración) para tokenizar la tarjeta, así el navegador y el servidor nunca quedan en
+// ambientes distintos. `pruebas: true` = ambiente de pruebas de Kushki: los pagos NO mueven dinero real.
 router.get('/metodos', authenticate, conCuenta(), async (req: Request, res: Response) => {
   const comercio = await comercioDeTitular(req.cuenta!.titularId);
-  res.json({ ok: true, breb: comercio ? await brebHabilitado(comercio.cred) : false });
+  const global = credencialesGlobales();
+  res.json({
+    ok: true,
+    breb: comercio ? await brebHabilitado(comercio.cred) : false,
+    publicMerchantId: global.publicId,
+    pruebas: global.baseUrl.replace(/\/+$/, '') !== AMBIENTES_KUSHKI.produccion.replace(/\/+$/, ''),
+  });
 });
 
 // ══ POST /api/kushki/consignar/breb/iniciar ══

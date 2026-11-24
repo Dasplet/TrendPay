@@ -98,6 +98,8 @@ export async function finalizarEliminacion(userId: string, adminId: string | nul
     await tx.notification.deleteMany({ where: { userId } });
     await tx.userAuditLog.deleteMany({ where: { userId } });
     await tx.bankAccount.deleteMany({ where: { userId } });
+    await tx.llaveBreb.deleteMany({ where: { userId } });
+    await tx.codigoVerificacion.deleteMany({ where: { userId } });
     await tx.referral.deleteMany({ where: { OR: [{ referidorId: userId }, { referidoId: userId }] } });
     await tx.user.updateMany({ where: { referidoPorId: userId }, data: { referidoPorId: null } });
     if (wallet) await tx.qrCode.deleteMany({ where: { walletId: wallet.id } });

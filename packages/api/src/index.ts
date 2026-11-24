@@ -23,6 +23,7 @@ import { iniciarSincronizacionVentas } from './utils/sincronizarVentas';
 // Routes
 import authRouter      from './routes/auth';
 import walletRouter    from './routes/wallet';
+import llavesBrebRouter from './routes/llavesBreb';
 import usersRouter     from './routes/users';
 import banksRouter     from './routes/banks';
 import withdrawalsRouter from './routes/withdrawals';
@@ -78,7 +79,7 @@ app.use(cors({
     return callback(new Error(`CORS: origen no permitido — ${origin}`));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Codigo-2FA'],
   credentials: true,
   maxAge: 86400,
 }));
@@ -112,6 +113,7 @@ app.set('trust proxy', 1);
 // ── API Routes ──
 app.use('/api/auth',        authRouter);
 app.use('/api/wallet',      walletRouter);
+app.use('/api/llaves-breb', llavesBrebRouter);
 app.use('/api/users',       usersRouter);
 app.use('/api/banks',       banksRouter);
 app.use('/api/withdrawals', withdrawalsRouter);

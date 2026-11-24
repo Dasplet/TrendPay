@@ -10,15 +10,23 @@ import { kushkiApi } from '@/lib/api';
 import { calcularComision, textoPct, useComision } from '@/lib/comision';
 import { AmountPicker, fmtCOP, InfoDestination, OperationCard, ThemeButton, UserModal } from '@/components/user/UserTheme';
 
-const KUSHKI_PUBLIC_MERCHANT_ID = process.env.NEXT_PUBLIC_KUSHKI_PUBLIC_MERCHANT_ID || '';
-const KUSHKI_IN_TEST_ENVIRONMENT = process.env.NEXT_PUBLIC_KUSHKI_IN_TEST_ENVIRONMENT !== 'false';
+// Con qué llave y en qué ambiente cobra Kushki lo decide el SERVIDOR (GET /kushki/metodos), así el navegador y el servidor
+// nunca quedan en ambientes distintos. Las variables NEXT_PUBLIC_* solo se usan si el servidor no responde.
+const KUSHKI_PUBLIC_MERCHANT_ID_ENV = process.env.NEXT_PUBLIC_KUSHKI_PUBLIC_MERCHANT_ID || '';
+const KUSHKI_IN_TEST_ENVIRONMENT_ENV = process.env.NEXT_PUBLIC_KUSHKI_IN_TEST_ENVIRONMENT !== 'false';
+
+interface MetodosKushki { breb: boolean; publicMerchantId?: string; pruebas?: boolean }
+let configKushki: { publicMerchantId: string; pruebas: boolean } = { publicMerchantId: KUSHKI_PUBLIC_MERCHANT_ID_ENV, pruebas: KUSHKI_IN_TEST_ENVIRONMENT_ENV };
+function fijarConfigKushki(m?: MetodosKushki) {
+  if (m?.publicMerchantId) configKushki = { publicMerchantId: m.publicMerchantId, pruebas: m.pruebas ?? true };
+}
 
 type Paso = 'monto' | 'metodo' | 'tarjeta' | 'pse' | 'breb';
 type Metodo = 'tarjeta' | 'pse' | 'breb';
 
 function kushkiClient() {
-  if (!KUSHKI_PUBLIC_MERCHANT_ID) return null;
-  return new Kushki({ merchantId: KUSHKI_PUBLIC_MERCHANT_ID, inTestEnvironment: KUSHKI_IN_TEST_ENVIRONMENT });
+  if (!configKushki.publicMerchantId) return null;
+  return new Kushki({ merchantId: configKushki.publicMerchantId, inTestEnvironment: configKushki.pruebas });
 }
 
 // La tarjeta se tokeniza aquí, en el navegador, con Kushki.js — el número
@@ -61,9 +69,10 @@ function tokenizarPSE(datos: { bankId: string; documentType: string; documentNum
   });
 }
 
-function useBancosPSE() {
+function useBancosPSE(listo: boolean) {
   return useQuery({
-    queryKey: ['kushki-bank-list'],
+    enabled: listo,
+    queryKey: ['kushki-bank-list', configKushki.publicMerchantId, configKushki.pruebas],
     queryFn: () =>
       new Promise<Array<{ code: string; name: string }>>((resolve, reject) => {
         const kushki = kushkiClient();
@@ -85,11 +94,15 @@ export default function ConsignarPage() {
   const [card, setCard] = useState({ name: '', number: '', expiryMonth: '', expiryYear: '', cvc: '' });
   const [pse, setPse] = useState({ bankId: '', documentType: 'CC', documentNumber: '', email: user?.correo || '', nombreCompleto: user?.nombre || '', telefono: '' });
 
-  const bancos = useBancosPSE();
-
-  // Bre-B solo se ofrece si Kushki lo tiene activo en el comercio
-  const metodosQ = useQuery({ queryKey: ['kushki-metodos'], queryFn: () => kushkiApi.metodos(), select: (r) => r.data as { breb: boolean }, staleTime: 60_000 });
+  // Qué métodos hay y en qué ambiente se cobra. Bre-B solo funciona si Kushki lo tiene activo en el Branch de la cuenta.
+  const metodosQ = useQuery({
+    queryKey: ['kushki-metodos'],
+    queryFn: async () => { const r = await kushkiApi.metodos(); fijarConfigKushki(r.data); return r.data as MetodosKushki; },
+    staleTime: 60_000,
+  });
+  const bancos = useBancosPSE(metodosQ.isSuccess || metodosQ.isError);
   const brebActivo = !!metodosQ.data?.breb;
+  const modoPruebas = metodosQ.data?.pruebas === true;
   const [breb, setBreb] = useState<{ qr: string; token: string; venceEn: number } | null>(null);
   const [ahora, setAhora] = useState(() => Date.now());
   const segundosRestantes = breb ? Math.max(0, Math.ceil((breb.venceEn - ahora) / 1000)) : 0;
@@ -207,8 +220,13 @@ export default function ConsignarPage() {
   );
 
   return (
-    <UserModal title="Consignar a mi billetera" subtitle={brebActivo ? 'Paga con tarjeta, PSE o Bre-B' : 'Paga con tarjeta o PSE'}>
+    <UserModal title="Consignar a mi billetera" subtitle="Paga con tarjeta, PSE o Bre-B">
       <div className="tp-modal-content">
+        {modoPruebas && (
+          <p role="alert" className="tp-modal-label" style={{ textAlign: 'center', padding: 10, borderRadius: 10, background: 'rgba(212,160,23,.15)', border: '1px solid rgba(212,160,23,.5)' }}>
+            Modo de pruebas: los pagos de esta pantalla no mueven dinero real.
+          </p>
+        )}
         <InfoDestination saldo={user?.saldo ?? undefined} />
 
         {paso === 'monto' && (
@@ -241,16 +259,15 @@ export default function ConsignarPage() {
               selected={metodo === 'pse'}
               onClick={() => setMetodo('pse')}
             />
-            {brebActivo && (
-              <OperationCard
-                icon={<QrCode size={20} />}
-                title="Bre-B (QR)"
-                description="Escanea el QR con la app de tu banco"
-                accent="blue"
-                selected={metodo === 'breb'}
-                onClick={() => setMetodo('breb')}
-              />
-            )}
+            <OperationCard
+              icon={<QrCode size={20} />}
+              title="Bre-B (QR)"
+              description={brebActivo ? 'Escanea el QR con la app de tu banco o billetera' : 'Aún no está activo para tu cuenta: escríbenos para activarlo'}
+              accent="blue"
+              selected={metodo === 'breb'}
+              disabled={!brebActivo}
+              onClick={() => brebActivo && setMetodo('breb')}
+            />
             <div className="tp-button-row">
               <ThemeButton tone="ghost" onClick={() => setPaso('monto')}>
                 <ArrowLeft size={18} /> Atrás

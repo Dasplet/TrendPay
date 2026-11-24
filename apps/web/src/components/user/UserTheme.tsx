@@ -22,7 +22,6 @@ import {
   Lock,
   LogOut,
   Mail,
-  Nfc,
   QrCode,
   Search,
   Send,
@@ -131,6 +130,7 @@ export function OperationCard({
   accent = 'purple',
   selected,
   onClick,
+  disabled,
 }: Readonly<{
   icon: ReactNode;
   title: string;
@@ -139,6 +139,7 @@ export function OperationCard({
   accent?: 'purple' | 'green' | 'pink' | 'red' | 'blue';
   selected?: boolean;
   onClick?: () => void;
+  disabled?: boolean;
 }>) {
   const body = (
     <>
@@ -158,7 +159,7 @@ export function OperationCard({
     );
   }
   return (
-    <button type="button" className={`tp-op-card ${selected ? 'is-selected' : ''}`} onClick={onClick}>
+    <button type="button" className={`tp-op-card ${selected ? 'is-selected' : ''}`} onClick={onClick} disabled={disabled} aria-disabled={disabled} style={disabled ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
       {body}
     </button>
   );
@@ -351,7 +352,6 @@ export const userMenu: { section: string; items: { href: string; label: string; 
     { href: '/dashboard/consignar', label: 'Consignar', icon: <QrCode size={19} />, permiso: 'recargar' },
     { href: '/dashboard/cobrar-qr', label: 'Cobrar QR', icon: <QrCode size={19} />, permiso: 'recargar' },
     { href: '/dashboard/datafono', label: 'Datáfonos', icon: <CreditCard size={19} />, permiso: 'recargar', soloConDatafonos: true },
-    { href: '/dashboard/pagar-nfc', label: 'Pagar con NFC', icon: <Nfc size={19} />, permiso: 'enviar' },
     { href: '/dashboard/enviar', label: 'Enviar', icon: <Send size={19} />, permiso: 'enviar' },
     { href: '/dashboard/retirar-banco', label: 'Retirar a banco', icon: <Building2 size={19} />, permiso: 'retirar' },
   ]},

@@ -11,7 +11,7 @@ export function puede(user: Pick<User, 'permisos'> | null | undefined, permiso: 
 }
 
 // Rutas del dashboard que exigen un permiso. Cobrar por QR cuenta como
-// recarga (ingresa dinero); pagar por QR o NFC cuenta como envío.
+// recarga (ingresa dinero); pagar por QR cuenta como envío.
 const PERMISO_POR_RUTA: [string, Permiso][] = [
   ['/dashboard/consignar', 'recargar'],
   ['/dashboard/consignaciones', 'recargar'],
@@ -19,7 +19,6 @@ const PERMISO_POR_RUTA: [string, Permiso][] = [
   ['/dashboard/datafono', 'recargar'],
   ['/dashboard/enviar', 'enviar'],
   ['/dashboard/pagar-qr', 'enviar'],
-  ['/dashboard/pagar-nfc', 'enviar'],
   ['/dashboard/retirar-banco', 'retirar'],
 ];
 
