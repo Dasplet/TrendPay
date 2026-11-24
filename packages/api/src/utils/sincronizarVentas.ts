@@ -3,7 +3,7 @@ import { prisma } from '../index';
 import { logger } from './logger';
 import { AMBIENTES_KUSHKI, KushkiError } from './kushki';
 import { businessCodeDeTitular } from './kushkiOne';
-import { procesarAvisoTerminal, terminalDelAviso, serialesDelAviso } from './ventasTerminal';
+import { procesarAvisoTerminal, terminalDelAviso, serialesDelAviso, claveDelAviso } from './ventasTerminal';
 import { buscarTransaccionesWeb, itemWebAAviso, terminalWeb } from './ventasWeb';
 
 // ══════════════════════════════════════
@@ -23,6 +23,9 @@ import { buscarTransaccionesWeb, itemWebAAviso, terminalWeb } from './ventasWeb'
 const TAMANO_PAGINA = 500;
 const MAX_PAGINAS = 20;
 const SOLAPE_MS = 15 * 60_000; // se vuelve a mirar un poco hacia atrás por si Kushki tarda en publicar; la referencia evita duplicados
+// Pagos en línea: un PSE o un pago en efectivo se crea "pendiente" y se aprueba minutos u horas (o días) después. Para no perderlos se vuelve a
+// mirar 3 días hacia atrás en cada vuelta; lo que ya está registrado se salta sin tocar nada.
+const SOLAPE_WEB_MS = 3 * 86_400_000;
 
 const baseUrl = () => (process.env.KUSHKI_POS_BASE_URL || AMBIENTES_KUSHKI.produccion).replace(/\/+$/, '');
 
@@ -134,7 +137,7 @@ export async function sincronizarEmpresa(duenoId: string, opciones: { desdeMs?: 
     await prisma.config.create({ data: { clave: claveMarca(duenoId), valor: String(hasta) } });
     return { ...vacio(), omitida: 'primera sincronización: se contarán las ventas desde ahora' };
   }
-  const desde = opciones.desdeMs ?? Number(marca!.valor) - SOLAPE_MS;
+  const desde = opciones.desdeMs ?? Number(marca!.valor) - (canalWeb ? SOLAPE_WEB_MS : SOLAPE_MS);
 
   const resumen: ResumenSincronizacion = { ...vacio(), desde: new Date(desde).toISOString(), hasta: new Date(hasta).toISOString() };
   let crudos: any[];
@@ -153,8 +156,27 @@ export async function sincronizarEmpresa(duenoId: string, opciones: { desdeMs?: 
   const ordenadas = [...items].sort((a, b) => Number(a?.created ?? 0) - Number(b?.created ?? 0));
   const huerfano = { terminal: null as Awaited<ReturnType<typeof terminalSinIdentificar>> | null };
 
+  // Lo que ya está registrado se salta de una vez (con ventanas largas casi todo lo que llega ya está): una sola consulta por lote
+  const claveCobro = (it: any) => { const c = claveDelAviso(it); return c ? `terminal:${c}` : null; };
+  const yaRegistradas = new Set<string>();
+  const claves = ordenadas.map(claveCobro).filter((c): c is string => !!c);
+  for (let i = 0; i < claves.length; i += 500) {
+    const filas = await prisma.cobroDatafono.findMany({ where: { clientTransactionId: { in: claves.slice(i, i + 500) } }, select: { clientTransactionId: true } });
+    for (const f of filas) yaRegistradas.add(f.clientTransactionId);
+  }
+  // Lo importado desde un reporte se registró por su ticket (no por la referencia): también se reconoce por el número de ticket
+  const ticketsRegistrados = new Set<string>();
+  const tickets = ordenadas.map((it) => (typeof it?.ticket_number === 'string' ? it.ticket_number : null)).filter((t): t is string => !!t);
+  for (let i = 0; i < tickets.length; i += 500) {
+    const filas = await prisma.cobroDatafono.findMany({ where: { ticketNumber: { in: tickets.slice(i, i + 500) } }, select: { ticketNumber: true } });
+    for (const f of filas) if (f.ticketNumber) ticketsRegistrados.add(f.ticketNumber);
+  }
+
   for (const item of ordenadas) {
     try {
+      const clave = claveCobro(item);
+      // Una venta ya registrada se salta; un reembolso (que comparte el ticket de la venta que anula en su campo aparte) sigue su camino normal
+      if ((clave && yaRegistradas.has(clave)) || (typeof item?.ticket_number === 'string' && ticketsRegistrados.has(item.ticket_number))) { resumen.repetidas += 1; continue; }
       if (serialesDelAviso(item).length > 0) resumen.conSerial = true;
       let terminal = canalWeb ? await (huerfano.terminal ??= await terminalWeb(titularId, sedeFija)) : await terminalDelAviso(item);
       // Con llave de sede solo vale un aparato de esa misma sede; cualquier otra cosa queda en la sede de la llave

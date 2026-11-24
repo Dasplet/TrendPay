@@ -122,6 +122,29 @@ describe('Pagos de la página web (Kushki, tarjeta no presente) en la cuenta de 
       expect((await sincronizarEmpresa(web.id, { desdeMs: hace1h() })).formaRespuesta).toBeUndefined();
     });
 
+    it('un pago pendiente (PSE o efectivo) que se aprueba horas después también se acredita, y una vez aprobado no se duplica', async () => {
+      const { e, web } = await cool();
+      const dentro = (p: object) => ({ ...p, created: Date.now() - 2 * 3_600_000 }); // creado hace 2 horas
+      const pse = pago({ transaction_status: 'PENDING', approved_transaction_amount: 40000 });
+      await prisma.config.create({ data: { clave: `ventas_pos_desde_${web.id}`, valor: String(Date.now() - 60_000) } }); // la última vuelta fue hace 1 minuto
+      respuesta([dentro(pse)]);
+      expect((await sincronizarEmpresa(web.id)).ventas).toBe(0);
+      expect(await saldoDe(e.id)).toBe(0);
+
+      // el banco lo aprueba: la próxima vuelta lo encuentra aunque se creó hace 2 horas (más de los 15 minutos de siempre)
+      respuesta([dentro({ ...pse, transaction_status: 'APPROVAL' })]);
+      expect((await sincronizarEmpresa(web.id)).ventas).toBe(1);
+      expect(await saldoDe(e.id)).toBe(40000);
+
+      // y en las vueltas siguientes ya no se vuelve a acreditar
+      const otra = await sincronizarEmpresa(web.id);
+      expect(otra).toMatchObject({ ventas: 0, repetidas: 1 });
+      expect(await saldoDe(e.id)).toBe(40000);
+      // la consulta pidió hacia atrás 3 días
+      const params = (http.get.mock.calls.at(-1) as any)[1].params;
+      expect(Date.now() - Date.parse(params.from)).toBeGreaterThan(2.9 * 86_400_000);
+    });
+
     it('conserva la hora real del pago', async () => {
       const { web } = await cool();
       const hora = Date.now() - 5 * 3_600_000;
