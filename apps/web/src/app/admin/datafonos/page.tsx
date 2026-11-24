@@ -16,7 +16,8 @@ interface CobroAdmin {
   terminal: string; empresa: string; cajero: string; tipo: string; origen: string; ticketNumber: string | null; creado: string;
 }
 interface Empresa { userId: string; nombre: string; subcuentas: { id: string; nombre: string }[] }
-interface EmpresaCodigo { titularId: string; nombre: string; configurado: boolean; termina: string; firma: boolean; terminales: number }
+interface SedeLlave { id: string; nombre: string; configurado: boolean; termina: string; terminales: number }
+interface EmpresaCodigo { titularId: string; nombre: string; configurado: boolean; termina: string; firma: boolean; terminales: number; sedes: SedeLlave[] }
 
 const COLOR_ESTADO: Record<string, string> = { aprobado: '#6CC998', pendiente: '#d4a017', expirado: '#d4a017', revision: '#d4a017', reembolsando: '#d4a017', reembolsado: '#C0392B', rechazado: '#C0392B', cancelado: '#C0392B', error: '#C0392B' };
 const NUEVO = { serial: '', alias: '', titularId: '', sedeId: '' };
@@ -75,12 +76,12 @@ export default function DatafonosAdminPage() {
   });
 
   const guardarCredenciales = useMutation({
-    mutationFn: () => datafonosApi.admin.guardarCredenciales(codigoModal!.titularId, { ...(firma.trim() ? { webhookSecret: firma.trim() } : {}), ...(codigo.trim() ? { businessCode: codigo.trim() } : {}) }),
+    mutationFn: () => datafonosApi.admin.guardarCredenciales(codigoModal!.titularId, { ...(firma.trim() && !esTienda ? { webhookSecret: firma.trim() } : {}), ...(codigo.trim() ? { businessCode: codigo.trim() } : {}) }),
     onSuccess: () => { toast.success('Credenciales guardadas'); setCodigoModal(null); setFirma(''); setCodigo(''); refrescar(); },
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudieron guardar'),
   });
   const sincronizar = useMutation({
-    mutationFn: (e: EmpresaCodigo) => datafonosApi.admin.sincronizar(e.titularId).then((r) => ({ e, r: r.data.resumen })),
+    mutationFn: (e: { titularId: string; nombre: string }) => datafonosApi.admin.sincronizar(e.titularId).then((r) => ({ e, r: r.data.resumen })),
     onSuccess: ({ e, r }) => {
       refrescar();
       if (r.omitida) { toast(`${e.nombre}: ${r.omitida}`, { duration: 8000 }); return; }
@@ -97,9 +98,10 @@ export default function DatafonosAdminPage() {
   const terminales = terminalesQ.data?.terminales ?? [];
   const empresasCodigo = terminalesQ.data?.empresas ?? [];
   const sinFirma = empresasCodigo.filter((e) => e.terminales > 0 && !e.firma);
+  const esTienda = !!codigoModal?.titularId && (empresasQ.data ?? []).some((e) => (e.subcuentas ?? []).some((s) => s.id === codigoModal.titularId));
   const firmaOk = firma.trim() === '' || /^\S{8,300}$/.test(firma.trim());
   const codigoOk = codigo.trim() === '' || /^[A-Za-z0-9_-]{8,128}$/.test(codigo.trim());
-  const hayAlgo = firma.trim() !== '' || codigo.trim() !== '';
+  const hayAlgo = (firma.trim() !== '' && !esTienda) || codigo.trim() !== '';
   const urlWebhook = terminalesQ.data?.urlWebhook ?? '';
   const empresa = empresasQ.data?.find((e) => e.userId === form.titularId);
   const serialOk = /^[A-Za-z0-9_-]{4,64}$/.test(form.serial.trim());
@@ -142,7 +144,7 @@ export default function DatafonosAdminPage() {
           </ol>
         </div>
         <Table headers={['Empresa', 'Datáfonos', 'Firma de webhooks (opcional)', 'Llave privada (Business-Code)', '']} empty="Aún no hay empresas con datáfonos">
-          {empresasCodigo.map((e) => (
+          {empresasCodigo.flatMap((e) => [
             <Tr key={e.titularId}>
               <Td><strong>{e.nombre}</strong></Td>
               <Td>{e.terminales}</Td>
@@ -155,8 +157,23 @@ export default function DatafonosAdminPage() {
                   {(e.firma || e.configurado) && <Btn variant="danger" disabled={quitarCodigo.isPending} onClick={() => { if (window.confirm(`¿Quitar las credenciales de ${e.nombre}? Sus datáfonos dejarán de reflejarse en TrendPay.`)) quitarCodigo.mutate(e.titularId); }}>Quitar</Btn>}
                 </div>
               </Td>
-            </Tr>
-          ))}
+            </Tr>,
+            ...e.sedes.map((s) => (
+              <Tr key={s.id}>
+                <Td style={{ paddingLeft: 28 }}>↳ {s.nombre}<div style={{ fontSize: 11, opacity: 0.6 }}>Llave propia de esta tienda</div></Td>
+                <Td>{s.terminales}</Td>
+                <Td><span style={{ opacity: 0.5 }}>—</span></Td>
+                <Td>{s.configurado ? <Etiqueta texto={`Guardada ${s.termina}`} color="#6CC998" /> : <Etiqueta texto="Sin llave propia" color="#888" />}</Td>
+                <Td>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {s.configurado && <Btn disabled={sincronizar.isPending} title="Trae ahora las ventas de esta tienda desde Kushki (se hace solo cada 2 minutos)" onClick={() => sincronizar.mutate({ titularId: s.id, nombre: `${e.nombre} · ${s.nombre}` })}>{sincronizar.isPending && sincronizar.variables?.titularId === s.id ? 'Sincronizando…' : 'Sincronizar ahora'}</Btn>}
+                    <Btn onClick={() => { setFirma(''); setCodigo(''); setCodigoModal({ titularId: s.id }); }}>{s.configurado ? 'Cambiar' : 'Asignar llave'}</Btn>
+                    {s.configurado && <Btn variant="danger" disabled={quitarCodigo.isPending} onClick={() => { if (window.confirm(`¿Quitar la llave de ${s.nombre}? Sus ventas dejarán de reflejarse en esa tienda por esta vía.`)) quitarCodigo.mutate(s.id); }}>Quitar</Btn>}
+                  </div>
+                </Td>
+              </Tr>
+            )),
+          ])}
         </Table>
       </Panel>
 
@@ -239,12 +256,20 @@ export default function DatafonosAdminPage() {
       <Modal open={!!codigoModal} onClose={() => { setCodigoModal(null); setFirma(''); setCodigo(''); }} title="Conexión con Kushki">
         <Select label="Empresa" value={codigoModal?.titularId ?? ''} onChange={(e) => setCodigoModal({ titularId: e.target.value })}>
           <option value="">Elige una empresa…</option>
-          {(empresasQ.data ?? []).map((e) => <option key={e.userId} value={e.userId}>{e.nombre}</option>)}
+          {(empresasQ.data ?? []).flatMap((e) => [
+            <option key={e.userId} value={e.userId}>{e.nombre}</option>,
+            ...(e.subcuentas ?? []).map((s) => <option key={s.id} value={s.id}>↳ {e.nombre} · {s.nombre} (llave propia de la tienda)</option>),
+          ])}
         </Select>
-        <Input label="Firma de webhooks (opcional: solo si Kushki te activa los webhooks)" type="password" autoComplete="off" value={firma} onChange={(e) => setFirma(e.target.value)} />
-        {!firmaOk && <p style={{ color: '#C0392B', fontSize: 12, marginTop: -8 }}>Sin espacios, de 8 a 300 caracteres.</p>}
-        <p style={{ fontSize: 12, opacity: 0.7, marginTop: -6 }}>Consola de Kushki, cuenta de card present → Desarrolladores → Webhooks: aparece arriba de la página. No se vuelve a mostrar.</p>
-        <Input label="Llave privada de la Branch de card present (Business-Code): para la sincronización cada 2 minutos" type="password" autoComplete="off" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+        {!esTienda && (
+          <>
+            <Input label="Firma de webhooks (opcional: solo si Kushki te activa los webhooks)" type="password" autoComplete="off" value={firma} onChange={(e) => setFirma(e.target.value)} />
+            {!firmaOk && <p style={{ color: '#C0392B', fontSize: 12, marginTop: -8 }}>Sin espacios, de 8 a 300 caracteres.</p>}
+            <p style={{ fontSize: 12, opacity: 0.7, marginTop: -6 }}>Consola de Kushki, cuenta de card present → Desarrolladores → Webhooks: aparece arriba de la página. No se vuelve a mostrar.</p>
+          </>
+        )}
+        {esTienda && <p style={{ fontSize: 12, opacity: 0.7 }}>Con la llave del Branch de esta tienda, todo lo que Kushki registre en ese Branch queda en esta tienda, sin importar el datáfono.</p>}
+        <Input label={esTienda ? 'Llave privada del Branch de esta tienda (Private Merchant ID)' : 'Llave privada de la Branch de card present (Business-Code): para la sincronización cada 2 minutos'} type="password" autoComplete="off" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
         {!codigoOk && <p style={{ color: '#C0392B', fontSize: 12, marginTop: -8 }}>Solo letras, números, guion y guion bajo (8 a 128 caracteres).</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Btn variant="ghost" onClick={() => { setCodigoModal(null); setFirma(''); setCodigo(''); }}>Cancelar</Btn>

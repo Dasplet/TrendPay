@@ -348,19 +348,35 @@ router.get('/admin/terminales', authenticate, requireAdmin, async (_req: Request
   });
   // Business-Code por empresa: las que tienen datáfonos (y las que ya tienen código aunque aún no tengan datáfonos)
   const codigos = await prisma.comercioKushkiOne.findMany({ include: { user: { select: { nombre: true } } } });
-  const empresas = new Map<string, { titularId: string; nombre: string; configurado: boolean; termina: string; firma: boolean; terminales: number }>();
+  type SedeLlave = { id: string; nombre: string; configurado: boolean; termina: string; terminales: number };
+  const empresas = new Map<string, { titularId: string; nombre: string; configurado: boolean; termina: string; firma: boolean; terminales: number; sedes: SedeLlave[] }>();
   for (const t of terminales) {
-    const e = empresas.get(t.titularId) ?? { titularId: t.titularId, nombre: t.titular.nombre, configurado: false, termina: '', firma: false, terminales: 0 };
+    const e = empresas.get(t.titularId) ?? { titularId: t.titularId, nombre: t.titular.nombre, configurado: false, termina: '', firma: false, terminales: 0, sedes: [] };
     e.terminales += 1;
     empresas.set(t.titularId, e);
   }
+  // La llave de una sede (su propio Branch de Kushki) se muestra dentro de su empresa
+  const duenos = await prisma.user.findMany({ where: { id: { in: codigos.map((c) => c.userId) } }, select: { id: true, nombre: true, cuentaPadreId: true, cuentaPadre: { select: { nombre: true } } } });
+  const duenoDe = new Map(duenos.map((d) => [d.id, d]));
   for (const c of codigos) {
-    const e = empresas.get(c.userId) ?? { titularId: c.userId, nombre: c.user.nombre, configurado: false, termina: '', firma: false, terminales: 0 };
+    const dueno = duenoDe.get(c.userId);
+    if (dueno?.cuentaPadreId) {
+      // Una tienda con llave propia hace que su empresa aparezca en la lista, aunque la empresa aún no tenga datáfonos ni llave
+      if (!empresas.has(dueno.cuentaPadreId)) empresas.set(dueno.cuentaPadreId, { titularId: dueno.cuentaPadreId, nombre: dueno.cuentaPadre?.nombre ?? '', configurado: false, termina: '', firma: false, terminales: 0, sedes: [] });
+      continue;
+    }
+    const e = empresas.get(c.userId) ?? { titularId: c.userId, nombre: c.user.nombre, configurado: false, termina: '', firma: false, terminales: 0, sedes: [] };
     const codigo = await businessCodeDeTitular(c.userId);
     e.firma = !!c.webhookSecretCif && c.activo;
     e.configurado = !!codigo;
     e.termina = codigo ? terminaEn(codigo) : '';
     empresas.set(c.userId, e);
+  }
+  // Todas las sedes de las empresas que se muestran (con o sin llave propia), para poder asignarles una
+  const sedesDe = await prisma.user.findMany({ where: { cuentaPadreId: { in: [...empresas.keys()] }, eliminadoAt: null }, select: { id: true, nombre: true, cuentaPadreId: true }, orderBy: { nombre: 'asc' } });
+  for (const s of sedesDe) {
+    const codigo = await businessCodeDeTitular(s.id);
+    empresas.get(s.cuentaPadreId!)!.sedes.push({ id: s.id, nombre: s.nombre, configurado: !!codigo, termina: codigo ? terminaEn(codigo) : '', terminales: terminales.filter((t) => t.sedeId === s.id).length });
   }
   res.json({
     ok: true,
@@ -390,11 +406,23 @@ async function empresaValida(titularId: string) {
   return u && u.rol === 'usuario' && !u.cuentaPadreId && !u.eliminadoAt ? u : null;
 }
 
+// Una cuenta que puede tener su propia llave de Kushki: una empresa (cuenta principal) o una de sus sedes
+async function duenoDeLlaveValido(id: string) {
+  const u = await prisma.user.findUnique({ where: { id }, select: { id: true, rol: true, cuentaPadreId: true, eliminadoAt: true, cuentaPadre: { select: { rol: true, eliminadoAt: true, cuentaPadreId: true } } } });
+  if (!u || u.rol !== 'usuario' || u.eliminadoAt) return null;
+  if (!u.cuentaPadreId) return u;
+  return u.cuentaPadre && u.cuentaPadre.rol === 'usuario' && !u.cuentaPadre.eliminadoAt && !u.cuentaPadre.cuentaPadreId ? u : null;
+}
+
 router.put('/admin/empresas/:titularId/business-code', authenticate, requireAdmin, async (req: Request, res: Response) => {
   const parse = credencialesSchema.safeParse(req.body);
   if (!parse.success) return res.status(400).json({ ok: false, mensaje: parse.error.errors[0].message });
-  if (!(await empresaValida(req.params.titularId))) return res.status(404).json({ ok: false, mensaje: 'Empresa no encontrada (los datáfonos van en la cuenta principal, no en una sede)' });
+  const dueno = await duenoDeLlaveValido(req.params.titularId);
+  if (!dueno) return res.status(404).json({ ok: false, mensaje: 'Cuenta no encontrada' });
   const { businessCode, webhookSecret } = parse.data;
+  // La firma de los avisos es de la cuenta de Kushki de la empresa, no de cada tienda
+  if (dueno.cuentaPadreId && webhookSecret !== undefined) return res.status(400).json({ ok: false, mensaje: 'La firma de webhooks se guarda en la cuenta principal de la empresa; en una tienda solo va su llave privada' });
+  if (dueno.cuentaPadreId && businessCode === undefined) return res.status(400).json({ ok: false, mensaje: 'Envía la llave privada de la tienda' });
   const cambios = {
     ...(businessCode !== undefined ? { businessCodeCif: encrypt(businessCode) } : {}),
     ...(webhookSecret !== undefined ? { webhookSecretCif: encrypt(webhookSecret) } : {}),
@@ -408,7 +436,7 @@ router.put('/admin/empresas/:titularId/business-code', authenticate, requireAdmi
 // POST /api/datafonos/admin/empresas/:titularId/sincronizar  → trae ahora las ventas del datáfono desde Kushki (sin esperar los 2 minutos)
 // Con { desde: <fecha> } vuelve a mirar desde esa fecha (las ventas ya reflejadas no se duplican).
 router.post('/admin/empresas/:titularId/sincronizar', authenticate, requireAdmin, async (req: Request, res: Response) => {
-  if (!(await empresaValida(req.params.titularId))) return res.status(404).json({ ok: false, mensaje: 'Empresa no encontrada' });
+  if (!(await duenoDeLlaveValido(req.params.titularId))) return res.status(404).json({ ok: false, mensaje: 'Cuenta no encontrada' });
   const desde = typeof req.body?.desde === 'string' ? Date.parse(req.body.desde) : undefined;
   if (req.body?.desde !== undefined && (desde === undefined || Number.isNaN(desde))) return res.status(400).json({ ok: false, mensaje: 'La fecha "desde" no es válida' });
   try {
@@ -421,7 +449,7 @@ router.post('/admin/empresas/:titularId/sincronizar', authenticate, requireAdmin
 });
 
 router.delete('/admin/empresas/:titularId/business-code', authenticate, requireAdmin, async (req: Request, res: Response) => {
-  const pendientes = await prisma.cobroDatafono.count({ where: { terminal: { titularId: req.params.titularId }, estado: { in: ['pendiente', 'reembolsando'] } } });
+  const pendientes = await prisma.cobroDatafono.count({ where: { terminal: { OR: [{ titularId: req.params.titularId }, { sedeId: req.params.titularId }] }, estado: { in: ['pendiente', 'reembolsando'] } } });
   if (pendientes > 0) return res.status(409).json({ ok: false, mensaje: `Esta empresa tiene ${pendientes} cobro(s) en curso que necesitan ese código. Espera a que terminen` });
   const r = await prisma.comercioKushkiOne.deleteMany({ where: { userId: req.params.titularId } });
   if (r.count === 0) return res.status(404).json({ ok: false, mensaje: 'Esta empresa no tiene Business-Code guardado' });

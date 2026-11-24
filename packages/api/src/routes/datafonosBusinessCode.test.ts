@@ -95,13 +95,11 @@ describe('Datáfonos: Business-Code por empresa y código del webhook', () => {
       expect(await prisma.comercioKushkiOne.count()).toBe(1);
     });
 
-    it('rechaza códigos con formato raro, sedes, cuentas inexistentes y a quien no es administrador', async () => {
+    it('rechaza códigos con formato raro, cuentas inexistentes y a quien no es administrador', async () => {
       const empresa = await crearUsuarioDePrueba({ saldo: 0 });
-      const sede = await crearSubcuentaDePrueba(empresa.id, {});
       const token = await admin();
       expect((await guardar(token, empresa.id, 'corto')).status).toBe(400);
       expect((await guardar(token, empresa.id, 'tiene espacios y símbolos!')).status).toBe(400);
-      expect((await guardar(token, sede.id, 'codigo-valido-12345')).status).toBe(404);
       expect((await guardar(token, '00000000-0000-4000-8000-000000000000', 'codigo-valido-12345')).status).toBe(404);
       expect((await guardar(tokenPara(empresa), empresa.id, 'codigo-valido-12345')).status).toBe(403);
       expect(await prisma.comercioKushkiOne.count()).toBe(0);
