@@ -9,7 +9,7 @@ import { Panel, PanelHeader, Table, Tr, Td, Btn, Modal, Input, Select, fmt, fmtD
 
 interface Terminal {
   id: string; serial: string; alias: string; modelo: string; activo: boolean;
-  titularId: string; titular: string; sedeId: string | null; sede: string | null; cobros: number;
+  titularId: string; titular: string; sedeId: string | null; sede: string | null; cobros: number; virtual?: boolean;
 }
 interface CobroAdmin {
   id: string; estado: string; estadoTerminal: string | null; detalle: string | null; monto: number; comisionPct: number;
@@ -126,7 +126,8 @@ export default function DatafonosAdminPage() {
   });
 
   const q = buscar.trim().toLowerCase();
-  const todasLasTerminales = terminalesQ.data?.terminales ?? [];
+  // Los "terminales" virtuales (datáfono sin identificar, página web) son del sistema, no aparatos: no se listan
+  const todasLasTerminales = (terminalesQ.data?.terminales ?? []).filter((t) => !t.virtual);
   const todasLasEmpresas = terminalesQ.data?.empresas ?? [];
   // Con muchas empresas se busca por nombre de empresa, de tienda, alias o serial
   const terminales = q ? todasLasTerminales.filter((t) => `${t.alias} ${t.serial} ${t.titular} ${t.sede ?? ''}`.toLowerCase().includes(q)) : todasLasTerminales;

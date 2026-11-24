@@ -357,9 +357,11 @@ router.get('/admin/terminales', authenticate, requireAdmin, async (_req: Request
   const codigos = await prisma.comercioKushkiOne.findMany({ include: { user: { select: { nombre: true } } } });
   type SedeLlave = { id: string; nombre: string; configurado: boolean; termina: string; terminales: number; canal: string };
   const empresas = new Map<string, { titularId: string; nombre: string; configurado: boolean; termina: string; firma: boolean; terminales: number; sedes: SedeLlave[]; comisionPropia?: number | null }>();
+  // "Datáfono sin identificar" y "Página web" son terminales virtuales del sistema: no son aparatos físicos y no se cuentan
+  const esVirtual = (serial: string) => serial.startsWith('SIN-IDENTIFICAR') || serial.startsWith('WEB-');
   for (const t of terminales) {
     const e = empresas.get(t.titularId) ?? { titularId: t.titularId, nombre: t.titular.nombre, configurado: false, termina: '', firma: false, terminales: 0, sedes: [] };
-    e.terminales += 1;
+    if (!esVirtual(t.serial)) e.terminales += 1;
     empresas.set(t.titularId, e);
   }
   // La llave de una sede (su propio Branch de Kushki) se muestra dentro de su empresa
@@ -383,7 +385,7 @@ router.get('/admin/terminales', authenticate, requireAdmin, async (_req: Request
   const sedesDe = await prisma.user.findMany({ where: { cuentaPadreId: { in: [...empresas.keys()] }, eliminadoAt: null }, select: { id: true, nombre: true, cuentaPadreId: true }, orderBy: { nombre: 'asc' } });
   for (const s of sedesDe) {
     const codigo = await businessCodeDeTitular(s.id);
-    empresas.get(s.cuentaPadreId!)!.sedes.push({ id: s.id, nombre: s.nombre, configurado: !!codigo, termina: codigo ? terminaEn(codigo) : '', terminales: terminales.filter((t) => t.sedeId === s.id && t.modelo !== 'WEB').length, canal: codigos.find((c) => c.userId === s.id)?.canal ?? 'datafono' });
+    empresas.get(s.cuentaPadreId!)!.sedes.push({ id: s.id, nombre: s.nombre, configurado: !!codigo, termina: codigo ? terminaEn(codigo) : '', terminales: terminales.filter((t) => t.sedeId === s.id && !esVirtual(t.serial)).length, canal: codigos.find((c) => c.userId === s.id)?.canal ?? 'datafono' });
   }
   const propias = await comisionesPropias([...empresas.keys()]);
   for (const [id, e] of empresas) e.comisionPropia = propias.get(id) ?? null;
@@ -394,7 +396,7 @@ router.get('/admin/terminales', authenticate, requireAdmin, async (_req: Request
     urlWebhook: urlPublicaApi() ? `${urlPublicaApi()}/api/datafonos/webhooks/tarjeta-presente` : null,
     empresas: [...empresas.values()].sort((a, b) => a.nombre.localeCompare(b.nombre)),
     terminales: terminales.map((t) => ({
-      id: t.id, serial: t.serial, alias: t.alias, modelo: t.modelo, activo: t.activo,
+      id: t.id, serial: t.serial, alias: t.alias, modelo: t.modelo, activo: t.activo, virtual: esVirtual(t.serial),
       titularId: t.titularId, titular: t.titular.nombre, sedeId: t.sedeId, sede: t.sede?.nombre ?? null, cobros: t._count.cobros,
     })),
   });

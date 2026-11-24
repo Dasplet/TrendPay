@@ -105,6 +105,17 @@ describe('Datáfonos: Business-Code por empresa y código del webhook', () => {
       expect(await prisma.comercioKushkiOne.count()).toBe(0);
     });
 
+    it('los terminales virtuales (sin identificar, página web) no cuentan como datáfonos', async () => {
+      const a = await empresaConTerminal('SN-AAAA-0001', null);
+      await prisma.terminalKushki.create({ data: { serial: `SIN-IDENTIFICAR-${a.id.slice(0, 8)}`, alias: 'Datáfono sin identificar', titularId: a.id } });
+      await prisma.terminalKushki.create({ data: { serial: `WEB-${a.id.slice(0, 8)}`, alias: 'Página web', modelo: 'WEB', titularId: a.id } });
+      const token = await admin();
+      const res = await request(app).get('/api/datafonos/admin/terminales').set('Authorization', `Bearer ${token}`);
+      expect(res.body.empresas.find((e: any) => e.titularId === a.id).terminales).toBe(1);
+      expect(res.body.terminales.filter((t: any) => t.virtual).map((t: any) => t.alias).sort()).toEqual(['Datáfono sin identificar', 'Página web']);
+      expect(res.body.terminales.find((t: any) => t.alias === 'Caja 1' || t.serial === 'SN-AAAA-0001').virtual).toBe(false);
+    });
+
     it('el listado muestra por empresa si ya tiene código (solo el final) y cuántos datáfonos tiene', async () => {
       const a = await empresaConTerminal('SN-AAAA-0001', 'codigo-empresa-A-1234');
       await empresaConTerminal('SN-CCCC-0003', null);
