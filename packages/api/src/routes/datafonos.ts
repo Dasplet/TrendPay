@@ -17,9 +17,12 @@ import { firmaKushkiValida } from '../utils/kushkiWebhook';
 import { terminalDelAviso, webhookSecretDeTitular, procesarAvisoTerminal, claveDelAviso, resumenParaRegistro, serialesDelAviso } from '../utils/ventasTerminal';
 import { encrypt } from '../utils/security';
 import { sincronizarEmpresa } from '../utils/sincronizarVentas';
+import { importarVentasCsv } from '../utils/importarVentas';
+import multer from 'multer';
 import { terminaEn } from '../utils/comerciosKushki';
 
 const router = Router();
+const subidaCsv = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 1 } });
 
 // El mensaje de Kushki con su código, para que quien lo lea pueda decirle a Kushki exactamente qué pasó
 function descripcionDeError(err: KushkiError): string {
@@ -448,6 +451,25 @@ router.post('/admin/empresas/:titularId/sincronizar', authenticate, requireAdmin
     const mensaje = err instanceof KushkiError ? descripcionDeError(err) : 'No se pudo sincronizar con Kushki';
     logger.warn('Sincronización manual de ventas de datáfono fallida', { err: err.message, status: err.status });
     res.status(502).json({ ok: false, mensaje });
+  }
+});
+
+// POST /api/datafonos/admin/empresas/:cuentaId/importar-ventas  (multipart: archivo = reporte .csv de la consola de Kushki)
+// Refleja ventas y anulaciones que ya ocurrieron, en la cuenta elegida (una empresa o una tienda). El archivo dice qué filas son de
+// datáfono y cuáles de la página web. Se puede repetir sin riesgo: cada ticket se registra una sola vez.
+router.post('/admin/empresas/:titularId/importar-ventas', authenticate, requireAdmin, subidaCsv.single('archivo'), async (req: Request, res: Response) => {
+  if (!(await duenoDeLlaveValido(req.params.titularId))) return res.status(404).json({ ok: false, mensaje: 'Cuenta no encontrada' });
+  if (!req.file) return res.status(400).json({ ok: false, mensaje: 'Adjunta el archivo .csv de Kushki' });
+  const pct = req.body?.comisionPct === undefined || req.body.comisionPct === '' ? undefined : Number(req.body.comisionPct);
+  if (pct !== undefined && (!Number.isFinite(pct) || pct < 0 || pct > 20)) return res.status(400).json({ ok: false, mensaje: 'La comisión debe estar entre 0% y 20%' });
+  try {
+    const resumen = await importarVentasCsv(req.params.titularId, req.file.buffer.toString('utf8'), { comisionPct: pct });
+    if (resumen.filas === 0) return res.status(400).json({ ok: false, mensaje: 'El archivo está vacío o no tiene el formato del reporte de Kushki (columnas separadas por "|")' });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'IMPORTAR_VENTAS_KUSHKI', tabla: 'cobros_datafono', registroId: req.params.titularId, ip: req.ip, datos: { ...resumen, comisionPct: pct ?? 'vigente' } } }).catch(() => {});
+    res.json({ ok: true, resumen });
+  } catch (err: any) {
+    logger.error('No se pudo importar el reporte de Kushki', { err: err.message });
+    res.status(500).json({ ok: false, mensaje: 'No se pudo importar el archivo' });
   }
 });
 

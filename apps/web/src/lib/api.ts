@@ -157,6 +157,11 @@ export const datafonosApi = {
     guardarConfig: (comisionPct: number) => api.put('/datafonos/admin/config', { comisionPct }),
     guardarCredenciales: (titularId: string, datos: { webhookSecret?: string; businessCode?: string; canal?: 'datafono' | 'web' }) => api.put(`/datafonos/admin/empresas/${titularId}/business-code`, datos),
     sincronizar: (titularId: string, desde?: string) => api.post(`/datafonos/admin/empresas/${titularId}/sincronizar`, desde ? { desde } : {}),
+    importarVentas: (cuentaId: string, archivo: File) => {
+      const datos = new FormData();
+      datos.append('archivo', archivo);
+      return api.post(`/datafonos/admin/empresas/${cuentaId}/importar-ventas`, datos, { headers: { 'Content-Type': 'multipart/form-data' } });
+    },
     quitarBusinessCode: (titularId: string) => api.delete(`/datafonos/admin/empresas/${titularId}/business-code`),
     cobros:        () => api.get('/datafonos/admin/cobros'),
   },

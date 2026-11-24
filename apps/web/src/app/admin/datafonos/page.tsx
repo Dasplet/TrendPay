@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, KeyRound, Plus, RefreshCw, Smartphone } from 'lucide-react';
+import { Copy, FileUp, KeyRound, Plus, RefreshCw, Smartphone } from 'lucide-react';
 import { adminApi, datafonosApi } from '@/lib/api';
 import { ResumenVentas } from '@/components/datafonos/ResumenVentas';
 import { Panel, PanelHeader, Table, Tr, Td, Btn, Modal, Input, Select, fmt, fmtDate } from '@/components/admin/ui';
@@ -90,6 +90,20 @@ export default function DatafonosAdminPage() {
     },
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo sincronizar con Kushki', { duration: 10000 }),
   });
+  // Importar un reporte de transacciones de la consola de Kushki (.csv): refleja lo que ya ocurrió (datáfono y/o página web)
+  const [importarModal, setImportarModal] = useState(false);
+  const [importCuenta, setImportCuenta] = useState('');
+  const [importArchivo, setImportArchivo] = useState<File | null>(null);
+  const importar = useMutation({
+    mutationFn: () => datafonosApi.admin.importarVentas(importCuenta, importArchivo!).then((r) => r.data.resumen),
+    onSuccess: (r) => {
+      refrescar();
+      setImportarModal(false); setImportArchivo(null);
+      toast.success(`${r.ventas} ventas (${fmt(r.montoVentas)}: ${r.ventasWeb} de la web, ${r.ventasDatafono} de datáfonos) y ${r.reembolsos} reembolsos (${fmt(r.montoReembolsos)}) importados · ${r.repetidas} ya estaban · ${r.ignoradas} ignoradas (rechazadas o sin número)${r.errores ? ` · ${r.errores} con error` : ''}`, { duration: 20000 });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudo importar el archivo', { duration: 10000 }),
+  });
+
   const quitarCodigo = useMutation({
     mutationFn: (titularId: string) => datafonosApi.admin.quitarBusinessCode(titularId),
     onSuccess: () => { toast.success('Credenciales quitadas'); refrescar(); },
@@ -127,7 +141,7 @@ export default function DatafonosAdminPage() {
         <PanelHeader
           title="Conexión con Kushki por empresa"
           icon={<KeyRound size={16} />}
-          actions={<Btn variant="primary" onClick={() => { setFirma(''); setCodigo(''); setCodigoModal({ titularId: '' }); }}><Plus size={14} /> Asignar firma de webhooks</Btn>}
+          actions={<div style={{ display: 'flex', gap: 8 }}><Btn onClick={() => { setImportCuenta(''); setImportArchivo(null); setImportarModal(true); }}><FileUp size={14} /> Importar reporte de Kushki</Btn><Btn variant="primary" onClick={() => { setFirma(''); setCodigo(''); setCodigoModal({ titularId: '' }); }}><Plus size={14} /> Asignar firma de webhooks</Btn></div>}
         />
         <div style={{ padding: '12px 20px 4px', fontSize: 12, lineHeight: 1.7, opacity: 0.85 }}>
           <strong>Cómo se conectan los datáfonos.</strong> El cajero digita el valor en el aparato; TrendPay no le manda nada. Las ventas llegan de dos formas que pueden convivir: <strong>(1) sincronización</strong> — TrendPay le pregunta a Kushki cada 2 minutos con la llave privada de la empresa (columna Business-Code; basta con asignarla), y <strong>(2) webhook</strong> — Kushki avisa al instante, si te activan los webhooks de card present. Para el webhook, en la consola de la cuenta de <strong>card present</strong>:
@@ -287,6 +301,26 @@ export default function DatafonosAdminPage() {
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Btn variant="ghost" onClick={() => { setCodigoModal(null); setFirma(''); setCodigo(''); }}>Cancelar</Btn>
           <Btn variant="primary" disabled={!codigoModal?.titularId || !hayAlgo || !firmaOk || !codigoOk || guardarCredenciales.isPending} onClick={() => guardarCredenciales.mutate()}>{guardarCredenciales.isPending ? 'Guardando…' : 'Guardar'}</Btn>
+        </div>
+      </Modal>
+
+      <Modal open={importarModal} onClose={() => setImportarModal(false)} title="Importar reporte de Kushki">
+        <p style={{ fontSize: 12, opacity: 0.75, marginTop: 0 }}>
+          Sube el archivo .csv de transacciones de la consola de Kushki. Las filas de datáfono y las de pagos en línea (tarjeta no presente, PSE, efectivo) se reconocen solas.
+          Se acredita con la comisión de datáfonos vigente (<strong>{configQ.data ?? 0}%</strong>) y cada movimiento conserva su fecha real. Lo que ya esté registrado no se duplica; los rechazados no se cuentan.
+        </p>
+        <Select label="¿A qué cuenta se acredita?" value={importCuenta} onChange={(e) => setImportCuenta(e.target.value)}>
+          <option value="">Elige la cuenta…</option>
+          {(empresasQ.data ?? []).flatMap((e) => [
+            <option key={e.userId} value={e.userId}>{e.nombre} (cuenta principal)</option>,
+            ...(e.subcuentas ?? []).map((s) => <option key={s.id} value={s.id}>↳ {e.nombre} · {s.nombre}</option>),
+          ])}
+        </Select>
+        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, margin: '4px 0 6px' }}>Archivo .csv</label>
+        <input type="file" accept=".csv,text/csv,text/plain" onChange={(e) => setImportArchivo(e.target.files?.[0] ?? null)} style={{ marginBottom: 14, fontSize: 12 }} />
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Btn variant="ghost" onClick={() => setImportarModal(false)}>Cancelar</Btn>
+          <Btn variant="primary" disabled={!importCuenta || !importArchivo || importar.isPending} onClick={() => importar.mutate()}>{importar.isPending ? 'Importando…' : 'Importar'}</Btn>
         </div>
       </Modal>
 
