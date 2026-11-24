@@ -135,6 +135,21 @@ describe('Una llave de Kushki por cuenta: cada venta llega a la tienda de su pro
       expect(empresa.sedes.find((s: any) => s.id === sanJuan.id)).toMatchObject({ configurado: true });
     });
 
+    it('se puede cambiar solo el canal de una llave que ya está guardada, sin volver a escribirla', async () => {
+      const { sanJuan } = await cool();
+      const token = await admin();
+      expect((await guardar(token, sanJuan.id, { canal: 'web' })).status).toBe(400); // todavía no tiene llave
+      await guardar(token, sanJuan.id, { businessCode: LLAVE_SAN_JUAN });
+      const antes = (await prisma.comercioKushkiOne.findUniqueOrThrow({ where: { userId: sanJuan.id } })).businessCodeCif;
+      expect((await prisma.comercioKushkiOne.findUniqueOrThrow({ where: { userId: sanJuan.id } })).canal).toBe('datafono');
+
+      const r = await guardar(token, sanJuan.id, { canal: 'web' });
+      expect(r.status).toBe(200);
+      const fila = await prisma.comercioKushkiOne.findUniqueOrThrow({ where: { userId: sanJuan.id } });
+      expect(fila.canal).toBe('web');
+      expect(fila.businessCodeCif).toBe(antes); // la llave sigue intacta
+    });
+
     it('en una tienda no se guarda la firma de webhooks (es de la empresa) y exige la llave', async () => {
       const { sanJuan } = await cool();
       const token = await admin();

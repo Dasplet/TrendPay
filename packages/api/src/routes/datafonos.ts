@@ -408,7 +408,7 @@ const credencialesSchema = z.object({
   webhookSecret: z.string().trim().regex(/^\S{8,300}$/, 'La firma de webhooks no puede tener espacios (8 a 300 caracteres)').optional(),
   // datafono = ventas de los datáfonos (card present); web = pagos en línea de la página web (card not present)
   canal: z.enum(['datafono', 'web']).optional(),
-}).refine((d) => d.businessCode !== undefined || d.webhookSecret !== undefined, { message: 'Envía la firma de webhooks o el Business-Code' });
+}).refine((d) => d.businessCode !== undefined || d.webhookSecret !== undefined || d.canal !== undefined, { message: 'Envía la firma de webhooks, la llave privada o el canal' });
 
 async function empresaValida(titularId: string) {
   const u = await prisma.user.findUnique({ where: { id: titularId }, select: { id: true, rol: true, cuentaPadreId: true, eliminadoAt: true } });
@@ -431,7 +431,12 @@ router.put('/admin/empresas/:titularId/business-code', authenticate, requireAdmi
   const { businessCode, webhookSecret, canal } = parse.data;
   // La firma de los avisos es de la cuenta de Kushki de la empresa, no de cada tienda
   if (dueno.cuentaPadreId && webhookSecret !== undefined) return res.status(400).json({ ok: false, mensaje: 'La firma de webhooks se guarda en la cuenta principal de la empresa; en una tienda solo va su llave privada' });
-  if (dueno.cuentaPadreId && businessCode === undefined) return res.status(400).json({ ok: false, mensaje: 'Envía la llave privada de la tienda' });
+  // Cambiar solo el canal de una llave que ya existe (sin volver a escribirla)
+  if (canal !== undefined && businessCode === undefined && webhookSecret === undefined) {
+    const existente = await prisma.comercioKushkiOne.findUnique({ where: { userId: req.params.titularId }, select: { businessCodeCif: true } });
+    if (!existente?.businessCodeCif) return res.status(400).json({ ok: false, mensaje: 'Esta cuenta todavía no tiene llave guardada: escríbela para asignarle el canal' });
+  }
+  if (dueno.cuentaPadreId && businessCode === undefined && canal === undefined) return res.status(400).json({ ok: false, mensaje: 'Envía la llave privada de la tienda' });
   const cambios = {
     ...(businessCode !== undefined ? { businessCodeCif: encrypt(businessCode) } : {}),
     ...(webhookSecret !== undefined ? { webhookSecretCif: encrypt(webhookSecret) } : {}),
@@ -439,7 +444,7 @@ router.put('/admin/empresas/:titularId/business-code', authenticate, requireAdmi
   };
   await prisma.comercioKushkiOne.upsert({ where: { userId: req.params.titularId }, create: { userId: req.params.titularId, ...cambios }, update: { ...cambios, activo: true } });
   // La auditoría guarda solo qué se cambió y el final del código, nunca el valor
-  await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'GUARDAR_BUSINESS_CODE_KUSHKI_ONE', tabla: 'comercios_kushki_one', registroId: req.params.titularId, ip: req.ip, datos: { businessCode: businessCode ? terminaEn(businessCode) : undefined, firmaWebhooks: webhookSecret ? 'actualizada' : undefined } } }).catch(() => {});
+  await prisma.auditLog.create({ data: { userId: req.user!.id, accion: 'GUARDAR_BUSINESS_CODE_KUSHKI_ONE', tabla: 'comercios_kushki_one', registroId: req.params.titularId, ip: req.ip, datos: { businessCode: businessCode ? terminaEn(businessCode) : undefined, firmaWebhooks: webhookSecret ? 'actualizada' : undefined, canal } } }).catch(() => {});
   res.json({ ok: true, termina: businessCode ? terminaEn(businessCode) : undefined, firma: webhookSecret !== undefined });
 });
 

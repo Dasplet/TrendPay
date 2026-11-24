@@ -36,6 +36,7 @@ export default function DatafonosAdminPage() {
   const [firma, setFirma] = useState('');
   const [codigo, setCodigo] = useState('');
   const [canal, setCanal] = useState<'datafono' | 'web'>('datafono');
+  const [canalOriginal, setCanalOriginal] = useState<'datafono' | 'web'>('datafono'); // el que ya tenía la llave, para saber si lo cambiaron
 
   const terminalesQ = useQuery({
     queryKey: ['admin-datafonos'],
@@ -77,7 +78,7 @@ export default function DatafonosAdminPage() {
   });
 
   const guardarCredenciales = useMutation({
-    mutationFn: () => datafonosApi.admin.guardarCredenciales(codigoModal!.titularId, { ...(firma.trim() && !esTienda ? { webhookSecret: firma.trim() } : {}), ...(codigo.trim() ? { businessCode: codigo.trim() } : {}), ...(esTienda && codigo.trim() ? { canal } : {}) }),
+    mutationFn: () => datafonosApi.admin.guardarCredenciales(codigoModal!.titularId, { ...(firma.trim() && !esTienda ? { webhookSecret: firma.trim() } : {}), ...(codigo.trim() ? { businessCode: codigo.trim() } : {}), ...(esTienda && (codigo.trim() || canal !== canalOriginal) ? { canal } : {}) }),
     onSuccess: () => { toast.success('Credenciales guardadas'); setCodigoModal(null); setFirma(''); setCodigo(''); refrescar(); },
     onError: (err: any) => toast.error(err.response?.data?.mensaje || 'No se pudieron guardar'),
   });
@@ -116,7 +117,7 @@ export default function DatafonosAdminPage() {
   const esTienda = !!codigoModal?.titularId && (empresasQ.data ?? []).some((e) => (e.subcuentas ?? []).some((s) => s.id === codigoModal.titularId));
   const firmaOk = firma.trim() === '' || /^\S{8,300}$/.test(firma.trim());
   const codigoOk = codigo.trim() === '' || /^[A-Za-z0-9_-]{8,128}$/.test(codigo.trim());
-  const hayAlgo = (firma.trim() !== '' && !esTienda) || codigo.trim() !== '';
+  const hayAlgo = (firma.trim() !== '' && !esTienda) || codigo.trim() !== '' || (esTienda && canal !== canalOriginal);
   const urlWebhook = terminalesQ.data?.urlWebhook ?? '';
   const empresa = empresasQ.data?.find((e) => e.userId === form.titularId);
   const serialOk = /^[A-Za-z0-9_-]{4,64}$/.test(form.serial.trim());
@@ -182,7 +183,7 @@ export default function DatafonosAdminPage() {
                 <Td>
                   <div style={{ display: 'flex', gap: 6 }}>
                     {s.configurado && <Btn disabled={sincronizar.isPending} title="Trae ahora las ventas de esta tienda desde Kushki (se hace solo cada 2 minutos)" onClick={() => sincronizar.mutate({ titularId: s.id, nombre: `${e.nombre} · ${s.nombre}` })}>{sincronizar.isPending && sincronizar.variables?.titularId === s.id ? 'Sincronizando…' : 'Sincronizar ahora'}</Btn>}
-                    <Btn onClick={() => { setFirma(''); setCodigo(''); setCanal(s.canal ?? 'datafono'); setCodigoModal({ titularId: s.id }); }}>{s.configurado ? 'Cambiar' : 'Asignar llave'}</Btn>
+                    <Btn onClick={() => { setFirma(''); setCodigo(''); setCanal(s.canal ?? 'datafono'); setCanalOriginal(s.canal ?? 'datafono'); setCodigoModal({ titularId: s.id }); }}>{s.configurado ? 'Cambiar' : 'Asignar llave'}</Btn>
                     {s.configurado && <Btn variant="danger" disabled={quitarCodigo.isPending} onClick={() => { if (window.confirm(`¿Quitar la llave de ${s.nombre}? Sus ventas dejarán de reflejarse en esa tienda por esta vía.`)) quitarCodigo.mutate(s.id); }}>Quitar</Btn>}
                   </div>
                 </Td>
@@ -296,7 +297,7 @@ export default function DatafonosAdminPage() {
             </p>
           </>
         )}
-        <Input label={esTienda ? 'Llave privada del Branch de esta tienda (Private Merchant ID)' : 'Llave privada de la Branch de card present (Business-Code): para la sincronización cada 2 minutos'} type="password" autoComplete="off" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+        <Input label={esTienda ? 'Llave privada del Branch de esta tienda (Private Merchant ID) — déjala vacía para conservar la que ya está guardada' : 'Llave privada de la Branch de card present (Business-Code): para la sincronización cada 2 minutos'} type="password" autoComplete="off" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
         {!codigoOk && <p style={{ color: '#C0392B', fontSize: 12, marginTop: -8 }}>Solo letras, números, guion y guion bajo (8 a 128 caracteres).</p>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <Btn variant="ghost" onClick={() => { setCodigoModal(null); setFirma(''); setCodigo(''); }}>Cancelar</Btn>
