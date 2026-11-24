@@ -35,7 +35,7 @@ export default function PerfilPage() {
   }
 
   const options = [
-    { icon: <Lock size={16} />, title: 'Seguridad y PIN', desc: 'Cambiar PIN, verificación en dos pasos y sesiones activas', tone: 'purple', href: '/dashboard/seguridad' },
+    ...(user?.cuentaPadre ? [] : [{ icon: <Lock size={16} />, title: 'Seguridad y PIN', desc: 'Cambiar PIN, verificación en dos pasos y sesiones activas', tone: 'purple', href: '/dashboard/seguridad' }]),
     ...(puede(user, 'retirar') ? [{ icon: <Building2 size={16} />, title: 'Bancos para retiro', desc: 'Vincular y administrar tus cuentas bancarias', tone: 'green', href: '/dashboard/bancos' }] : []),
   ];
 
@@ -66,6 +66,7 @@ export default function PerfilPage() {
         </div>
       </Panel>
 
+      {options.length > 0 && (
       <Panel style={{ maxWidth: 820 }}>
         <PanelHeader title="Tu cuenta" />
         <div className="tp-profile-list">
@@ -78,6 +79,7 @@ export default function PerfilPage() {
           ))}
         </div>
       </Panel>
+      )}
     </div>
   );
 }

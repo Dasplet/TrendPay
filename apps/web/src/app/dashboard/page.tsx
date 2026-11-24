@@ -65,7 +65,7 @@ export default function DashboardPage() {
     { label: 'Mis bancos', icon: <Building2 size={18} />, href: '/dashboard/bancos', tone: 'pink', permiso: 'retirar' },
     { label: 'Seguridad', icon: <ShieldCheck size={18} />, href: '/dashboard/seguridad', tone: 'purple' },
   ];
-  const actions = allActions.filter((a) => !a.permiso || puede(user, a.permiso));
+  const actions = allActions.filter((a) => (!a.permiso || puede(user, a.permiso)) && !(a.href === '/dashboard/seguridad' && user?.cuentaPadre));
 
   return (
     <div className="tp-user-page">

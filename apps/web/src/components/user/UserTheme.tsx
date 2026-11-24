@@ -348,7 +348,7 @@ export function EmptyState({ title = 'Sin movimientos', icon = <History size={40
 }
 
 // soloConDatafonos: el enlace aparece únicamente si la cuenta tiene datáfonos asignados
-export const userMenu: { section: string; items: { href: string; label: string; icon: React.ReactNode; permiso?: Permiso; soloConDatafonos?: boolean }[] }[] = [
+export const userMenu: { section: string; items: { href: string; label: string; icon: React.ReactNode; permiso?: Permiso; soloConDatafonos?: boolean; soloPrincipal?: boolean }[] }[] = [
   { section: 'Principal', items: [
     { href: '/dashboard', label: 'Inicio', icon: <Home size={15} /> },
     { href: '/dashboard/historial', label: 'Historial', icon: <History size={15} /> },
@@ -360,7 +360,7 @@ export const userMenu: { section: string; items: { href: string; label: string; 
   ]},
   { section: 'Cuenta', items: [
     { href: '/dashboard/perfil', label: 'Mi perfil', icon: <UserIcon /> },
-    { href: '/dashboard/seguridad', label: 'Seguridad', icon: <Lock size={15} /> },
+    { href: '/dashboard/seguridad', label: 'Seguridad', icon: <Lock size={15} />, soloPrincipal: true },
     { href: '/dashboard/bancos', label: 'Mis bancos', icon: <CreditCard size={15} />, permiso: 'retirar' },
   ]},
 ];

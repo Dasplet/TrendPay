@@ -73,7 +73,9 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
   // Una subcuenta que entra por URL a una operación que no tiene permitida
   // vuelve al inicio (el backend igual la rechazaría con 403).
   const permisoRequerido = permisoDeRuta(pathname);
-  const rutaBloqueada = !!user && !!permisoRequerido && !puede(user, permisoRequerido);
+  // El PIN, la verificación en dos pasos y las sesiones son de la cuenta principal: una tienda no entra a Seguridad
+  const seguridadDeTienda = !!user?.cuentaPadre && pathname.startsWith('/dashboard/seguridad');
+  const rutaBloqueada = (!!user && !!permisoRequerido && !puede(user, permisoRequerido)) || seguridadDeTienda;
   useEffect(() => {
     if (hydrated && rutaBloqueada) router.replace('/dashboard');
   }, [hydrated, rutaBloqueada, router]);
@@ -103,7 +105,7 @@ export default function DashboardLayout({ children }: Readonly<{ children: React
           {userMenu.map((group) => (
             <div key={group.section} className="tp-nav-group">
               <p>{group.section}</p>
-              {group.items.filter((item) => (!item.permiso || puede(user, item.permiso)) && (!item.soloConDatafonos || tieneDatafonos)).map((item) => {
+              {group.items.filter((item) => (!item.permiso || puede(user, item.permiso)) && (!item.soloConDatafonos || tieneDatafonos) && (!item.soloPrincipal || !user.cuentaPadre)).map((item) => {
                 const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
                 return (
                   <Link key={item.href} href={item.href} className={`tp-nav-link ${active ? 'active' : ''}`}>

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { randomUUID, randomInt } from 'node:crypto';
 import { prisma } from '../index';
 import { authenticate, AuthUser } from '../middleware/auth';
+import type { NextFunction } from 'express';
 import { authLimiter } from '../middleware/rateLimiter';
 import { logger } from '../utils/logger';
 import { INCLUDE_BILLETERA, datosBilletera } from '../utils/cuentas';
@@ -311,7 +312,7 @@ router.post('/logout', authenticate, async (req: Request, res: Response) => {
 });
 
 // ══ GET /api/auth/sessions ══
-router.get('/sessions', authenticate, async (req: Request, res: Response) => {
+router.get('/sessions', authenticate, soloCuentaPrincipal, async (req: Request, res: Response) => {
   try {
     const actualToken = req.cookies?.refreshToken || req.body?.refreshToken;
     const sessions = await prisma.session.findMany({
@@ -335,8 +336,21 @@ router.get('/sessions', authenticate, async (req: Request, res: Response) => {
   }
 });
 
+// Las tiendas (subcuentas) no administran la seguridad de su acceso: el PIN, la verificación en dos pasos y las sesiones son de la cuenta
+// principal de la empresa. Si una tienda necesita cambiar su PIN, lo pide a TrendPay.
+export async function soloCuentaPrincipal(req: Request, res: Response, next: NextFunction) {
+  try {
+    const u = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { cuentaPadreId: true } });
+    if (u?.cuentaPadreId) return res.status(403).json({ ok: false, mensaje: 'Esta opción solo está disponible en la cuenta principal de la empresa' });
+    next();
+  } catch (err: any) {
+    logger.error('Error verificando el tipo de cuenta', { err: err.message, userId: req.user?.id });
+    res.status(500).json({ ok: false, mensaje: 'No se pudo completar la operación' });
+  }
+}
+
 // ══ DELETE /api/auth/sessions/:id ══
-router.delete('/sessions/:id', authenticate, async (req: Request, res: Response) => {
+router.delete('/sessions/:id', authenticate, soloCuentaPrincipal, async (req: Request, res: Response) => {
   try {
     const session = await prisma.session.findUnique({ where: { id: req.params.id } });
     if (session?.userId !== req.user!.id) {
@@ -351,7 +365,7 @@ router.delete('/sessions/:id', authenticate, async (req: Request, res: Response)
 });
 
 // ══ POST /api/auth/sessions/revoke-others ══
-router.post('/sessions/revoke-others', authenticate, async (req: Request, res: Response) => {
+router.post('/sessions/revoke-others', authenticate, soloCuentaPrincipal, async (req: Request, res: Response) => {
   try {
     const actualToken = req.cookies?.refreshToken || req.body?.refreshToken;
     await prisma.session.updateMany({
@@ -386,7 +400,7 @@ router.post('/verify-pin', authenticate, async (req: Request, res: Response) => 
 });
 
 // ══ PUT /api/auth/change-pin ══
-router.put('/change-pin', authenticate, exigir2fa, async (req: Request, res: Response) => {
+router.put('/change-pin', authenticate, soloCuentaPrincipal, exigir2fa, async (req: Request, res: Response) => {
   const schema = z.object({
     pin_actual:   z.string().length(4).regex(/^\d{4}$/),
     pin_nuevo:    z.string().length(4).regex(/^\d{4}$/),
@@ -465,7 +479,7 @@ async function pinValido(userId: string, pin: unknown): Promise<{ ok: true } | {
   return { ok: true };
 }
 
-router.post('/2fa/solicitar', authenticate, authLimiter, async (req: Request, res: Response) => {
+router.post('/2fa/solicitar', authenticate, soloCuentaPrincipal, authLimiter, async (req: Request, res: Response) => {
   const proposito = req.body?.proposito;
   if (proposito !== 'activar' && proposito !== 'desactivar' && proposito !== 'operacion') return res.status(400).json({ ok: false, mensaje: 'Propósito inválido' });
   try {
@@ -503,8 +517,8 @@ async function cambiarEstado2fa(req: Request, res: Response, activar: boolean) {
     res.status(500).json({ ok: false, mensaje: 'No se pudo completar el cambio' });
   }
 }
-router.post('/2fa/activar', authenticate, authLimiter, (req: Request, res: Response) => cambiarEstado2fa(req, res, true));
-router.post('/2fa/desactivar', authenticate, authLimiter, (req: Request, res: Response) => cambiarEstado2fa(req, res, false));
+router.post('/2fa/activar', authenticate, soloCuentaPrincipal, authLimiter, (req: Request, res: Response) => cambiarEstado2fa(req, res, true));
+router.post('/2fa/desactivar', authenticate, soloCuentaPrincipal, authLimiter, (req: Request, res: Response) => cambiarEstado2fa(req, res, false));
 
 // ══ OTP store (memory — usar Redis en producción) ══
 const otpStore = new Map<string, { otp: string; expires: Date }>();
